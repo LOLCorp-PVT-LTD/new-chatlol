@@ -9,7 +9,7 @@
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "seed": "tsx src/seed.ts --reset",
-    "test": "tsx --test src/api.test.ts"
+    "test": "tsx --test src/api.test.ts && tsx --test src/ai.test.ts"
   },
   "dependencies": {
     "@chatlol/shared": "workspace:*",

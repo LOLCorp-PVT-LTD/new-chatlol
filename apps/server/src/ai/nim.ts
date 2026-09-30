@@ -1,4 +1,4 @@
-import { writeFile, readFile } from 'node:fs/promises';
+import { writeFile, readFile, mkdir } from 'node:fs/promises';
 import { join, basename } from 'node:path';
 import { config } from '../config';
 import { newId } from '../db';
@@ -124,6 +124,7 @@ export async function nimImage(prompt: string): Promise<string | null> {
     const b64 = art?.base64 ?? data.image;
     if (!b64 || art?.finishReason === 'CONTENT_FILTERED') return null;
     const name = `${newId('ai')}.jpg`;
+    await mkdir(config.uploadDir, { recursive: true });
     await writeFile(join(config.uploadDir, name), Buffer.from(b64, 'base64'));
     return `${config.publicUrl}/uploads/${name}`;
   } catch (e) {
