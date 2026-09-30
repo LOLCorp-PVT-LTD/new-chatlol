@@ -1,0 +1,113 @@
+{
+  "expo": {
+    "name": "ChatLOL",
+    "slug": "chatlol",
+    "version": "0.1.0",
+    "scheme": "chatlol",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ff5e00"
+    },
+    "ios": {
+      "bundleIdentifier": "app.chatlol",
+      "supportsTablet": true,
+      "associatedDomains": [
+        "applinks:chatlol.app"
+      ],
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "remote-notification"
+        ],
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "app.chatlol",
+      "adaptiveIcon": {
+        "backgroundColor": "#ff5e00",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "permissions": [
+        "CAMERA",
+        "VIBRATE",
+        "POST_NOTIFICATIONS",
+        "USE_BIOMETRIC"
+      ],
+      "predictiveBackGestureEnabled": true,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "chatlol.app"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-image",
+      "expo-secure-store",
+      "expo-web-browser",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 180,
+          "backgroundColor": "#ff5e00",
+          "dark": {
+            "backgroundColor": "#1a110c"
+          }
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "ChatLOL needs your photos so you can post drops and vibes.",
+          "cameraPermission": "ChatLOL uses the camera for Sunset Drops and going live."
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Unlock ChatLOL with Face ID."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#ff5e00"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": false
+    },
+    "extra": {
+      "apiUrl": "http://localhost:4000",
+      "eas": {
+        "projectId": ""
+      }
+    }
+  }
+}
