@@ -1,0 +1,42 @@
+@import './tokens.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { -webkit-tap-highlight-color: transparent; }
+  body { @apply bg-surface text-on-surface font-sans antialiased; font-weight: 500; overscroll-behavior-y: none; }
+  ::selection { background: rgb(255 94 0 / 0.25); }
+  button { -webkit-user-select: none; user-select: none; }
+  :focus-visible { outline: 2px solid rgb(var(--c-primary-container)); outline-offset: 2px; }
+}
+
+@layer components {
+  .icon { font-family: 'Material Symbols Outlined'; font-weight: normal; font-style: normal; line-height: 1; letter-spacing: normal; text-transform: none;
+    display: inline-block; white-space: nowrap; direction: ltr; -webkit-font-smoothing: antialiased; font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24; font-size: 22px; }
+  .icon-fill { font-variation-settings: 'FILL' 1, 'wght' 500, 'GRAD' 0, 'opsz' 24; }
+  .card { @apply bg-surface-container-lowest rounded-lg shadow-warm; }
+  .btn { @apply inline-flex items-center justify-center gap-2 rounded-full font-bold text-label-lg px-5 h-11 transition-all active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none; }
+  .btn-primary { @apply btn bg-sunset text-white shadow-float hover:brightness-110; }
+  .btn-secondary { @apply btn bg-sunlit text-flame hover:bg-primary-fixed; }
+  .btn-ghost { @apply btn text-on-surface hover:bg-flame/10; }
+  .btn-icon { @apply inline-flex items-center justify-center rounded-full w-11 h-11 transition-all hover:bg-surface-container-high active:scale-95 text-on-surface-variant; }
+  .chip { @apply inline-flex items-center gap-1.5 rounded-full px-3.5 h-9 text-label-md border border-sandstone bg-surface-container-lowest whitespace-nowrap transition-all active:scale-95; }
+  .chip-active { @apply bg-umber text-cream border-umber; }
+  .input { @apply w-full h-[52px] rounded-full bg-surface-container-lowest border border-sandstone px-6 text-body-lg text-on-surface placeholder:text-outline
+    focus:outline-none focus:border-flame focus:border-2 focus:ring-4 focus:ring-flame/15 transition; }
+  .textarea { @apply input h-auto rounded-md py-4 resize-none; }
+  .label { @apply text-label-sm uppercase tracking-wider text-on-surface-variant; }
+  .glass { @apply bg-surface/75 backdrop-blur-xl backdrop-saturate-150; }
+  .skeleton { background: linear-gradient(90deg, rgb(var(--c-surface-container)) 0px, rgb(var(--c-surface-container-high)) 80px, rgb(var(--c-surface-container)) 160px);
+    background-size: 800px 100%; @apply animate-shimmer; }
+  .scrollbar-none { scrollbar-width: none; }
+  .scrollbar-none::-webkit-scrollbar { display: none; }
+  .text-gradient { @apply bg-sunset bg-clip-text text-transparent; }
+}
+
+.fade-enter-active, .fade-leave-active { transition: opacity .2s ease, transform .2s ease; }
+.fade-enter-from, .fade-leave-to { opacity: 0; transform: translateY(6px); }
+.slide-up-enter-active, .slide-up-leave-active { transition: transform .3s cubic-bezier(.2,.9,.3,1), opacity .3s; }
+.slide-up-enter-from, .slide-up-leave-to { transform: translateY(40px); opacity: 0; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; } }

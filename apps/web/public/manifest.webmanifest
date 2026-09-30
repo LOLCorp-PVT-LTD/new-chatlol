@@ -1,0 +1,10 @@
+{
+  "name": "ChatLOL",
+  "short_name": "ChatLOL",
+  "description": "The golden-hour social network",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fff8f5",
+  "theme_color": "#ff5e00",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

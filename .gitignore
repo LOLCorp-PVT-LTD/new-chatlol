@@ -1,0 +1,16 @@
+node_modules/
+dist/
+build/
+.expo/
+.env
+.env.*
+!.env.example
+*.db
+*.db-*
+apps/server/data/
+apps/native/ios/
+apps/native/android/
+apps/desktop/out/
+apps/desktop/renderer/
+.DS_Store
+*.log
