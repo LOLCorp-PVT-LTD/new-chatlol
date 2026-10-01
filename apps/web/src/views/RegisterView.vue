@@ -31,7 +31,7 @@ async function submit() {
 <template>
   <div class="min-h-dvh flex items-center justify-center p-5 bg-[radial-gradient(ellipse_at_top,rgba(255,153,0,.18),transparent_60%)]">
     <div class="w-full max-w-md">
-      <div class="flex justify-center mb-6"><Logo /></div>
+      <div class="flex flex-col items-center gap-3 mb-6"><img src="/brand/mascot.webp" alt="" class="h-20 w-auto drop-shadow-xl" /><Logo variant="wordmark" size="sm" /></div>
       <div class="card p-7">
         <div class="flex gap-1.5 mb-6"><span v-for="i in 2" :key="i" class="h-1.5 flex-1 rounded-full" :class="i <= step ? 'bg-sunset' : 'bg-surface-container'" /></div>
         <form v-if="step === 1" class="space-y-3" @submit.prevent="step = 2">

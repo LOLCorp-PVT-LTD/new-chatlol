@@ -1,5 +1,5 @@
 import React from 'react';
-import { Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
@@ -23,8 +23,16 @@ export function Frost({ style, children, radius = 999 }: { style?: object; child
   return <BlurView intensity={60} tint={dark ? 'dark' : 'light'} style={[{ borderRadius: radius, overflow: 'hidden', backgroundColor: dark ? 'rgba(26,17,12,0.5)' : c.surface + 'aa' }, style]}>{children}</BlurView>;
 }
 
+/** CHATLOL wordmark, or just the mascot where space is tight. */
+export function BrandMark({ compact, height = 24 }: { compact?: boolean; height?: number }) {
+  return compact
+    ? <Image source={require('../../assets/brand/mascot.png')} style={{ width: height * 1.45 * (512 / 493), height: height * 1.45 }} contentFit="contain" accessibilityLabel="ChatLOL" />
+    : <Image source={require('../../assets/brand/wordmark.png')} style={{ width: height * (800 / 136), height }} contentFit="contain" accessibilityLabel="ChatLOL" />;
+}
+
 export function TopBar() {
   const c = useColors();
+  const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const user = useSession((s) => s.user);
   const unread = useSession((s) => s.unread);
@@ -32,9 +40,8 @@ export function TopBar() {
   return (
     <View style={{ paddingTop: insets.top, backgroundColor: c.surface }}>
       <Row style={{ height: 56, paddingHorizontal: 16 }} gap={6}>
-        <Tap onPress={() => router.push('/')} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Image source={require('../../assets/icon.png')} style={{ width: 34, height: 34, borderRadius: 10 }} />
-          <Text variant="headlineMd" style={{ fontFamily: 'PlusJakartaSans_800ExtraBold' }}>Chat<Text variant="headlineMd" color={c.flame} style={{ fontFamily: 'PlusJakartaSans_800ExtraBold' }}>LOL</Text></Text>
+        <Tap onPress={() => router.push('/')} accessibilityRole="link" accessibilityLabel="ChatLOL home">
+          <BrandMark compact={width < 380} />
         </Tap>
         <View style={{ flex: 1 }} />
         {user ? (

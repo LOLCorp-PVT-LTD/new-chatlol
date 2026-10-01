@@ -11,7 +11,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ff5e00"
+      "backgroundColor": "#fff8f5"
     },
     "ios": {
       "bundleIdentifier": "app.chatlol",
@@ -29,7 +29,7 @@
     "android": {
       "package": "app.chatlol",
       "adaptiveIcon": {
-        "backgroundColor": "#ff5e00",
+        "backgroundColor": "#fd6a0a",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -77,9 +77,10 @@
         "expo-splash-screen",
         {
           "image": "./assets/splash-icon.png",
-          "imageWidth": 180,
-          "backgroundColor": "#ff5e00",
+          "imageWidth": 200,
+          "backgroundColor": "#fff8f5",
           "dark": {
+            "image": "./assets/splash-icon.png",
             "backgroundColor": "#1a110c"
           }
         }
@@ -100,7 +101,8 @@
       [
         "expo-notifications",
         {
-          "color": "#ff5e00"
+          "color": "#ff5e00",
+          "icon": "./assets/notification-icon.png"
         }
       ],
       [

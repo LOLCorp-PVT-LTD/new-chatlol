@@ -126,7 +126,7 @@ export function Empty({ emoji = '🌅', title, body, children }: { emoji?: strin
   const c = useColors();
   return (
     <View style={{ alignItems: 'center', paddingVertical: 48, paddingHorizontal: 24, gap: 6 }}>
-      <RNText style={{ fontSize: 48 }}>{emoji}</RNText>
+      {emoji ? <RNText style={{ fontSize: 48 }}>{emoji}</RNText> : null}
       <Text variant="headlineSm" style={{ textAlign: 'center' }}>{title}</Text>
       {body ? <Text color={c.onSurfaceVariant} style={{ textAlign: 'center', maxWidth: 280 }}>{body}</Text> : null}
       {children ? <View style={{ marginTop: 10 }}>{children}</View> : null}

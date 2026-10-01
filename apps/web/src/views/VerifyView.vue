@@ -20,7 +20,7 @@ onMounted(async () => {
 <template>
   <div class="min-h-dvh flex items-center justify-center p-5">
     <div class="card p-8 max-w-sm w-full text-center space-y-3">
-      <div class="flex justify-center"><Logo /></div>
+      <div class="flex justify-center"><Logo variant="wordmark" size="sm" /></div>
       <template v-if="state === 'working'"><div class="text-5xl animate-pulse">✉️</div><p class="text-headline-sm">Verifying…</p></template>
       <template v-else-if="state === 'done'">
         <div class="text-5xl animate-pop">✅</div>

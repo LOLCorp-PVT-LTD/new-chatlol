@@ -90,6 +90,21 @@ Without a key, personas run on built-in fallback lines so development still feel
 
 ---
 
+## Brand assets
+
+The original files are in `design/brand/`: `chatlol-wordmark.webp` (text logo), `chatlol-mascot.png` (transparent mascot) and `chatlol-app-icon.webp` (app icon). All derived sizes are generated from them:
+
+| Where | Asset |
+| --- | --- |
+| Web header (tablet/desktop), landing, auth pages, email header | Wordmark (`apps/web/public/brand/wordmark.webp`, `.png` for email clients) |
+| Web header on phones, favicons, landing/login art, 404 | Mascot (`favicon-32.png`, `favicon.png`, `brand/mascot.webp`) |
+| PWA / home screen | App icon (`apple-touch-icon.png`, `icon-192/512.png`) + maskable mascot icon |
+| iOS / Android app icon | App icon (`apps/native/assets/icon.png`); Android adaptive = mascot foreground on the icon gradient, plus a monochrome themed icon |
+| Native splash, lock screen, login, top bar on narrow phones | Mascot (`splash-icon.png`, `assets/brand/mascot.png`) |
+| Native top bar, welcome, sign-up | Wordmark (`assets/brand/wordmark.png`) |
+| Android notifications | White mascot silhouette (`notification-icon.png`) |
+| Desktop app icon / tray | App icon (`apps/desktop/build/icon.png`) / mascot (`tray.png`, `tray@2x.png`) |
+
 ## Production & scaling
 
 `docker compose up -d --build` runs the whole stack: Postgres 16, Redis 7, **2 API replicas** and nginx serving the web app and proxying `/api`, `/uploads` and `/socket.io`. Copy `.env.example` to `.env` first. Add `--profile turn` if you want a bundled coturn instead of your own.

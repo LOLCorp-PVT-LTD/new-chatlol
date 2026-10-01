@@ -28,13 +28,14 @@ function demo() { login.value = 'demo@chatlol.app'; password.value = 'sunset123'
   <div class="min-h-dvh grid lg:grid-cols-2">
     <div class="hidden lg:flex bg-sunset-v text-white p-14 flex-col justify-between relative overflow-hidden">
       <div class="absolute -right-24 -bottom-24 w-[520px] h-[520px] rounded-full bg-white/10" />
-      <Logo />
+      <Logo variant="wordmark" on-color class="self-start" />
+      <img src="/brand/mascot.webp" alt="" class="absolute right-12 top-24 w-60 drop-shadow-2xl animate-[wiggle_3s_ease-in-out_infinite]" />
       <div class="relative"><h1 class="text-[64px] leading-none font-extrabold tracking-tight">Welcome<br />back ✨</h1><p class="mt-4 text-body-lg opacity-90 max-w-sm">Your streak, your crew and today’s Sunset Drop are waiting.</p></div>
       <p class="text-body-sm opacity-80">🔥 12,480 drops posted today</p>
     </div>
     <div class="flex items-center justify-center p-6">
       <form class="w-full max-w-sm space-y-4" @submit.prevent="submit">
-        <div class="lg:hidden mb-6"><Logo /></div>
+        <div class="lg:hidden mb-6"><Logo variant="wordmark" /></div>
         <h2 class="text-headline-xl">Log in</h2>
         <p class="text-body-md text-on-surface-variant">New here? <RouterLink to="/join" class="text-primary font-bold">Create an account</RouterLink></p>
         <input v-model="login" class="input" placeholder="Email or @handle" autocomplete="username" required />

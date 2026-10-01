@@ -16,7 +16,7 @@ async function submit() {
 <template>
   <div class="min-h-dvh flex items-center justify-center p-5">
     <form class="card p-8 max-w-sm w-full space-y-4" @submit.prevent="submit">
-      <Logo />
+      <Logo variant="wordmark" size="sm" />
       <template v-if="!sent">
         <h1 class="text-headline-lg">Forgot your password?</h1>
         <p class="text-body-md text-on-surface-variant">Enter your email and we’ll send a reset link.</p>

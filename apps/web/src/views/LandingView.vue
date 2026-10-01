@@ -20,7 +20,7 @@ const features = [
 <template>
   <div class="min-h-dvh bg-surface overflow-hidden">
     <header class="max-w-6xl mx-auto px-5 h-20 flex items-center justify-between">
-      <Logo />
+      <Logo variant="wordmark" />
       <div class="flex gap-2"><RouterLink to="/login" class="btn-ghost">Log in</RouterLink><RouterLink to="/join" class="btn-primary">Join free</RouterLink></div>
     </header>
 
@@ -44,6 +44,7 @@ const features = [
           <img :src="c.img" alt="" class="w-full aspect-square object-cover" />
         </div>
         <span class="absolute -right-2 top-1/3 rotate-12 bg-coral text-white rounded-full px-4 py-2 text-label-lg shadow-float">👑 GOD TIER</span>
+        <img src="/brand/mascot.webp" alt="" class="absolute -left-6 -top-6 w-36 sm:w-44 drop-shadow-2xl animate-[wiggle_3s_ease-in-out_infinite] z-10" />
         <span class="absolute left-0 bottom-6 -rotate-6 bg-inverse-surface text-inverse-on-surface rounded-full px-4 py-2 text-label-lg shadow-float">🔥 21 day streak</span>
       </div>
     </section>

@@ -31,7 +31,7 @@ export function template(opts: { title: string; intro: string; cta: string; url:
   const html = `<!doctype html><html><body style="margin:0;background:#fff8f5;font-family:'Plus Jakarta Sans',Helvetica,Arial,sans-serif;color:#251911">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fff8f5;padding:32px 16px"><tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#ffffff;border-radius:32px;overflow:hidden">
-<tr><td style="background:linear-gradient(135deg,#ff9900,#ff5e00);background-color:#ff5e00;padding:28px 32px;color:#ffffff;font-size:26px;font-weight:800">Chat<span style="opacity:.85">LOL</span> 🌅</td></tr>
+<tr><td style="padding:28px 32px 8px;border-bottom:4px solid #ff5e00"><img src="${config.appUrl}/brand/wordmark.png" width="200" height="34" alt="ChatLOL" style="display:block;border:0;height:34px;width:200px"></td></tr>
 <tr><td style="padding:32px">
 <h1 style="margin:0 0 12px;font-size:22px">${esc(opts.title)}</h1>
 <p style="margin:0 0 24px;font-size:15px;line-height:22px;color:#5b4137">${esc(opts.intro)}</p>

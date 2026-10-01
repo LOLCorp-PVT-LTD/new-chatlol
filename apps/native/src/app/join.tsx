@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BrandMark } from '../components/chrome';
 import { ageFrom, MIN_AGE } from '@chatlol/shared';
 import { register } from '../lib/actions';
 import { useColors } from '../lib/theme';
@@ -38,6 +39,7 @@ export default function Join() {
         <IconButton name="arrow-back" label="Back" onPress={() => (step === 2 ? setStep(1) : router.back())} />
         {step === 1 ? (
           <>
+            <BrandMark height={26} />
             <Text variant="headlineXl">Join the vibe 🌅</Text>
             <Input value={f.displayName} onChangeText={set('displayName')} placeholder="Your name" maxLength={40} autoComplete="name" />
             <Input value={f.handle} onChangeText={set('handle')} placeholder="@handle" autoCapitalize="none" maxLength={20} />

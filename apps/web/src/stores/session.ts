@@ -68,7 +68,7 @@ export const useSession = defineStore('session', () => {
       notifications.value.unshift(n);
       if (n.kind !== 'dm') unread.value++;
       if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
-        new Notification(n.title, { body: n.body, icon: n.actor?.avatarUrl || '/icon.svg', tag: n.id });
+        new Notification(n.title, { body: n.body, icon: n.actor?.avatarUrl || '/icon-192.png', tag: n.id });
       } else if (n.kind !== 'dm') {
         toast({ kind: 'info', title: n.title, body: n.body });
       }

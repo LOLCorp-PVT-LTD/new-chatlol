@@ -26,7 +26,7 @@ async function submit() {
 <template>
   <div class="min-h-dvh flex items-center justify-center p-5">
     <form class="card p-8 max-w-sm w-full space-y-4" @submit.prevent="submit">
-      <Logo />
+      <Logo variant="wordmark" size="sm" />
       <h1 class="text-headline-lg">Choose a new password</h1>
       <input v-model="pw" type="password" class="input" placeholder="New password (8+ characters)" minlength="8" autocomplete="new-password" required />
       <input v-model="pw2" type="password" class="input" placeholder="Repeat it" minlength="8" autocomplete="new-password" required />

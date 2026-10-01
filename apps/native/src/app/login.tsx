@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Image } from 'expo-image';
 import { login } from '../lib/actions';
 import { useColors } from '../lib/theme';
 import { Button, IconButton, Input, Text } from '../components/ui';
@@ -21,6 +22,7 @@ export default function Login() {
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: c.surface }}>
       <ScrollView contentContainerStyle={{ paddingTop: insets.top + 8, padding: 20, gap: 14, maxWidth: 480, width: '100%', alignSelf: 'center' }} keyboardShouldPersistTaps="handled">
         <IconButton name="arrow-back" label="Back" onPress={() => router.back()} />
+        <Image source={require('../../assets/brand/mascot.png')} style={{ width: 96, height: 92, alignSelf: 'center' }} contentFit="contain" accessibilityLabel="ChatLOL" />
         <Text variant="headlineXl">Welcome back ✨</Text>
         <Text color={c.onSurfaceVariant}>Your streak and today’s Sunset Drop are waiting.</Text>
         <Input value={id} onChangeText={setId} placeholder="Email or @handle" autoCapitalize="none" autoComplete="username" textContentType="username" />
