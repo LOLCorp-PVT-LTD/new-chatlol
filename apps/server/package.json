@@ -9,13 +9,18 @@
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "seed": "tsx src/seed.ts --reset",
-    "test": "tsx --test src/api.test.ts && tsx --test src/ai.test.ts"
+    "test": "tsx --test --test-concurrency=1 src/api.test.ts src/ai.test.ts src/cluster.test.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1144.0",
     "@chatlol/shared": "workspace:*",
+    "@socket.io/redis-adapter": "^8.3.0",
     "cors": "^2.8.5",
     "express": "^5.1.0",
+    "ioredis": "^6.0.0",
     "multer": "^2.0.2",
+    "nodemailer": "^10.0.13",
+    "pg": "^8.23.1",
     "socket.io": "^4.8.1",
     "zod": "^3.25.76"
   },
@@ -24,6 +29,10 @@
     "@types/express": "^5.0.3",
     "@types/multer": "^2.0.0",
     "@types/node": "^22.18.0",
+    "@types/nodemailer": "^8.0.2",
+    "@types/pg": "^8.23.1",
+    "ioredis-mock": "^8.13.1",
+    "socket.io-client": "^4.8.4",
     "tsx": "^4.20.5",
     "typescript": "^5.9.3"
   }

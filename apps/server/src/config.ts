@@ -10,7 +10,12 @@ export const config = {
   isProd,
   corsOrigins: (env.CORS_ORIGINS ?? 'http://localhost:5173,http://localhost:8081,app://chatlol').split(',').map((s) => s.trim()),
   jwtSecret: env.JWT_SECRET ?? randomBytes(32).toString('hex'),
+  /** postgres://… → Postgres (production). Otherwise SQLite at DATABASE_PATH (dev/tests). */
+  databaseUrl: env.DATABASE_URL ?? '',
   dbPath: env.DATABASE_PATH ?? './data/chatlol.db',
+  redisUrl: env.REDIS_URL ?? '',
+  /** Set to 0 on extra instances so only one runs the AI persona engine & schedulers (a Redis lock also guards this). */
+  runWorkers: (env.RUN_WORKERS ?? '1') !== '0',
   publicUrl: env.PUBLIC_URL ?? `http://localhost:${env.PORT ?? 4000}`,
   uploadDir: env.UPLOAD_DIR ?? './data/uploads',
   nim: {
@@ -28,4 +33,33 @@ export const config = {
     activity: Number(env.AI_ACTIVITY ?? 1),
   },
   expoAccessToken: env.EXPO_ACCESS_TOKEN ?? '',
+  /** Object storage for uploads (S3, Cloudflare R2, MinIO…). Empty bucket = local disk. */
+  s3: {
+    bucket: env.S3_BUCKET ?? '',
+    region: env.S3_REGION ?? 'auto',
+    endpoint: env.S3_ENDPOINT ?? '', // e.g. https://<account>.r2.cloudflarestorage.com
+    publicUrl: (env.S3_PUBLIC_URL ?? '').replace(/\/$/, ''), // CDN / public bucket base URL
+  },
+  /** WebRTC: your own TURN server (coturn). TURN_SECRET = coturn static-auth-secret (REST API credentials). */
+  rtc: {
+    stunUrls: (env.STUN_URLS ?? 'stun:stun.l.google.com:19302').split(',').map((s) => s.trim()).filter(Boolean),
+    turnUrls: (env.TURN_URLS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
+    turnSecret: env.TURN_SECRET ?? '',
+    turnUsername: env.TURN_USERNAME ?? '',
+    turnCredential: env.TURN_CREDENTIAL ?? '',
+    ttlSec: Number(env.TURN_TTL ?? 6 * 3600),
+    /** Mesh: the host uploads one stream per viewer, so cap it to what a home uplink can carry. */
+    maxViewers: Number(env.LIVE_MAX_VIEWERS ?? 12),
+  },
+  payments: {
+    stripeSecretKey: env.STRIPE_SECRET_KEY ?? '',
+    stripeWebhookSecret: env.STRIPE_WEBHOOK_SECRET ?? '',
+    revenueCatWebhookAuth: env.REVENUECAT_WEBHOOK_AUTH ?? '',
+  },
+  /** Public web app origin used in email links (verification, password reset). */
+  appUrl: (env.APP_URL ?? 'http://localhost:5173').replace(/\/$/, ''),
+  mail: {
+    smtpUrl: env.SMTP_URL ?? '', // smtps://user:pass@smtp.example.com:465
+    from: env.MAIL_FROM ?? 'ChatLOL <hello@chatlol.app>',
+  },
 };

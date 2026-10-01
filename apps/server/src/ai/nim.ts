@@ -1,7 +1,5 @@
-import { writeFile, readFile, mkdir } from 'node:fs/promises';
-import { join, basename } from 'node:path';
 import { config } from '../config';
-import { newId } from '../db';
+import { putImage, readImage, sniffImage } from '../lib/storage';
 
 export interface ChatMsg { role: 'system' | 'user' | 'assistant'; content: string }
 
@@ -78,13 +76,10 @@ export async function nimChat(messages: ChatMsg[], opts: { model?: string; maxTo
 export async function nimVision(prompt: string, imageUrl: string, system: string): Promise<string | null> {
   if (!nimEnabled() || !config.nim.visionModel) return null;
   try {
-    let src = imageUrl;
-    if (imageUrl.startsWith(`${config.publicUrl}/uploads/`)) {
-      const buf = await readFile(join(config.uploadDir, basename(imageUrl)));
-      if (buf.length > 180_000) return null; // NIM inline image limit; larger images fall back to text-only
-      const ext = imageUrl.split('.').pop()?.toLowerCase() === 'png' ? 'png' : 'jpeg';
-      src = `data:image/${ext};base64,${buf.toString('base64')}`;
-    }
+    const buf = await readImage(imageUrl, 180_000); // NIM inline image limit; larger images fall back to text-only
+    const type = buf && sniffImage(buf);
+    if (!buf || !type) return null;
+    const src = `data:${type.mime};base64,${buf.toString('base64')}`;
     await limiter.take();
     const res = await fetch(`${config.nim.baseUrl}/chat/completions`, {
       method: 'POST',
@@ -123,10 +118,7 @@ export async function nimImage(prompt: string): Promise<string | null> {
     const art = data.artifacts?.[0];
     const b64 = art?.base64 ?? data.image;
     if (!b64 || art?.finishReason === 'CONTENT_FILTERED') return null;
-    const name = `${newId('ai')}.jpg`;
-    await mkdir(config.uploadDir, { recursive: true });
-    await writeFile(join(config.uploadDir, name), Buffer.from(b64, 'base64'));
-    return `${config.publicUrl}/uploads/${name}`;
+    return await putImage(Buffer.from(b64, 'base64'), 'ai');
   } catch (e) {
     console.warn('[nim] image failed:', (e as Error).message);
     return null;

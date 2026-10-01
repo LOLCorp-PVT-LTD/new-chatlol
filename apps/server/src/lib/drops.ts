@@ -21,14 +21,14 @@ export function dayIndex(day: string) {
   return Math.floor(Date.parse(`${day}T00:00:00Z`) / 86_400_000);
 }
 
-export function ensureDrop(day = today()): Row {
-  let d = db.one<Row>('SELECT * FROM drops WHERE id = ?', day);
+export async function ensureDrop(day = today()): Promise<Row> {
+  let d = await db.one('SELECT * FROM drops WHERE id = ?', day);
   if (!d) {
     const [prompt, emoji] = DROP_PROMPTS[dayIndex(day) % DROP_PROMPTS.length];
     const starts = `${day}T00:00:00.000Z`;
     const ends = new Date(Date.parse(starts) + 86_400_000 - 1).toISOString();
-    db.run('INSERT OR IGNORE INTO drops VALUES (?, ?, ?, ?, ?)', day, prompt, emoji, starts, ends);
-    d = db.one<Row>('SELECT * FROM drops WHERE id = ?', day)!;
+    await db.run('INSERT INTO drops (id, prompt, emoji, starts_at, ends_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING', day, prompt, emoji, starts, ends);
+    d = (await db.one('SELECT * FROM drops WHERE id = ?', day))!;
   }
   return d;
 }

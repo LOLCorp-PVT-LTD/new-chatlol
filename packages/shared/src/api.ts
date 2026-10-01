@@ -1,7 +1,7 @@
 import type {
   AuthResponse, ChatMessage, Comment, Conversation, Drop, HotTake, LeaderboardEntry, LiveStream, Lounge,
   NotificationItem, Page, Post, ReactionKind, RewardEvent, RouletteCard, RouletteResult, ShoutReply, ShoutThread,
-  StoreItem, UserPrivate, UserPublic, UserSettings, VibeScore, Cosmetics, ID,
+  StoreItem, UserPrivate, UserPublic, UserSettings, VibeScore, Cosmetics, ID, GemPack, IceConfig,
 } from './types';
 
 export class ApiError extends Error {
@@ -48,6 +48,11 @@ export function createApi(opts: ApiClientOptions) {
     register: (b: { email: string; password: string; handle: string; displayName: string; birthdate: string; interests?: string[] }) =>
       req<AuthResponse>('POST', '/auth/register', b),
     login: (b: { login: string; password: string }) => req<AuthResponse>('POST', '/auth/login', b),
+    verifyEmail: (token: string) => req<{ ok: true }>('POST', '/auth/verify', { token }),
+    resendVerification: () => req<{ ok: true; alreadyVerified?: boolean }>('POST', '/auth/verify/resend'),
+    forgotPassword: (email: string) => req<{ ok: true }>('POST', '/auth/password/forgot', { email }),
+    resetPassword: (token: string, password: string) => req<AuthResponse>('POST', '/auth/password/reset', { token, password }),
+    changePassword: (current: string, password: string) => req<AuthResponse>('POST', '/auth/password/change', { current, password }),
     me: () => req<WithReward<{ user: UserPrivate }>>('GET', '/me'),
     updateMe: (b: Partial<Pick<UserPrivate, 'displayName' | 'bio' | 'pronouns' | 'city' | 'interests' | 'avatarUrl'>>) =>
       req<{ user: UserPrivate }>('PATCH', '/me', b),
@@ -121,17 +126,23 @@ export function createApi(opts: ApiClientOptions) {
     markNotificationsRead: () => req<{ ok: true }>('POST', '/notifications/read'),
 
     // store
-    store: () => req<{ items: StoreItem[]; sparks: number; crateOdds: Record<string, number> }>('GET', '/store'),
-    buy: (id: ID) => req<WithReward<{ item: StoreItem; sparks: number; won?: StoreItem | null }>>('POST', `/store/${id}/buy`),
+    store: () => req<{ items: StoreItem[]; sparks: number; gems: number; crateOdds: Record<string, number> }>('GET', '/store'),
+    buy: (id: ID, currency: 'sparks' | 'gems' = 'sparks') => req<WithReward<{ item: StoreItem; sparks: number; gems: number; won?: StoreItem | null }>>('POST', `/store/${id}/buy`, { currency }),
     inventory: () => req<{ items: StoreItem[] }>('GET', '/store/inventory'),
     claimDaily: () => req<WithReward<{ claimed: boolean; nextAt: string }>>('POST', '/store/daily'),
 
     // live
     streams: () => req<{ streams: LiveStream[] }>('GET', '/live'),
     stream: (id: ID) => req<{ stream: LiveStream; chat: ChatMessage[] }>('GET', `/live/${id}`),
-    goLive: (b: { title: string; category: string }) => req<{ stream: LiveStream }>('POST', '/live', b),
+    goLive: (b: { title: string; category: string; video?: boolean }) => req<{ stream: LiveStream }>('POST', '/live', b),
+    iceServers: () => req<IceConfig>('GET', '/rtc/ice'),
     endLive: (id: ID) => req<{ ok: true }>('DELETE', `/live/${id}`),
     sendGift: (id: ID, giftId: string) => req<{ sparks: number }>('POST', `/live/${id}/gift`, { giftId }),
+
+    // payments (Gems)
+    gemPacks: () => req<{ packs: GemPack[]; stripe: boolean; iap: boolean }>('GET', '/payments/packs'),
+    stripeCheckout: (packId: string, returnUrl?: string) => req<{ url: string }>('POST', '/payments/stripe/checkout', { packId, returnUrl }),
+    purchaseHistory: () => req<{ purchases: { id: string; provider: string; product_id: string; gems: number; amount_cents: number | null; currency: string | null; status: string; created_at: string }[] }>('GET', '/payments/history'),
 
     // leaderboards
     leaderboard: (kind: 'vibe' | 'streak' | 'xp' = 'vibe') => req<{ entries: LeaderboardEntry[] }>('GET', `/leaderboard${q({ kind })}`),

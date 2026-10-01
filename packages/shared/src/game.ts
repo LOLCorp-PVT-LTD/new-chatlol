@@ -145,3 +145,18 @@ export function countdown(toIso: string, now = Date.now()) {
   const s = Math.floor((ms % 60_000) / 1000);
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
+
+// ——— Premium currency ———
+/** Gems are sold for money and only buy cosmetics. Loot crates and anything wager-like stay earned-Sparks-only. */
+export function gemPriceFor(kind: string, sparksPrice: number): number | null {
+  if (kind === 'crate' || kind === 'gift') return null;
+  return Math.max(1, Math.ceil(sparksPrice / 10));
+}
+
+export const GEM_PACKS: import('./types').GemPack[] = [
+  { id: 'gems_80', gems: 80, bonus: 0, usd: 0.99, label: 'Pocket Glow' },
+  { id: 'gems_450', gems: 400, bonus: 50, usd: 4.99, label: 'Golden Pouch' },
+  { id: 'gems_1000', gems: 850, bonus: 150, usd: 9.99, label: 'Sunset Chest', best: true },
+  { id: 'gems_2200', gems: 1700, bonus: 500, usd: 19.99, label: 'Solar Vault' },
+];
+export const gemPack = (id: string) => GEM_PACKS.find((p) => p.id === id);

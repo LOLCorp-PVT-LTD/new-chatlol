@@ -42,7 +42,11 @@ export interface UserPublic {
 
 export interface UserPrivate extends UserPublic {
   email: string;
+  emailVerified: boolean;
+  /** Earned currency: Roulette, Drops, Arena, gifts. Never sold. */
   sparks: number;
+  /** Premium currency bought with real money. Cosmetics only — can't be staked or gambled. */
+  gems: number;
   dailyGoal: { done: number; target: number };
   comboCount: number;
   settings: UserSettings;
@@ -204,6 +208,8 @@ export interface StoreItem {
   name: string;
   description: string;
   price: number; // in Sparks
+  /** Price in Gems, or null when the item can only be bought with earned Sparks (e.g. loot crates). */
+  gemPrice: number | null;
   rarity: Rarity;
   emoji: string;
   preview: string; // css gradient / color / image url
@@ -214,6 +220,9 @@ export interface StoreItem {
 
 export interface LiveStream {
   id: ID;
+  /** True while the host is broadcasting camera video over WebRTC. */
+  video: boolean;
+  maxViewers: number;
   host: UserPublic;
   title: string;
   category: string;
@@ -253,3 +262,16 @@ export interface RewardEvent {
 export interface AuthResponse { token: string; user: UserPrivate }
 
 export interface Page<T> { items: T[]; nextCursor: string | null }
+
+export interface GemPack { id: string; gems: number; bonus: number; usd: number; label: string; best?: boolean }
+
+export interface IceConfig { iceServers: { urls: string | string[]; username?: string; credential?: string }[]; ttl: number; maxViewers: number }
+
+/** WebRTC signalling payloads relayed by the server between host and viewers. */
+export interface RtcSignal {
+  streamId: ID;
+  /** socket id of the peer this signal is for / from */
+  peer: string;
+  description?: { type: 'offer' | 'answer'; sdp: string };
+  candidate?: { candidate: string; sdpMid?: string | null; sdpMLineIndex?: number | null } | null;
+}

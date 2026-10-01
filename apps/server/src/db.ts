@@ -1,324 +1,164 @@
-import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { config } from './config';
+import { MIGRATIONS } from './migrations';
 
-const SCHEMA = /* sql */ `
-PRAGMA journal_mode = WAL;
-PRAGMA foreign_keys = ON;
+/**
+ * Async database layer with two drivers:
+ *  - Postgres (DATABASE_URL=postgres://…) for production and horizontal scaling
+ *  - SQLite (node:sqlite, DATABASE_PATH) for local dev and tests
+ * All SQL in the app is written in the portable subset both understand, with `?` placeholders.
+ */
+export type Row = Record<string, any>;
+export type Param = string | number | bigint | null | Uint8Array;
 
-CREATE TABLE IF NOT EXISTS users (
-  id TEXT PRIMARY KEY,
-  email TEXT UNIQUE,
-  password_hash TEXT,
-  handle TEXT UNIQUE NOT NULL COLLATE NOCASE,
-  display_name TEXT NOT NULL,
-  avatar_url TEXT NOT NULL,
-  bio TEXT NOT NULL DEFAULT '',
-  pronouns TEXT NOT NULL DEFAULT '',
-  city TEXT NOT NULL DEFAULT '',
-  birthdate TEXT NOT NULL,
-  interests TEXT NOT NULL DEFAULT '[]',
-  xp INTEGER NOT NULL DEFAULT 0,
-  sparks INTEGER NOT NULL DEFAULT 250,
-  streak_days INTEGER NOT NULL DEFAULT 0,
-  last_drop_day TEXT,
-  last_daily_claim TEXT,
-  combo_count INTEGER NOT NULL DEFAULT 0,
-  badges TEXT NOT NULL DEFAULT '[]',
-  cosmetics TEXT NOT NULL DEFAULT '{"frame":null,"flair":null,"theme":null,"banner":null}',
-  settings TEXT NOT NULL DEFAULT '{}',
-  is_ai INTEGER NOT NULL DEFAULT 0,
-  persona_id TEXT,
-  last_seen_at TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  deleted_at TEXT
-);
-
-CREATE TABLE IF NOT EXISTS follows (
-  follower_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  followee_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  created_at TEXT NOT NULL,
-  PRIMARY KEY (follower_id, followee_id)
-);
-
-CREATE TABLE IF NOT EXISTS blocks (
-  blocker_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  blocked_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  PRIMARY KEY (blocker_id, blocked_id)
-);
-
-CREATE TABLE IF NOT EXISTS posts (
-  id TEXT PRIMARY KEY,
-  author_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  kind TEXT NOT NULL,
-  body TEXT NOT NULL DEFAULT '',
-  media_url TEXT,
-  tags TEXT NOT NULL DEFAULT '[]',
-  drop_id TEXT,
-  soundtrack TEXT,
-  r1 INTEGER NOT NULL DEFAULT 0, r2 INTEGER NOT NULL DEFAULT 0, r3 INTEGER NOT NULL DEFAULT 0,
-  r4 INTEGER NOT NULL DEFAULT 0, r5 INTEGER NOT NULL DEFAULT 0,
-  comment_count INTEGER NOT NULL DEFAULT 0,
-  hidden INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS posts_created ON posts(created_at DESC);
-CREATE INDEX IF NOT EXISTS posts_author ON posts(author_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS posts_drop ON posts(drop_id);
-
-CREATE TABLE IF NOT EXISTS battle_options (
-  id TEXT PRIMARY KEY,
-  post_id TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
-  label TEXT NOT NULL,
-  media_url TEXT,
-  votes INTEGER NOT NULL DEFAULT 0,
-  position INTEGER NOT NULL
-);
-CREATE TABLE IF NOT EXISTS battle_votes (
-  post_id TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
-  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  option_id TEXT NOT NULL,
-  PRIMARY KEY (post_id, user_id)
-);
-
-CREATE TABLE IF NOT EXISTS ratings (
-  post_id TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
-  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  score INTEGER NOT NULL,
-  created_at TEXT NOT NULL,
-  PRIMARY KEY (post_id, user_id)
-);
-CREATE INDEX IF NOT EXISTS ratings_user ON ratings(user_id, created_at DESC);
-
-CREATE TABLE IF NOT EXISTS reactions (
-  post_id TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
-  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  kind TEXT NOT NULL,
-  PRIMARY KEY (post_id, user_id)
-);
-
-CREATE TABLE IF NOT EXISTS comments (
-  id TEXT PRIMARY KEY,
-  post_id TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
-  author_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  body TEXT NOT NULL,
-  created_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS comments_post ON comments(post_id, created_at);
-
-CREATE TABLE IF NOT EXISTS drops (
-  id TEXT PRIMARY KEY,
-  prompt TEXT NOT NULL,
-  emoji TEXT NOT NULL,
-  starts_at TEXT NOT NULL,
-  ends_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS hot_takes (
-  id TEXT PRIMARY KEY,
-  author_id TEXT REFERENCES users(id) ON DELETE SET NULL,
-  category TEXT NOT NULL,
-  statement TEXT NOT NULL,
-  image_url TEXT,
-  agree_pool INTEGER NOT NULL DEFAULT 0,
-  disagree_pool INTEGER NOT NULL DEFAULT 0,
-  agree_count INTEGER NOT NULL DEFAULT 0,
-  disagree_count INTEGER NOT NULL DEFAULT 0,
-  ends_at TEXT NOT NULL,
-  resolved INTEGER NOT NULL DEFAULT 0,
-  outcome TEXT,
-  created_at TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS stakes (
-  take_id TEXT NOT NULL REFERENCES hot_takes(id) ON DELETE CASCADE,
-  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  side TEXT NOT NULL,
-  amount INTEGER NOT NULL,
-  PRIMARY KEY (take_id, user_id)
-);
-
-CREATE TABLE IF NOT EXISTS boards (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  emoji TEXT NOT NULL,
-  position INTEGER NOT NULL
-);
-CREATE TABLE IF NOT EXISTS threads (
-  id TEXT PRIMARY KEY,
-  board_id TEXT NOT NULL REFERENCES boards(id),
-  author_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  title TEXT NOT NULL,
-  body TEXT NOT NULL,
-  upvotes INTEGER NOT NULL DEFAULT 0,
-  reply_count INTEGER NOT NULL DEFAULT 0,
-  pinned INTEGER NOT NULL DEFAULT 0,
-  last_activity_at TEXT NOT NULL,
-  created_at TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS thread_votes (
-  thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
-  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  v INTEGER NOT NULL,
-  PRIMARY KEY (thread_id, user_id)
-);
-CREATE TABLE IF NOT EXISTS replies (
-  id TEXT PRIMARY KEY,
-  thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
-  author_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  body TEXT NOT NULL,
-  upvotes INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS lounges (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  emoji TEXT NOT NULL,
-  topic TEXT NOT NULL,
-  now_playing TEXT NOT NULL,
-  cover_url TEXT NOT NULL,
-  position INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS conversations (
-  id TEXT PRIMARY KEY,
-  updated_at TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS conversation_members (
-  conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
-  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  last_read_at TEXT NOT NULL,
-  PRIMARY KEY (conversation_id, user_id)
-);
-
-CREATE TABLE IF NOT EXISTS messages (
-  id TEXT PRIMARY KEY,
-  room_type TEXT NOT NULL, -- 'lounge' | 'dm' | 'stream'
-  room_id TEXT NOT NULL,
-  author_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  body TEXT NOT NULL,
-  media_url TEXT,
-  kind TEXT NOT NULL DEFAULT 'text',
-  reply_to_id TEXT,
-  created_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS messages_room ON messages(room_type, room_id, created_at DESC);
-
-CREATE TABLE IF NOT EXISTS notifications (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  kind TEXT NOT NULL,
-  title TEXT NOT NULL,
-  body TEXT NOT NULL,
-  actor_id TEXT,
-  link TEXT,
-  read INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS notifications_user ON notifications(user_id, created_at DESC);
-
-CREATE TABLE IF NOT EXISTS store_items (
-  id TEXT PRIMARY KEY,
-  kind TEXT NOT NULL,
-  name TEXT NOT NULL,
-  description TEXT NOT NULL,
-  price INTEGER NOT NULL,
-  rarity TEXT NOT NULL,
-  emoji TEXT NOT NULL,
-  preview TEXT NOT NULL,
-  limited INTEGER NOT NULL DEFAULT 0,
-  position INTEGER NOT NULL
-);
-CREATE TABLE IF NOT EXISTS inventory (
-  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  item_id TEXT NOT NULL REFERENCES store_items(id),
-  qty INTEGER NOT NULL DEFAULT 1,
-  acquired_at TEXT NOT NULL,
-  PRIMARY KEY (user_id, item_id)
-);
-
-CREATE TABLE IF NOT EXISTS streams (
-  id TEXT PRIMARY KEY,
-  host_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  title TEXT NOT NULL,
-  category TEXT NOT NULL,
-  cover_url TEXT NOT NULL,
-  gifts_total INTEGER NOT NULL DEFAULT 0,
-  started_at TEXT NOT NULL,
-  ended_at TEXT
-);
-CREATE TABLE IF NOT EXISTS stream_gifts (
-  stream_id TEXT NOT NULL REFERENCES streams(id) ON DELETE CASCADE,
-  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  amount INTEGER NOT NULL,
-  created_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS push_tokens (
-  token TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  platform TEXT NOT NULL,
-  created_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS reports (
-  id TEXT PRIMARY KEY,
-  reporter_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  target_type TEXT NOT NULL,
-  target_id TEXT NOT NULL,
-  reason TEXT NOT NULL,
-  created_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS daily_counters (
-  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  day TEXT NOT NULL,
-  key TEXT NOT NULL,
-  n INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY (user_id, day, key)
-);
-`;
-
-let _db: DatabaseSync | null = null;
-
-export function getDb() {
-  if (_db) return _db;
-  if (config.dbPath !== ':memory:') mkdirSync(dirname(config.dbPath), { recursive: true });
-  _db = new DatabaseSync(config.dbPath);
-  _db.exec(SCHEMA);
-  return _db;
+interface Driver {
+  kind: 'postgres' | 'sqlite';
+  query(sql: string, params: Param[], tx: unknown): Promise<{ rows: Row[]; changes: number }>;
+  tx<T>(fn: () => Promise<T>): Promise<T>;
+  close(): Promise<void>;
 }
 
-export type Row = Record<string, any>;
-type Params = SQLInputValue[];
+const txStore = new AsyncLocalStorage<unknown>();
+
+async function createPostgres(url: string): Promise<Driver> {
+  const pg = await import('pg');
+  pg.default.types.setTypeParser(20, (v) => Number(v)); // int8 (COUNT) → number
+  pg.default.types.setTypeParser(1700, (v) => Number(v)); // numeric (SUM/AVG) → number
+  const pool = new pg.default.Pool({ connectionString: url, max: Number(process.env.PG_POOL_MAX ?? 20) });
+  return pgDriver(pool, toPg);
+}
+
+/** Converts `?` placeholders to `$1…$n`, leaving `?` inside quoted string literals alone. */
+export function toPg(sql: string) {
+  let out = '';
+  let n = 0;
+  let quoted = false;
+  for (const ch of sql) {
+    if (ch === "'") quoted = !quoted;
+    out += ch === '?' && !quoted ? `$${++n}` : ch;
+  }
+  return out;
+}
+
+function pgDriver(pool: import('pg').Pool, toPg: (s: string) => string): Driver {
+  return {
+    kind: 'postgres',
+    async query(sql, params, tx) {
+      const client = (tx as import('pg').PoolClient | undefined) ?? pool;
+      try {
+        const r = await client.query(toPg(sql), params as unknown[]);
+        return { rows: r.rows, changes: r.rowCount ?? 0 };
+      } catch (e) {
+        (e as Error).message += ` — in: ${sql.replace(/\s+/g, ' ').slice(0, 200)}`;
+        throw e;
+      }
+    },
+    async tx(fn) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const out = await txStore.run(client, fn);
+        await client.query('COMMIT');
+        return out;
+      } catch (e) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw e;
+      } finally {
+        client.release();
+      }
+    },
+    close: () => pool.end(),
+  };
+}
+
+async function createSqlite(path: string): Promise<Driver> {
+  const { DatabaseSync } = await import('node:sqlite');
+  if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
+  const d = new DatabaseSync(path);
+  d.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
+  // SQLite has one connection, so transactions are serialised and other queries wait for them.
+  let lock: Promise<void> = Promise.resolve();
+  let locked = false;
+  return {
+    kind: 'sqlite',
+    async query(sql, params, tx) {
+      if (!tx) while (locked) await lock;
+      const stmt = d.prepare(sql);
+      if (/^\s*(SELECT|WITH)\b/i.test(sql) || /\bRETURNING\b/i.test(sql)) return { rows: stmt.all(...(params as never[])) as Row[], changes: 0 };
+      const r = stmt.run(...(params as never[]));
+      return { rows: [], changes: Number(r.changes) };
+    },
+    async tx(fn) {
+      while (locked) await lock;
+      let release!: () => void;
+      lock = new Promise((r) => (release = r));
+      locked = true;
+      try {
+        d.exec('BEGIN IMMEDIATE');
+        const out = await txStore.run(true, fn);
+        d.exec('COMMIT');
+        return out;
+      } catch (e) {
+        try { d.exec('ROLLBACK'); } catch { /* already rolled back */ }
+        throw e;
+      } finally {
+        locked = false;
+        release();
+      }
+    },
+    close: async () => d.close(),
+  };
+}
+
+let driver: Driver | null = null;
+let ready: Promise<Driver> | null = null;
+
+export function initDb(): Promise<Driver> {
+  ready ??= (async () => {
+    driver = config.databaseUrl ? await createPostgres(config.databaseUrl) : await createSqlite(config.dbPath);
+    await migrate(driver);
+    return driver;
+  })();
+  return ready;
+}
+
+async function migrate(d: Driver) {
+  await d.query('CREATE TABLE IF NOT EXISTS schema_migrations (id INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL)', [], undefined);
+  const done = new Set((await d.query('SELECT id FROM schema_migrations', [], undefined)).rows.map((r) => Number(r.id)));
+  for (const m of MIGRATIONS) {
+    if (done.has(m.id)) continue;
+    await d.tx(async () => {
+      const tx = txStore.getStore();
+      for (const stmt of m.sql.split(/;\s*\n/).map((s) => s.trim()).filter(Boolean)) await d.query(stmt, [], tx);
+      await d.query('INSERT INTO schema_migrations (id, name, applied_at) VALUES (?, ?, ?)', [m.id, m.name, new Date().toISOString()], tx);
+    });
+  }
+}
+
+function drv() {
+  if (!driver) throw new Error('Database not initialised — await initDb() first');
+  return driver;
+}
 
 export const db = {
-  one<T = Row>(sql: string, ...p: Params): T | undefined {
-    return getDb().prepare(sql).get(...p) as T | undefined;
+  get kind() { return drv().kind; },
+  async one<T = Row>(sql: string, ...p: Param[]): Promise<T | undefined> {
+    return (await drv().query(sql, p, txStore.getStore())).rows[0] as T | undefined;
   },
-  all<T = Row>(sql: string, ...p: Params): T[] {
-    return getDb().prepare(sql).all(...p) as T[];
+  async all<T = Row>(sql: string, ...p: Param[]): Promise<T[]> {
+    return (await drv().query(sql, p, txStore.getStore())).rows as T[];
   },
-  run(sql: string, ...p: Params) {
-    return getDb().prepare(sql).run(...p);
+  async run(sql: string, ...p: Param[]) {
+    return { changes: (await drv().query(sql, p, txStore.getStore())).changes };
   },
-  exec(sql: string) {
-    getDb().exec(sql);
+  /** Runs fn in a transaction; nested calls join the outer transaction. */
+  tx<T>(fn: () => Promise<T>): Promise<T> {
+    return txStore.getStore() ? fn() : drv().tx(fn);
   },
-  tx<T>(fn: () => T): T {
-    const d = getDb();
-    d.exec('BEGIN IMMEDIATE');
-    try {
-      const r = fn();
-      d.exec('COMMIT');
-      return r;
-    } catch (e) {
-      d.exec('ROLLBACK');
-      throw e;
-    }
-  },
+  close: () => driver?.close(),
 };
 
 const ALPHA = '0123456789abcdefghijklmnopqrstuvwxyz';

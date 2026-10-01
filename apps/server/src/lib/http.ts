@@ -1,3 +1,4 @@
+import { shared } from './shared';
 import type { Request, Response, NextFunction } from 'express';
 import { ZodError, type ZodTypeAny, type z } from 'zod';
 
@@ -21,14 +22,9 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
   res.status(500).json({ error: 'Something broke on our end. Try again in a sec.' });
 }
 
-/** Tiny in-memory token bucket, keyed per user/IP + action. */
-const buckets = new Map<string, { tokens: number; at: number }>();
-export function rateLimit(key: string, perMinute: number) {
-  const t = Date.now();
-  const b = buckets.get(key) ?? { tokens: perMinute, at: t };
-  b.tokens = Math.min(perMinute, b.tokens + ((t - b.at) / 60_000) * perMinute);
-  b.at = t;
-  if (b.tokens < 1) throw new HttpError(429, 'Whoa, slow down a little!', 'rate_limited');
-  b.tokens -= 1;
-  buckets.set(key, b);
+/** Fixed-window rate limit shared across instances (Redis when configured). */
+export async function rateLimit(key: string, perMinute: number) {
+  const window = Math.floor(Date.now() / 60_000);
+  const n = await shared().incr(`rl:${key}:${window}`, 70);
+  if (n > perMinute) throw new HttpError(429, 'Whoa, slow down a little!', 'rate_limited');
 }

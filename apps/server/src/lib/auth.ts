@@ -25,15 +25,16 @@ export async function verifyPassword(pw: string, stored: string | null) {
 const b64u = (b: Buffer | string) => Buffer.from(b).toString('base64url');
 const TOKEN_TTL_S = 60 * 60 * 24 * 60; // 60 days, mobile-friendly
 
-export function signToken(userId: string) {
+/** `pv` (password version) lets a password reset invalidate every existing session. */
+export function signToken(userId: string, pv = '') {
   const header = b64u(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
   const iat = Math.floor(Date.now() / 1000);
-  const payload = b64u(JSON.stringify({ sub: userId, iat, exp: iat + TOKEN_TTL_S }));
+  const payload = b64u(JSON.stringify({ sub: userId, pv, iat, exp: iat + TOKEN_TTL_S }));
   const sig = createHmac('sha256', config.jwtSecret).update(`${header}.${payload}`).digest('base64url');
   return `${header}.${payload}.${sig}`;
 }
 
-export function verifyToken(token: string | undefined | null): string | null {
+export function verifyToken(token: string | undefined | null): { sub: string; pv: string } | null {
   if (!token) return null;
   const [h, p, s] = token.split('.');
   if (!h || !p || !s) return null;
@@ -43,10 +44,23 @@ export function verifyToken(token: string | undefined | null): string | null {
   try {
     const payload = JSON.parse(Buffer.from(p, 'base64url').toString());
     if (typeof payload.exp !== 'number' || payload.exp < Date.now() / 1000) return null;
-    return typeof payload.sub === 'string' ? payload.sub : null;
+    return typeof payload.sub === 'string' ? { sub: payload.sub, pv: payload.pv ?? '' } : null;
   } catch {
     return null;
   }
+}
+
+/** Short fingerprint of the password hash; changes whenever the password changes. */
+export const passwordVersion = (hash: string | null) => (hash ? createHmac('sha256', config.jwtSecret).update(hash).digest('base64url').slice(0, 10) : '');
+
+/** Resolves a bearer token to an active user id (checks deletion + password version). */
+export async function authenticate(token: string | undefined | null): Promise<string | null> {
+  const t = verifyToken(token);
+  if (!t) return null;
+  const u = await db.one<{ password_hash: string | null; is_ai: number }>('SELECT password_hash, is_ai FROM users WHERE id = ? AND deleted_at IS NULL', t.sub);
+  if (!u || u.is_ai) return null;
+  if (t.pv && t.pv !== passwordVersion(u.password_hash)) return null;
+  return t.sub;
 }
 
 declare global {
@@ -61,20 +75,22 @@ function bearer(req: Request) {
   return h?.startsWith('Bearer ') ? h.slice(7) : null;
 }
 
-export function optionalAuth(req: Request, _res: Response, next: NextFunction) {
-  const uid = verifyToken(bearer(req));
-  if (uid && db.one('SELECT 1 FROM users WHERE id = ? AND deleted_at IS NULL', uid)) req.userId = uid;
-  next();
+export async function optionalAuth(req: Request, _res: Response, next: NextFunction) {
+  try {
+    const uid = await authenticate(bearer(req));
+    if (uid) req.userId = uid;
+    next();
+  } catch (e) { next(e); }
 }
 
-export function requireAuth(req: Request, _res: Response, next: NextFunction) {
-  const uid = verifyToken(bearer(req));
-  if (!uid || !db.one('SELECT 1 FROM users WHERE id = ? AND deleted_at IS NULL', uid)) {
-    return next(new HttpError(401, 'Sign in to keep the vibe going'));
-  }
-  req.userId = uid;
-  db.run('UPDATE users SET last_seen_at = ? WHERE id = ?', now(), uid);
-  next();
+export async function requireAuth(req: Request, _res: Response, next: NextFunction) {
+  try {
+    const uid = await authenticate(bearer(req));
+    if (!uid) return next(new HttpError(401, 'Sign in to keep the vibe going'));
+    req.userId = uid;
+    void db.run('UPDATE users SET last_seen_at = ? WHERE id = ?', now(), uid).catch(() => {});
+    next();
+  } catch (e) { next(e); }
 }
 
 export const uid = (req: Request) => {

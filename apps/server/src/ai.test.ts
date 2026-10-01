@@ -14,7 +14,7 @@ const nim: Server = createServer((req, res) => {
     const body = JSON.parse(raw || '{}');
     calls.push({ path: req.url!, body, auth: req.headers.authorization });
     res.setHeader('Content-Type', 'application/json');
-    if (req.url!.includes('genai')) return res.end(JSON.stringify({ artifacts: [{ base64: Buffer.from('fakejpeg').toString('base64'), finishReason: 'SUCCESS' }] }));
+    if (req.url!.includes('genai')) return res.end(JSON.stringify({ artifacts: [{ base64: Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(16)]).toString("base64"), finishReason: 'SUCCESS' }] }));
     if (body.model?.includes('safety')) return res.end(JSON.stringify({ choices: [{ message: { content: '{"User Safety": "safe"}' } }] }));
     res.end(JSON.stringify({ choices: [{ message: { content: '"@mia.goldenhour: portra 400 is such a vibe, what camera?"' } }] }));
   });
