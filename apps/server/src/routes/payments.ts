@@ -81,8 +81,9 @@ paymentsRouter.post('/payments/stripe/checkout', requireAuth, async (req, res) =
   if (!pack) throw new HttpError(404, 'Unknown pack');
   const u = (await db.one<Row>('SELECT email, email_verified_at FROM users WHERE id = ?', me))!;
   if (!u.email_verified_at) throw new HttpError(403, 'Verify your email before buying Gems', 'email_unverified');
-  // Only allow returning to our own app origin (or the desktop scheme).
-  const base = returnUrl && (returnUrl.startsWith(config.appUrl) || returnUrl.startsWith('chatlol://')) ? returnUrl : `${config.appUrl}/vault`;
+  // Only return to our own web origin. Desktop checkouts land on the web Vault, which hands off to chatlol://.
+  const toApp = !!returnUrl?.startsWith('chatlol://');
+  const base = returnUrl && returnUrl.startsWith(config.appUrl) ? returnUrl : `${config.appUrl}/vault${toApp ? '?app=1' : ''}`;
   const session = await stripe('checkout/sessions', {
     mode: 'payment',
     client_reference_id: me,

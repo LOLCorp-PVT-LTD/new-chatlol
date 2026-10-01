@@ -1,0 +1,68 @@
+# Full ChatLOL stack: Postgres, Redis, 2× API, web (nginx). Optional coturn with `--profile turn`.
+#   cp .env.example .env   # fill in secrets
+#   docker compose up -d --build
+#   docker compose --profile turn up -d   # if you want the bundled coturn instead of your own TURN server
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: chatlol
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chatlol}
+      POSTGRES_DB: chatlol
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chatlol"]
+      interval: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes: [redisdata:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 20
+
+  api:
+    build: { context: ., dockerfile: apps/server/Dockerfile }
+    image: chatlol-api
+    deploy: { replicas: 2 }
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgres://chatlol:${POSTGRES_PASSWORD:-chatlol}@postgres:5432/chatlol
+      REDIS_URL: redis://redis:6379
+    volumes: [uploads:/data/uploads]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  web:
+    build: { context: ., dockerfile: apps/web/Dockerfile }
+    image: chatlol-web
+    ports: ["${WEB_PORT:-8080}:80"]
+    depends_on: [api]
+
+  coturn:
+    profiles: [turn]
+    image: coturn/coturn:4.6
+    network_mode: host
+    command:
+      - -n
+      - --listening-port=3478
+      - --tls-listening-port=5349
+      - --use-auth-secret
+      - --static-auth-secret=${TURN_SECRET}
+      - --realm=${TURN_REALM:-chatlol.app}
+      - --no-cli
+      - --fingerprint
+      - --min-port=49160
+      - --max-port=49200
+      - --denied-peer-ip=10.0.0.0-10.255.255.255
+      - --denied-peer-ip=172.16.0.0-172.31.255.255
+      - --denied-peer-ip=192.168.0.0-192.168.255.255
+
+volumes:
+  pgdata:
+  redisdata:
+  uploads:

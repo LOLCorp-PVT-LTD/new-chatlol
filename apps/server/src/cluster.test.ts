@@ -34,6 +34,10 @@ async function waitUp(port: number) {
 
 before(async () => {
   if (skip) return;
+  const { default: Redis } = await import('ioredis');
+  const r = new Redis(REDIS!);
+  await r.flushdb(); // fresh rate-limit windows and leases
+  r.disconnect();
   start(4711, 0);
   await waitUp(4711); // first boot runs migrations + seed
   start(4712, 1);
@@ -46,7 +50,7 @@ test('socket on instance A receives a DM sent via instance B (Redis adapter)', {
   const login = await a.login({ login: 'demo@chatlol.app', password: 'sunset123' });
   const other = await a.register({ email: `c${Date.now()}@example.com`, password: 'password123', handle: `c${Date.now() % 1e8}`, displayName: 'Cluster', birthdate: '1990-01-01' });
   const sock = ioClient('http://127.0.0.1:4711', { auth: { token: login.token }, transports: ['websocket'] });
-  await new Promise((r) => sock.on('connect', r));
+  await new Promise<void>((r) => sock.on('connect', () => r()));
   const b = createApi({ baseUrl: 'http://127.0.0.1:4712', getToken: () => other.token });
   const { conversation } = await b.openConversation(login.user.id);
   const got = new Promise<any>((r) => sock.on('dm:message', r));
@@ -60,7 +64,7 @@ test('presence and rate limits are shared across instances', { skip }, async () 
   const a = createApi({ baseUrl: 'http://127.0.0.1:4711', getToken: () => null });
   const login = await a.login({ login: 'demo@chatlol.app', password: 'sunset123' });
   const sock = ioClient('http://127.0.0.1:4711', { auth: { token: login.token }, transports: ['websocket'] });
-  await new Promise((r) => sock.on('connect', r));
+  await new Promise<void>((r) => sock.on('connect', () => r()));
   await new Promise((r) => setTimeout(r, 300));
   const b = createApi({ baseUrl: 'http://127.0.0.1:4712', getToken: () => null });
   const u = await b.user('jordan_vibe');

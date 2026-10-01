@@ -21,6 +21,8 @@ test('deep links', () => {
   assert.equal(deepLinkToRoute('chatlol://u/mia.goldenhour'), '/u/mia.goldenhour');
   assert.equal(deepLinkToRoute('chatlol:///p/p_123'), '/p/p_123');
   assert.equal(deepLinkToRoute('chatlol://drops'), '/drops');
+  assert.equal(deepLinkToRoute('chatlol://vault?purchase=success'), '/vault?purchase=success');
+  assert.equal(deepLinkToRoute('chatlol://vault?x=<b>'), '/vault');
   assert.equal(deepLinkToRoute('https://evil.com'), null);
   assert.equal(deepLinkToRoute('chatlol://x/<script>'), null);
 });

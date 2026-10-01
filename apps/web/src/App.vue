@@ -13,6 +13,7 @@ import Composer from './components/Composer.vue';
 import Notifications from './components/Notifications.vue';
 import Drawer from './components/Drawer.vue';
 import Modal from './components/Modal.vue';
+import VerifyBanner from './components/VerifyBanner.vue';
 import { themeMode } from './stores/theme';
 
 const route = useRoute();
@@ -48,6 +49,7 @@ function onPosted(p: Post) { posted.value = p; }
     <div class="max-w-[1320px] mx-auto px-4 lg:px-10 py-5 lg:py-8 flex gap-6 pb-32 lg:pb-10">
       <Sidebar class="hidden xl:block sticky top-28 self-start max-h-[calc(100dvh-8rem)] overflow-y-auto scrollbar-none" />
       <main class="flex-1 min-w-0">
+        <VerifyBanner />
         <RouterView v-slot="{ Component }">
           <Transition name="fade" mode="out-in"><component :is="Component" :key="route.path" :new-post="posted" @compose="composing = true" /></Transition>
         </RouterView>

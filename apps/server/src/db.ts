@@ -16,6 +16,8 @@ export type Param = string | number | bigint | null | Uint8Array;
 
 interface Driver {
   kind: 'postgres' | 'sqlite';
+  /** Cluster-wide mutex (Postgres advisory lock) so concurrent boots don't race migrations / seeding. */
+  exclusive<T>(fn: () => Promise<T>): Promise<T>;
   query(sql: string, params: Param[], tx: unknown): Promise<{ rows: Row[]; changes: number }>;
   tx<T>(fn: () => Promise<T>): Promise<T>;
   close(): Promise<void>;
@@ -46,6 +48,16 @@ export function toPg(sql: string) {
 function pgDriver(pool: import('pg').Pool, toPg: (s: string) => string): Driver {
   return {
     kind: 'postgres',
+    async exclusive(fn) {
+      const client = await pool.connect();
+      try {
+        await client.query('SELECT pg_advisory_lock(727272)');
+        return await fn();
+      } finally {
+        await client.query('SELECT pg_advisory_unlock(727272)').catch(() => {});
+        client.release();
+      }
+    },
     async query(sql, params, tx) {
       const client = (tx as import('pg').PoolClient | undefined) ?? pool;
       try {
@@ -84,6 +96,7 @@ async function createSqlite(path: string): Promise<Driver> {
   let locked = false;
   return {
     kind: 'sqlite',
+    exclusive: (fn) => fn(),
     async query(sql, params, tx) {
       if (!tx) while (locked) await lock;
       const stmt = d.prepare(sql);
@@ -119,8 +132,9 @@ let ready: Promise<Driver> | null = null;
 export function initDb(): Promise<Driver> {
   ready ??= (async () => {
     driver = config.databaseUrl ? await createPostgres(config.databaseUrl) : await createSqlite(config.dbPath);
-    await migrate(driver);
-    return driver;
+    const d = driver;
+    await d.exclusive(() => migrate(d));
+    return d;
   })();
   return ready;
 }
@@ -159,6 +173,7 @@ export const db = {
     return txStore.getStore() ? fn() : drv().tx(fn);
   },
   close: () => driver?.close(),
+  exclusive: <T>(fn: () => Promise<T>) => drv().exclusive(fn),
 };
 
 const ALPHA = '0123456789abcdefghijklmnopqrstuvwxyz';

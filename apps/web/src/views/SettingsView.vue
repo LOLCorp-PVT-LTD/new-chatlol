@@ -10,6 +10,20 @@ import Icon from '../components/Icon.vue';
 const s = useSession();
 const router = useRouter();
 const saving = ref(false);
+const pw = ref({ current: '', next: '' });
+const pwBusy = ref(false);
+async function changePassword() {
+  pwBusy.value = true;
+  try {
+    const r = await api.changePassword(pw.value.current, pw.value.next);
+    await s.adoptSession(r.token);
+    pw.value = { current: '', next: '' };
+    s.toast({ kind: 'info', title: 'Password changed — other devices were signed out 🔐' });
+  } catch (e) { s.toast({ kind: 'error', title: (e as Error).message }); } finally { pwBusy.value = false; }
+}
+async function resend() {
+  try { await api.resendVerification(); s.toast({ kind: 'info', title: `Verification link sent to ${s.user?.email}` }); } catch (e) { s.toast({ kind: 'error', title: (e as Error).message }); }
+}
 
 async function set<K extends keyof UserSettings>(k: K, v: UserSettings[K]) {
   if (!s.user) return;
@@ -56,8 +70,19 @@ async function remove() {
       <div><p class="label mb-2">Wellbeing — take-a-break reminder</p>
         <div class="flex gap-2 flex-wrap"><button v-for="m in [0, 30, 60, 90]" :key="m" class="chip" :class="{ 'chip-active': s.user.settings.breakReminderMins === m }" @click="set('breakReminderMins', m)">{{ m ? `Every ${m} min` : 'Off' }}</button></div></div>
     </section>
+    <section class="card p-5 space-y-3">
+      <p class="label">Password</p>
+      <form class="space-y-2" @submit.prevent="changePassword">
+        <input v-model="pw.current" type="password" class="input" placeholder="Current password" autocomplete="current-password" />
+        <input v-model="pw.next" type="password" class="input" placeholder="New password (8+ characters)" autocomplete="new-password" minlength="8" />
+        <button class="btn-secondary w-full" :disabled="pwBusy || !pw.current || pw.next.length < 8">Change password</button>
+      </form>
+    </section>
     <section class="card p-5 space-y-2">
-      <p class="text-body-md"><b>Account:</b> {{ s.user.email }}</p>
+      <p class="text-body-md flex items-center gap-2"><b>Account:</b> {{ s.user.email }}
+        <span v-if="s.user.emailVerified" class="text-label-sm bg-online/15 text-green-700 rounded-full px-2 py-0.5">✓ verified</span>
+        <button v-else class="text-label-sm text-primary underline" @click="resend">verify email</button></p>
+      <RouterLink to="/vault?tab=gems" class="btn-ghost w-full justify-start"><Icon name="receipt_long" /> Purchase history & Gems</RouterLink>
       <button class="btn-secondary w-full" @click="logout"><Icon name="logout" /> Log out</button>
       <button class="btn w-full text-error hover:bg-error-container" @click="remove"><Icon name="delete_forever" /> Delete account</button>
     </section>

@@ -7,6 +7,7 @@ import { getSocket } from '../../lib/socket';
 import { useSession } from '../../lib/store';
 import { useColors, gradients, shadow } from '../../lib/theme';
 import { PostCard } from '../../components/PostCard';
+import { VerifyBanner } from '../../components/VerifyBanner';
 import { Avatar } from '../../components/people';
 import { Button, Card, Chip, Countdown, Empty, Gradient, Icon, IconButton, Row, Tap, Text } from '../../components/ui';
 
@@ -46,6 +47,7 @@ export default function Stream() {
 
   const header = (
     <View style={{ gap: 14, paddingBottom: 14 }}>
+      <VerifyBanner />
       {drop ? (
         <Tap onPress={() => router.push('/drops')}>
           <Gradient colors={gradients.sunset} style={[{ borderRadius: 32, padding: 18 }, shadow.float]}>

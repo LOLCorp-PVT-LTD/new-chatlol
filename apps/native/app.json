@@ -38,7 +38,11 @@
         "CAMERA",
         "VIBRATE",
         "POST_NOTIFICATIONS",
-        "USE_BIOMETRIC"
+        "USE_BIOMETRIC",
+        "RECORD_AUDIO",
+        "MODIFY_AUDIO_SETTINGS",
+        "ACCESS_NETWORK_STATE",
+        "WAKE_LOCK"
       ],
       "predictiveBackGestureEnabled": true,
       "intentFilters": [
@@ -97,6 +101,13 @@
         "expo-notifications",
         {
           "color": "#ff5e00"
+        }
+      ],
+      [
+        "@config-plugins/react-native-webrtc",
+        {
+          "cameraPermission": "ChatLOL uses the camera when you go live and for Sunset Drops.",
+          "microphonePermission": "ChatLOL uses the microphone when you go live."
         }
       ]
     ],

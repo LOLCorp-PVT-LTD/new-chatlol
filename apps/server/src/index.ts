@@ -36,6 +36,7 @@ async function main() {
   });
 
   if (!config.runWorkers) return;
+  if (!config.ai.enabled) await shared().del('presence:ai');
   let engineStarted = false;
   const tick = async () => {
     if (!(await acquireWorkerLease())) return;

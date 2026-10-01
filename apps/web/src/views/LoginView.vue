@@ -42,6 +42,7 @@ function demo() { login.value = 'demo@chatlol.app'; password.value = 'sunset123'
           <input v-model="password" :type="show ? 'text' : 'password'" class="input pr-14" placeholder="Password" autocomplete="current-password" required />
           <button type="button" class="btn-icon absolute right-1 top-1" :aria-label="show ? 'Hide password' : 'Show password'" @click="show = !show"><Icon :name="show ? 'visibility_off' : 'visibility'" /></button>
         </div>
+        <div class="text-right -mt-1"><RouterLink to="/forgot" class="text-label-md text-primary">Forgot password?</RouterLink></div>
         <p v-if="error" class="text-error text-body-md">{{ error }}</p>
         <button class="btn-primary w-full h-[52px]" :disabled="busy">{{ busy ? 'Logging in…' : 'Log in' }}</button>
         <button type="button" class="btn-secondary w-full" @click="demo">Try the demo account</button>

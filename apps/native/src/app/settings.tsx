@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import type { UserSettings } from '@chatlol/shared';
 import { api } from '../lib/api';
-import { logout, errorToast } from '../lib/actions';
+import { logout, errorToast, adoptSession, toast } from '../lib/actions';
 import { biometricsAvailable, unlockWithBiometrics } from '../lib/native';
 import { session, useSession } from '../lib/store';
 import { useColors } from '../lib/theme';
@@ -28,6 +28,8 @@ export default function Settings() {
   const [bio, setBio] = useState(user?.bio ?? '');
   const [name, setName] = useState(user?.displayName ?? '');
   const [bioAvailable, setBioAvailable] = useState(false);
+  const [pwCur, setPwCur] = useState('');
+  const [pwNew, setPwNew] = useState('');
   useEffect(() => {
     if (Platform.OS === 'web') return;
     void SecureStore.getItemAsync(APP_LOCK_KEY).then((v) => setLock(v === '1'));
@@ -46,6 +48,14 @@ export default function Settings() {
   }
   async function saveProfile() {
     try { session.set({ user: (await api.updateMe({ displayName: name, bio })).user }); Alert.alert('Saved ✨'); } catch (e) { errorToast(e); }
+  }
+  async function changePassword() {
+    try {
+      const r = await api.changePassword(pwCur, pwNew);
+      await adoptSession(r.token);
+      setPwCur(''); setPwNew('');
+      toast({ kind: 'info', title: 'Password changed — other devices were signed out 🔐' });
+    } catch (e) { errorToast(e); }
   }
   function remove() {
     Alert.alert('Delete account?', 'Your posts, streak and Sparks will be gone forever.', [
@@ -88,8 +98,15 @@ export default function Settings() {
           <View style={{ gap: 8 }}><Label>Take-a-break reminder</Label>
             <Row gap={8}>{[0, 30, 60, 90].map((m) => <Chip key={m} label={m ? `${m} min` : 'Off'} active={user.settings.breakReminderMins === m} onPress={() => set('breakReminderMins', m)} />)}</Row></View>
         </Card>
+        <Card style={{ padding: 16, gap: 10 }}>
+          <Label>Password</Label>
+          <Input value={pwCur} onChangeText={setPwCur} placeholder="Current password" secureTextEntry textContentType="password" />
+          <Input value={pwNew} onChangeText={setPwNew} placeholder="New password (8+ characters)" secureTextEntry textContentType="newPassword" />
+          <Button small title="Change password" variant="secondary" disabled={!pwCur || pwNew.length < 8} onPress={changePassword} />
+        </Card>
         <Card style={{ padding: 16, gap: 8 }}>
-          <Text>Signed in as <Text variant="labelLg">{user.email}</Text></Text>
+          <Text>Signed in as <Text variant="labelLg">{user.email}</Text> {user.emailVerified ? <Text variant="labelSm" color={c.online}>✓ verified</Text> : null}</Text>
+          {!user.emailVerified ? <Button small title="Send verification email" variant="secondary" onPress={() => api.resendVerification().then(() => toast({ kind: 'info', title: `Link sent to ${user.email}` })).catch(errorToast)} /> : null}
           <Button title="Log out" icon="logout" variant="secondary" onPress={async () => { await logout(); router.replace('/welcome'); }} />
           <Button title="Delete account" icon="delete-forever" variant="ghost" onPress={remove} />
         </Card>

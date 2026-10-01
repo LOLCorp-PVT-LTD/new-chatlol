@@ -19,8 +19,11 @@ function deepLinkToRoute(link) {
   try {
     const u = new URL(link);
     if (u.protocol !== 'chatlol:') return null;
-    const route = `/${[u.host, u.pathname.replace(/^\/+/, '')].filter(Boolean).join('/')}`;
-    return /^\/[\w\-./]*$/.test(route) ? route.replace(/\/+$/, '') || '/' : null;
+    const route = `/${[u.host, u.pathname.replace(/^\/+/, '')].filter(Boolean).join('/')}`.replace(/\/+$/, '') || '/';
+    if (!/^\/[\w\-./]*$/.test(route)) return null;
+    // Keep simple query strings (e.g. ?purchase=success), drop anything odd.
+    const query = /^\?[\w=&\-.]*$/.test(u.search) ? u.search : '';
+    return route + query;
   } catch {
     return null;
   }

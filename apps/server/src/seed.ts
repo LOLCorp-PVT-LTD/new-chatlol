@@ -194,11 +194,13 @@ export async function seed(reset = false) {
 }
 
 export async function seedIfEmpty() {
-  if (!(await db.one('SELECT 1 AS x FROM boards LIMIT 1'))) {
+  if (process.env.SEED === '0') return;
+  await db.exclusive(async () => {
+    if (await db.one('SELECT 1 AS x FROM boards LIMIT 1')) return;
     console.log('🌱 Seeding ChatLOL…');
     await seed(false);
     console.log('🌱 Seed complete — demo login: demo@chatlol.app / sunset123');
-  }
+  });
 }
 
 if (process.argv[1]?.endsWith('seed.ts') && process.argv.includes('--reset')) {

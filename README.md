@@ -7,7 +7,7 @@
 | **Web** | Vue 3 · Vite · Pinia · Tailwind | `apps/web` |
 | **iOS & Android** | React Native · Expo SDK 57 · expo-router | `apps/native` |
 | **Desktop** (macOS / Windows / Linux) | The same React Native app (react-native-web) in an Electron shell | `apps/desktop` |
-| **API + realtime** | Node 22 · Express 5 · Socket.IO · built-in SQLite | `apps/server` |
+| **API + realtime** | Node 22 · Express 5 · Socket.IO · Postgres (prod) / SQLite (dev) · Redis | `apps/server` |
 | **AI personas** | Free NVIDIA NIM models (chat, vision, FLUX image gen, NemoGuard safety) | `apps/server/src/ai` |
 | **Shared** | Design tokens, types, game rules, typed API client | `packages/shared` |
 
@@ -90,6 +90,30 @@ Without a key, personas run on built-in fallback lines so development still feel
 
 ---
 
+## Production & scaling
+
+`docker compose up -d --build` runs the whole stack: Postgres 16, Redis 7, **2 API replicas** and nginx serving the web app and proxying `/api`, `/uploads` and `/socket.io`. Copy `.env.example` to `.env` first. Add `--profile turn` if you want a bundled coturn instead of your own.
+
+- **Database:** Postgres via `DATABASE_URL` (SQLite via `DATABASE_PATH` for local dev). Versioned migrations run on boot, under an advisory lock so replicas never race.
+- **Redis** (`REDIS_URL`): Socket.IO adapter (cross-instance fan-out), presence, rate limits, lounge and stream state, cluster-wide domain events, and a worker lease so exactly one instance runs the AI personas and Arena payouts.
+- **Uploads:** stored on the shared volume, or on S3 / Cloudflare R2 / MinIO with `S3_BUCKET` (+ `S3_ENDPOINT`, `S3_PUBLIC_URL`). Files are type-checked by their bytes, not their extension.
+- **Tests:** `pnpm -r test` runs everything on SQLite. Set `TEST_DATABASE_URL` and `TEST_REDIS_URL` to run the same suite on Postgres + Redis, plus a two-process cluster test.
+
+### Live video (your TURN server)
+
+Live streams use WebRTC. The host's camera goes straight to each viewer, relayed by **your coturn server** when needed. Set `TURN_URLS` and `TURN_SECRET` (coturn's `use-auth-secret` / `static-auth-secret`). The API mints short-lived credentials per user, so the secret never reaches clients. `RTC_RELAY_ONLY=1` forces every stream through TURN so viewers and hosts never see each other's IP. This mesh caps video at `LIVE_MAX_VIEWERS` (default 12); everyone above the cap still gets chat and gifts.
+
+### Gems (real-money purchases)
+
+Gems are the premium currency and **only buy cosmetics**. Loot crates, Arena stakes and gifts use earned Sparks, so purchased value never enters anything wager-like.
+- **iOS / Android:** in-app purchase via RevenueCat. Create consumables `gems_80`, `gems_450`, `gems_1000`, `gems_2200`; set `EXPO_PUBLIC_REVENUECAT_IOS_KEY` / `_ANDROID_KEY`; point RevenueCat's webhook at `/api/payments/revenuecat/webhook` with `REVENUECAT_WEBHOOK_AUTH`.
+- **Web / desktop:** Stripe Checkout. Set `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`, with a webhook for `checkout.session.completed`, `checkout.session.async_payment_succeeded` and `charge.refunded`.
+- Credits are idempotent per transaction, and refunds claw Gems back. Buying Gems needs a verified email.
+
+### Email
+
+`SMTP_URL` + `MAIL_FROM` turn on verification emails (+50 Sparks when confirmed; required to go live or buy Gems) and password resets. Reset links are single-use, expire after an hour, and sign out every other session. Without SMTP the emails are printed to the server log. Associate `chatlol.app` for universal links so `/verify` and `/reset-password` open in the app.
+
 ## Building & shipping
 
 **iOS / Android** (Expo EAS, no local Xcode or Android Studio needed):
@@ -118,8 +142,4 @@ CHATLOL_API_URL=https://api.chatlol.app pnpm --filter @chatlol/desktop build   #
 
 ## Not wired up yet
 
-- **Live video transport.** Go Live, chat, gifts and viewer counts are real, and the host sees their camera. Relaying video to viewers needs a media server; plug LiveKit or Cloudflare Calls into the `MediaStream` in `LiveRoomView.vue` and `live/[id].tsx`.
-- **Buying Sparks with money.** Sparks are earn-only for now. Add StoreKit / Play Billing (for example RevenueCat) before selling them, and keep the crate odds disclosure.
-- **Scale.** SQLite and in-process sockets are fine for launch and a single box. For horizontal scaling, move to Postgres and add the Socket.IO Redis adapter. Move uploads to S3/R2 and a CDN.
-- **Seed content.** Seed posts use placeholder photos (picsum / pravatar). Real persona photos come from NIM image generation once a key is set.
-- **Email.** There's no verification or password-reset email yet.
+- **Seed content.** Seed posts use placeholder photos; real persona photos come from NIM image generation once a key is set.

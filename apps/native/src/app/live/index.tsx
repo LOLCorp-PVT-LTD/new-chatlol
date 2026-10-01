@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { FlatList, Modal, View } from 'react-native';
+import { FlatList, Modal, Switch, View } from 'react-native';
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
 import type { LiveStream } from '@chatlol/shared';
@@ -18,9 +18,10 @@ export default function Live() {
   const [going, setGoing] = useState(false);
   const [title, setTitle] = useState('');
   const [cat, setCat] = useState(CATS[0]);
+  const [video, setVideo] = useState(true);
   useFocusEffect(useCallback(() => { void api.streams().then((r) => setStreams(r.streams)); }, []));
   async function goLive() {
-    try { const r = await api.goLive({ title, category: cat }); setGoing(false); router.push(`/live/${r.stream.id}`); } catch (e) { errorToast(e); }
+    try { const r = await api.goLive({ title, category: cat, video }); setGoing(false); router.push(`/live/${r.stream.id}`); } catch (e) { errorToast(e); }
   }
   return (
     <View style={{ flex: 1 }}>
@@ -32,7 +33,7 @@ export default function Live() {
             <View style={{ aspectRatio: 16 / 9, backgroundColor: '#3b2e25' }}>
               <Image source={s.coverUrl} style={{ width: '100%', height: '100%', opacity: 0.9 }} contentFit="cover" />
               <View style={{ position: 'absolute', top: 12, left: 12, backgroundColor: c.flame, borderRadius: 99, paddingHorizontal: 10, paddingVertical: 3 }}><Text variant="labelSm" color="#fff">● LIVE</Text></View>
-              <View style={{ position: 'absolute', top: 12, right: 12, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 99, paddingHorizontal: 10, paddingVertical: 3 }}><Text variant="labelSm" color="#fff">👁 {compact(s.viewers)} • 🎁 {compact(s.giftsTotal)}</Text></View>
+              <View style={{ position: 'absolute', top: 12, right: 12, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 99, paddingHorizontal: 10, paddingVertical: 3 }}><Text variant="labelSm" color="#fff">{s.video ? '🎥 ' : ''}👁 {compact(s.viewers)} • 🎁 {compact(s.giftsTotal)}</Text></View>
             </View>
             <Row gap={12} style={{ padding: 14 }}>
               <Avatar user={s.host} size={40} live />
@@ -46,7 +47,11 @@ export default function Live() {
             <Text variant="headlineMd">Go Live</Text>
             <Input value={title} onChangeText={setTitle} placeholder="Stream title" maxLength={80} />
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{CATS.map((x) => <Chip key={x} label={x} active={cat === x} onPress={() => setCat(x)} />)}</View>
-            <Text variant="bodySm" color={c.onSurfaceVariant}>Followers get notified. You keep 70% of gifted Sparks.</Text>
+            <Row gap={10} style={{ backgroundColor: c.surfaceContainerLow, borderRadius: 20, padding: 12 }}>
+              <Text style={{ flex: 1 }}><Text variant="labelLg">Camera on</Text> — video for up to 12 viewers. Off = chat-only.</Text>
+              <Switch value={video} onValueChange={setVideo} trackColor={{ true: c.flame, false: c.sandstone }} thumbColor="#fff" />
+            </Row>
+            <Text variant="bodySm" color={c.onSurfaceVariant}>Followers get notified. You keep 70% of gifted Sparks. Needs a verified email.</Text>
             <Row gap={8}><Button title="Cancel" variant="ghost" onPress={() => setGoing(false)} /><Button title="Start broadcast" icon="videocam" style={{ flex: 1 }} disabled={title.length < 3} onPress={goLive} /></Row>
           </View>
         </View>

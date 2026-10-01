@@ -4,6 +4,7 @@ import { api, tokenStore } from './api';
 import { session, type Toast } from './store';
 import { getSocket, resetSocket } from './socket';
 import { haptic, localNotify, registerForPush, setBadge } from './native';
+import { initPurchases, resetPurchases } from './purchases';
 
 let toastId = 0;
 const recent = new Map<string, number>();
@@ -31,7 +32,7 @@ export function errorToast(e: unknown) {
 
 function wireSocket() {
   const sock = resetSocket();
-  sock.on('wallet', (w) => session.patchUser({ sparks: w.sparks, xp: w.xp, level: w.level }));
+  sock.on('wallet', (w) => session.patchUser({ sparks: w.sparks, gems: w.gems, xp: w.xp, level: w.level }));
   sock.on('reward', (r) => { if (r.reason !== 'rate') toast({ kind: 'reward', title: r.reason, sparks: r.sparks, xp: r.xp }); });
   sock.on('notification', (n) => {
     session.set((s) => ({ notifications: [n, ...s.notifications].slice(0, 80), unread: n.kind === 'dm' ? s.unread : s.unread + 1 }));
@@ -70,7 +71,11 @@ async function afterAuth(token: string) {
   setTimeout(() => reward(me.reward), 600);
   void loadNotifications();
   void registerForPush();
+  void initPurchases(me.user.id).catch((e) => console.warn('purchases init failed', e));
 }
+
+/** Adopts a session token issued by password reset / change. */
+export const adoptSession = (token: string) => afterAuth(token);
 
 export async function boot() {
   const token = await tokenStore.load();
@@ -97,6 +102,7 @@ export async function register(b: Parameters<typeof api.register>[0]) {
 }
 
 export async function logout() {
+  await resetPurchases();
   await tokenStore.save(null);
   session.set({ user: null, notifications: [], unread: 0, unreadDms: 0 });
   setBadge(0);

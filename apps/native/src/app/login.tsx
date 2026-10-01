@@ -25,6 +25,7 @@ export default function Login() {
         <Text color={c.onSurfaceVariant}>Your streak and today’s Sunset Drop are waiting.</Text>
         <Input value={id} onChangeText={setId} placeholder="Email or @handle" autoCapitalize="none" autoComplete="username" textContentType="username" />
         <Input value={pw} onChangeText={setPw} placeholder="Password" secureTextEntry autoComplete="password" textContentType="password" onSubmitEditing={() => submit()} />
+        <View style={{ alignItems: 'flex-end', marginTop: -6 }}><Button small title="Forgot password?" variant="ghost" onPress={() => router.push('/forgot')} /></View>
         {err ? <Text color={c.error}>{err}</Text> : null}
         <Button title="Log in" onPress={() => submit()} loading={busy} />
         <Button title="Try the demo account" variant="secondary" onPress={() => { setId('demo@chatlol.app'); setPw('sunset123'); void submit('demo@chatlol.app', 'sunset123'); }} />

@@ -50,6 +50,8 @@ export const config = {
     ttlSec: Number(env.TURN_TTL ?? 6 * 3600),
     /** Mesh: the host uploads one stream per viewer, so cap it to what a home uplink can carry. */
     maxViewers: Number(env.LIVE_MAX_VIEWERS ?? 12),
+    /** Force media through TURN (hides IPs between peers). Needs TURN_URLS. */
+    relayOnly: env.RTC_RELAY_ONLY === '1',
   },
   payments: {
     stripeSecretKey: env.STRIPE_SECRET_KEY ?? '',

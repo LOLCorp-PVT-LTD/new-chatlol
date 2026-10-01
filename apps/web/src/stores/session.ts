@@ -60,7 +60,7 @@ export const useSession = defineStore('session', () => {
     socket.on('wallet', (w) => {
       if (!user.value) return;
       const before = user.value.level;
-      Object.assign(user.value, { sparks: w.sparks, xp: w.xp, level: w.level });
+      Object.assign(user.value, { sparks: w.sparks, gems: w.gems, xp: w.xp, level: w.level });
       if (w.level > before && !levelUp.value) levelUp.value = { from: before, to: w.level };
     });
     socket.on('reward', (r) => { if (r.reason !== 'rate') toast({ kind: 'reward', title: r.reason, sparks: r.sparks, xp: r.xp }, 2600); });
@@ -118,6 +118,16 @@ export const useSession = defineStore('session', () => {
     void loadNotifications();
   }
 
+  /** Signs in with a token from register / password reset. */
+  async function adoptSession(t: string) {
+    tokenStore.set(t);
+    wireSocket();
+    const me = await api.me();
+    applyUser(me.user);
+    reward(me.reward);
+    void loadNotifications();
+  }
+
   async function register(b: Parameters<typeof api.register>[0]) {
     const r = await api.register(b);
     tokenStore.set(r.token);
@@ -150,7 +160,7 @@ export const useSession = defineStore('session', () => {
 
   return {
     user, ready, isAuthed, toasts, notifications, unread, unreadDms, ticker, levelUp, typing,
-    boot, login, register, logout, refresh, reward, toast, applyUser, spend, onDm, loadNotifications,
+    boot, login, register, logout, adoptSession, refresh, reward, toast, applyUser, spend, onDm, loadNotifications,
     socket: () => socket ?? getSocket(),
   };
 });

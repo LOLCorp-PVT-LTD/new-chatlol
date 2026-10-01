@@ -265,7 +265,13 @@ export interface Page<T> { items: T[]; nextCursor: string | null }
 
 export interface GemPack { id: string; gems: number; bonus: number; usd: number; label: string; best?: boolean }
 
-export interface IceConfig { iceServers: { urls: string | string[]; username?: string; credential?: string }[]; ttl: number; maxViewers: number }
+export interface IceConfig {
+  iceServers: { urls: string | string[]; username?: string; credential?: string }[];
+  /** 'relay' sends all media through TURN so peers never learn each other's IP addresses. */
+  iceTransportPolicy: 'all' | 'relay';
+  ttl: number;
+  maxViewers: number;
+}
 
 /** WebRTC signalling payloads relayed by the server between host and viewers. */
 export interface RtcSignal {

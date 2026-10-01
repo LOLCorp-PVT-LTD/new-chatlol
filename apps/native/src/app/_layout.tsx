@@ -36,9 +36,11 @@ export default function RootLayout() {
   // Auth gate: signed-out users land on the welcome screen.
   useEffect(() => {
     if (!ready) return;
-    const inAuth = ['welcome', 'login', 'join'].includes(segments[0] as string);
+    const first = segments[0] as string;
+    const inAuth = ['welcome', 'login', 'join', 'forgot', 'reset-password'].includes(first);
+    if (first === 'verify') return; // works signed in or out
     if (!user && !inAuth) router.replace('/welcome');
-    else if (user && inAuth) router.replace('/');
+    else if (user && inAuth && first !== 'reset-password') router.replace('/');
   }, [ready, user, segments]);
 
   // Push taps & desktop deep links route into the app.

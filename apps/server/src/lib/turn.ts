@@ -7,7 +7,7 @@ import { config } from '../config';
  * (coturn: use-auth-secret + static-auth-secret=<TURN_SECRET>), so the long-term secret never reaches clients.
  */
 export function iceConfig(userId: string): IceConfig {
-  const { stunUrls, turnUrls, turnSecret, turnUsername, turnCredential, ttlSec, maxViewers } = config.rtc;
+  const { stunUrls, turnUrls, turnSecret, turnUsername, turnCredential, ttlSec, maxViewers, relayOnly } = config.rtc;
   const iceServers: IceConfig['iceServers'] = [];
   if (stunUrls.length) iceServers.push({ urls: stunUrls });
   if (turnUrls.length) {
@@ -19,5 +19,6 @@ export function iceConfig(userId: string): IceConfig {
       iceServers.push({ urls: turnUrls, username: turnUsername, credential: turnCredential });
     }
   }
-  return { iceServers, ttl: ttlSec, maxViewers };
+  const hasTurn = iceServers.some((s) => s.username);
+  return { iceServers, iceTransportPolicy: relayOnly && hasTurn ? 'relay' : 'all', ttl: ttlSec, maxViewers };
 }

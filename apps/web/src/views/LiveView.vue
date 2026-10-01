@@ -15,7 +15,7 @@ const s = useSession();
 const router = useRouter();
 const streams = ref<LiveStream[]>([]);
 const going = ref(false);
-const form = ref({ title: '', category: 'Just Chatting' });
+const form = ref({ title: '', category: 'Just Chatting', video: true });
 const CATS = ['Just Chatting', 'Music', 'Gaming', 'Art', 'Cooking', 'Fitness', 'Study With Me', 'IRL'];
 onMounted(async () => { streams.value = (await api.streams()).streams; });
 async function goLive() {
@@ -36,6 +36,7 @@ async function goLive() {
         <div class="relative aspect-video bg-inverse-surface">
           <img :src="st.coverUrl" alt="" class="w-full h-full object-cover opacity-90 group-hover:scale-105 transition duration-500" />
           <span class="absolute top-3 left-3 bg-flame text-white rounded-full px-2.5 py-1 text-label-sm flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-white animate-pulse" /> LIVE</span>
+          <span v-if="st.video" class="absolute bottom-3 left-3 bg-black/50 text-white rounded-full px-2.5 py-1 text-label-sm">🎥 video</span>
           <span class="absolute top-3 right-3 glass rounded-full px-2.5 py-1 text-label-sm flex items-center gap-1"><Icon name="visibility" :size="14" /> {{ compact(st.viewers) }}</span>
           <span class="absolute bottom-3 right-3 bg-black/50 text-white rounded-full px-2.5 py-1 text-label-sm">🎁 {{ compact(st.giftsTotal) }}</span>
         </div>
@@ -50,7 +51,11 @@ async function goLive() {
       <div class="px-6 pb-6 space-y-3">
         <input v-model="form.title" class="input" placeholder="Stream title" maxlength="80" />
         <div class="flex flex-wrap gap-2"><button v-for="c in CATS" :key="c" class="chip" :class="{ 'chip-active': form.category === c }" @click="form.category = c">{{ c }}</button></div>
-        <p class="text-body-sm text-on-surface-variant">Your followers get a notification. You keep 70% of gifted Sparks.</p>
+        <label class="flex items-center gap-3 rounded-md bg-surface-container-low p-3 cursor-pointer">
+          <input v-model="form.video" type="checkbox" class="w-5 h-5 accent-[#ff5e00]" />
+          <span class="text-body-md flex-1"><b>Camera on</b> — stream video to up to 12 viewers. Off = chat-only stream.</span>
+        </label>
+        <p class="text-body-sm text-on-surface-variant">Your followers get a notification. You keep 70% of gifted Sparks. You need a verified email to go live.</p>
         <button class="btn-primary w-full" :disabled="form.title.length < 3" @click="goLive"><Icon name="videocam" /> Start broadcast</button>
       </div>
     </Modal>
