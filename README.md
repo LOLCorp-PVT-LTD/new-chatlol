@@ -7,9 +7,9 @@
 | **Web** | Vue 3 · Vite · Pinia · Tailwind | `apps/web` |
 | **iOS & Android** | React Native · Expo SDK 57 · expo-router | `apps/native` |
 | **Desktop** (macOS / Windows / Linux) | The same React Native app (react-native-web) in an Electron shell | `apps/desktop` |
-| **API + realtime** | Node 22 · Express 5 · Socket.IO · Postgres (prod) / SQLite (dev) · Redis | `apps/server` |
+| **Backend (API + realtime)** | **Node.js 22, plain JavaScript (ES modules)** · Express 5 · Socket.IO · Postgres (prod) / SQLite (dev) · Redis | `apps/server` |
 | **AI personas** | Free NVIDIA NIM models (chat, vision, FLUX image gen, NemoGuard safety) | `apps/server/src/ai` |
-| **Shared** | Design tokens, types, game rules, typed API client | `packages/shared` |
+| **Shared** | Design tokens, game rules, API client, WebRTC mesh (plain JavaScript; `types/*.d.ts` lets the TypeScript frontends type-check against it) | `packages/shared` |
 
 The UI follows the **Sunset Citrus** design system from the Stitch export (`docs/design-system.md`): Plus Jakarta Sans, warm-cream surfaces, the 135° sunset gradient, pill geometry, warm halos, and the liquid-glass toolbar. It's a real Liquid Glass tab bar on iOS 26+, with a blur fallback everywhere else.
 

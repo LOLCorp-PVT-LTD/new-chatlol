@@ -4,7 +4,9 @@
   "version": "0.1.0",
   "description": "ChatLOL — the golden-hour social network. Vue web, React Native (iOS/Android/desktop), Node realtime API with NVIDIA NIM AI personas.",
   "packageManager": "pnpm@10.33.0",
-  "engines": { "node": ">=22.13" },
+  "engines": {
+    "node": ">=22.13"
+  },
   "scripts": {
     "dev": "pnpm -r --parallel --filter @chatlol/server --filter @chatlol/web dev",
     "dev:server": "pnpm --filter @chatlol/server dev",
@@ -14,5 +16,8 @@
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test"
+  },
+  "devDependencies": {
+    "prettier": "^3.9.9"
   }
 }

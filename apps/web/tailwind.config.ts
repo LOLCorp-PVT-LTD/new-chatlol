@@ -1,5 +1,5 @@
 import type { Config } from 'tailwindcss';
-import { colors, radii } from '../../packages/shared/src/tokens';
+import { colors, radii } from '../../packages/shared/src/tokens.js';
 
 const kebab = (s: string) => s.replace(/[A-Z]/g, (m) => '-' + m.toLowerCase());
 const palette = Object.fromEntries(Object.keys(colors).map((k) => [kebab(k), `rgb(var(--c-${kebab(k)}) / <alpha-value>)`]));

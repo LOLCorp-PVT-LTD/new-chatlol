@@ -29,7 +29,8 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm -r typecheck
+      - name: Typecheck frontends / syntax-check backend
+        run: pnpm -r typecheck && pnpm -r check
       - name: Tests (Postgres + Redis, incl. 2-instance cluster test)
         run: pnpm -r test
       - name: Server tests on SQLite

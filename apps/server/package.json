@@ -4,12 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch --env-file-if-exists=.env src/index.ts",
-    "start": "tsx --env-file-if-exists=.env src/index.ts",
-    "build": "tsc --noEmit",
-    "typecheck": "tsc --noEmit",
-    "seed": "tsx src/seed.ts --reset",
-    "test": "tsx --test --test-concurrency=1 src/api.test.ts src/ai.test.ts src/cluster.test.ts"
+    "dev": "node --watch --disable-warning=ExperimentalWarning --env-file-if-exists=.env src/index.js",
+    "start": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env src/index.js",
+    "check": "find src -name '*.js' -print0 | xargs -0 -n1 node --check",
+    "seed": "node --disable-warning=ExperimentalWarning src/seed.js --reset",
+    "test": "node --disable-warning=ExperimentalWarning --test --test-concurrency=1 src/api.test.js src/ai.test.js src/cluster.test.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1144.0",
@@ -25,15 +24,8 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.3",
-    "@types/multer": "^2.0.0",
-    "@types/node": "^22.18.0",
-    "@types/nodemailer": "^8.0.2",
-    "@types/pg": "^8.23.1",
     "ioredis-mock": "^8.13.1",
-    "socket.io-client": "^4.8.4",
-    "tsx": "^4.20.5",
-    "typescript": "^5.9.3"
-  }
+    "socket.io-client": "^4.8.4"
+  },
+  "main": "src/index.js"
 }
