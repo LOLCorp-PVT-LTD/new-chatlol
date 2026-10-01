@@ -14,3 +14,4 @@ apps/desktop/out/
 apps/desktop/renderer/
 .DS_Store
 *.log
+dump.rdb
