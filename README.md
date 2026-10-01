@@ -18,18 +18,18 @@ The UI follows the **Sunset Citrus** design system from the Stitch export (`docs
 ## Quick start
 
 ```bash
-pnpm install                      # Node 22.13+ and pnpm 10
+npm install                       # Node 22.13+ — run at the repo root (or inside any app folder)
 cp apps/server/.env.example apps/server/.env   # optionally add NVIDIA_API_KEY
 
-pnpm dev:server                   # API + sockets on :4000 (auto-seeds on first run)
-pnpm dev:web                      # Vue web app on :5173
-pnpm dev:native                   # Expo dev server (press i / a / w)
-pnpm dev:desktop                  # Electron, pointing at the Expo web dev server on :8081
+npm run dev:server                # API + sockets on :4000 (auto-seeds on first run)
+npm run dev:web                   # Vue web app on :5173
+npm run dev:native                # Expo dev server (press i / a / w)
+npm run dev:desktop               # Electron, pointing at the Expo web dev server on :8081
 ```
 
 The demo login is **demo@chatlol.app / sunset123**, and every login screen also has a "Try the demo account" button.
 
-`pnpm -r typecheck` and `pnpm -r test` run everything (27 tests: game rules, API integration, NIM engine against a mock, desktop deep links). CI does the same, then builds the web app and bundles the native app for web, iOS and Android.
+`npm run typecheck`, `npm run check` and `npm test` run everything (27 tests: game rules, API integration, NIM engine against a mock, desktop deep links). CI does the same, then builds the web app and bundles the native app for web, iOS and Android.
 
 ---
 
@@ -112,7 +112,7 @@ The original files are in `design/brand/`: `chatlol-wordmark.webp` (text logo), 
 - **Database:** Postgres via `DATABASE_URL` (SQLite via `DATABASE_PATH` for local dev). Versioned migrations run on boot, under an advisory lock so replicas never race.
 - **Redis** (`REDIS_URL`): Socket.IO adapter (cross-instance fan-out), presence, rate limits, lounge and stream state, cluster-wide domain events, and a worker lease so exactly one instance runs the AI personas and Arena payouts.
 - **Uploads:** stored on the shared volume, or on S3 / Cloudflare R2 / MinIO with `S3_BUCKET` (+ `S3_ENDPOINT`, `S3_PUBLIC_URL`). Files are type-checked by their bytes, not their extension.
-- **Tests:** `pnpm -r test` runs everything on SQLite. Set `TEST_DATABASE_URL` and `TEST_REDIS_URL` to run the same suite on Postgres + Redis, plus a two-process cluster test.
+- **Tests:** `npm test` runs everything on SQLite. Set `TEST_DATABASE_URL` and `TEST_REDIS_URL` to run the same suite on Postgres + Redis, plus a two-process cluster test.
 
 ### Live video (your TURN server)
 
@@ -146,12 +146,12 @@ Bundle IDs are `app.chatlol` (edit them in `apps/native/app.json`). Set `EXPO_PU
 **Desktop:**
 
 ```bash
-CHATLOL_API_URL=https://api.chatlol.app pnpm --filter @chatlol/desktop build   # dmg/zip, nsis, AppImage/deb → apps/desktop/out
+CHATLOL_API_URL=https://api.chatlol.app npm run build -w @chatlol/desktop   # dmg/zip, nsis, AppImage/deb → apps/desktop/out
 ```
 
-**Web:** `pnpm --filter @chatlol/web build`, then serve `apps/web/dist` with a SPA fallback and proxy `/api`, `/uploads` and `/socket.io` to the server. Set `VITE_API_URL` if the API is on another origin.
+**Web:** `npm run build:web`, then serve `apps/web/dist` with a SPA fallback and proxy `/api`, `/uploads` and `/socket.io` to the server. Set `VITE_API_URL` if the API is on another origin.
 
-**Server:** `pnpm --filter @chatlol/server start`. Set `NODE_ENV=production`, `JWT_SECRET`, `PUBLIC_URL`, `CORS_ORIGINS` and a persistent `DATABASE_PATH` / `UPLOAD_DIR`.
+**Server:** `npm start -w @chatlol/server` (or `node src/index.js` inside `apps/server`). Set `NODE_ENV=production`, `JWT_SECRET`, `PUBLIC_URL`, `CORS_ORIGINS` and a persistent `DATABASE_PATH` / `UPLOAD_DIR`.
 
 ---
 

@@ -2,13 +2,13 @@
   "name": "@chatlol/desktop",
   "version": "0.1.0",
   "private": true,
-  "description": "ChatLOL for macOS, Windows and Linux — the React Native app (via react-native-web) in a native Electron shell.",
+  "description": "ChatLOL for macOS, Windows and Linux \u2014 the React Native app (via react-native-web) in a native Electron shell.",
   "main": "main.cjs",
   "scripts": {
-    "renderer": "pnpm --filter @chatlol/native export:web",
+    "renderer": "npm run export:web -w @chatlol/native",
     "dev": "cross-env CHATLOL_DEV_URL=http://localhost:8081 electron .",
     "start": "electron .",
-    "build": "pnpm renderer && electron-builder --publish never",
+    "build": "npm run renderer && electron-builder --publish never",
     "typecheck": "node --check main.cjs && node --check preload.cjs",
     "test": "node --test test/*.test.cjs"
   },
@@ -20,11 +20,44 @@
   "build": {
     "appId": "app.chatlol.desktop",
     "productName": "ChatLOL",
-    "files": ["main.cjs", "preload.cjs", "lib/**", "renderer/**", "build/**"],
-    "directories": { "buildResources": "build", "output": "out" },
-    "protocols": [{ "name": "ChatLOL", "schemes": ["chatlol"] }],
-    "mac": { "category": "public.app-category.social-networking", "target": ["dmg", "zip"], "hardenedRuntime": true },
-    "win": { "target": ["nsis"] },
-    "linux": { "target": ["AppImage", "deb"], "category": "Network" }
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "lib/**",
+      "renderer/**",
+      "build/**"
+    ],
+    "directories": {
+      "buildResources": "build",
+      "output": "out"
+    },
+    "protocols": [
+      {
+        "name": "ChatLOL",
+        "schemes": [
+          "chatlol"
+        ]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.social-networking",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "hardenedRuntime": true
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Network"
+    }
   }
 }

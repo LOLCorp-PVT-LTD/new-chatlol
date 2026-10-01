@@ -2,22 +2,25 @@
   "name": "chatlol",
   "private": true,
   "version": "0.1.0",
-  "description": "ChatLOL — the golden-hour social network. Vue web, React Native (iOS/Android/desktop), Node realtime API with NVIDIA NIM AI personas.",
-  "packageManager": "pnpm@10.33.0",
+  "description": "ChatLOL \u2014 the golden-hour social network. Vue web, React Native (iOS/Android/desktop), Node realtime API with NVIDIA NIM AI personas.",
   "engines": {
     "node": ">=22.13"
   },
   "scripts": {
-    "dev": "pnpm -r --parallel --filter @chatlol/server --filter @chatlol/web dev",
-    "dev:server": "pnpm --filter @chatlol/server dev",
-    "dev:web": "pnpm --filter @chatlol/web dev",
-    "dev:native": "pnpm --filter @chatlol/native start",
-    "dev:desktop": "pnpm --filter @chatlol/desktop dev",
-    "build": "pnpm -r build",
-    "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test"
+    "dev:server": "npm run dev -w @chatlol/server",
+    "dev:web": "npm run dev -w @chatlol/web",
+    "dev:native": "npm run start -w @chatlol/native",
+    "dev:desktop": "npm run dev -w @chatlol/desktop",
+    "build:web": "npm run build -w @chatlol/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "check": "npm run check --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
   },
   "devDependencies": {
     "prettier": "^3.9.9"
-  }
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ]
 }

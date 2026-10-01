@@ -13,7 +13,7 @@
     "doctor": "expo-doctor"
   },
   "dependencies": {
-    "@chatlol/shared": "workspace:*",
+    "@chatlol/shared": "*",
     "@config-plugins/react-native-webrtc": "^15.0.2",
     "@expo-google-fonts/plus-jakarta-sans": "^0.4.2",
     "@expo/vector-icons": "^15.1.1",

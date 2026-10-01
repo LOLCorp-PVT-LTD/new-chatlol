@@ -1,15 +1,18 @@
 # ChatLOL API — build from the repo root:  docker build -f apps/server/Dockerfile -t chatlol-api .
 ARG NODE_IMAGE=node:22-slim
 FROM ${NODE_IMAGE}
-ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 WORKDIR /app
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+# All workspace manifests are copied so npm ci can match the lockfile; only the server's deps get installed.
+COPY package.json package-lock.json ./
 COPY packages/shared/package.json packages/shared/
 COPY apps/server/package.json apps/server/
+COPY apps/web/package.json apps/web/
+COPY apps/native/package.json apps/native/
+COPY apps/desktop/package.json apps/desktop/
 # The optional "ca" secret lets builds behind a TLS-inspecting proxy trust its CA; normal builds don't need it.
 RUN --mount=type=secret,id=ca,required=false \
     if [ -f /run/secrets/ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/ca; fi; \
-    corepack enable && pnpm install --frozen-lockfile --prod --filter @chatlol/server... --config.ignore-scripts=true
+    npm ci --omit=dev --ignore-scripts -w @chatlol/server
 COPY packages/shared packages/shared
 COPY apps/server apps/server
 WORKDIR /app/apps/server

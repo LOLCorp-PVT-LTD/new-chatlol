@@ -23,21 +23,20 @@ jobs:
         ports: ['6379:6379']
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
+          cache: npm
+      - run: npm ci
       - name: Typecheck frontends / syntax-check backend
-        run: pnpm -r typecheck && pnpm -r check
+        run: npm run typecheck && npm run check
       - name: Tests (Postgres + Redis, incl. 2-instance cluster test)
-        run: pnpm -r test
+        run: npm test
       - name: Server tests on SQLite
-        run: pnpm --filter @chatlol/server test
+        run: npm test -w @chatlol/server
         env: { TEST_DATABASE_URL: '', TEST_REDIS_URL: '' }
       - name: Build web
-        run: pnpm --filter @chatlol/web build
+        run: npm run build -w @chatlol/web
       - name: Bundle native app (web + iOS + Android JS bundles)
         working-directory: apps/native
         run: npx expo export --platform web --platform ios --platform android --output-dir /tmp/native-export
