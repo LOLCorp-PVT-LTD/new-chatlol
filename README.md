@@ -7,7 +7,7 @@
 | **Web** | Vue 3 · Vite · Pinia · Tailwind | `apps/web` |
 | **iOS & Android** | React Native · Expo SDK 57 · expo-router | `apps/native` |
 | **Desktop** (macOS / Windows / Linux) | The same React Native app (react-native-web) in an Electron shell | `apps/desktop` |
-| **Backend (API + realtime)** | **Node.js 22, plain JavaScript (ES modules)** · Express 5 · Socket.IO · Postgres (prod) / SQLite (dev) · Redis | `apps/server` |
+| **Backend (API + realtime)** | **Node.js 22, plain JavaScript (ES modules)** · Express 5 · Socket.IO · **MongoDB** (official driver) · Redis | `apps/server` |
 | **AI personas** | Free NVIDIA NIM models (chat, vision, FLUX image gen, NemoGuard safety) | `apps/server/src/ai` |
 | **Shared** | Design tokens, game rules, API client, WebRTC mesh (plain JavaScript; `types/*.d.ts` lets the TypeScript frontends type-check against it) | `packages/shared` |
 
@@ -19,7 +19,7 @@ The UI follows the **Sunset Citrus** design system from the Stitch export (`docs
 
 ```bash
 npm install                       # Node 22.13+ — run at the repo root (or inside any app folder)
-cp apps/server/.env.example apps/server/.env   # optionally add NVIDIA_API_KEY
+cp apps/server/.env.example apps/server/.env   # set MONGODB_URL; optionally add NVIDIA_API_KEY
 
 npm run dev:server                # API + sockets on :4000 (auto-seeds on first run)
 npm run dev:web                   # Vue web app on :5173
@@ -27,9 +27,11 @@ npm run dev:native                # Expo dev server (press i / a / w)
 npm run dev:desktop               # Electron, pointing at the Expo web dev server on :8081
 ```
 
+**Database:** the backend uses MongoDB. Put your connection string in `MONGODB_URL` (local `mongodb://127.0.0.1:27017/chatlol` or a MongoDB Atlas `mongodb+srv://…` URL). If you leave it empty in development, the server uses a mongod running on port 27017, or, if there isn't one, starts an embedded MongoDB that keeps its data in `apps/server/data/mongo`. The first run downloads that MongoDB binary (about 100 MB).
+
 The demo login is **demo@chatlol.app / sunset123**, and every login screen also has a "Try the demo account" button.
 
-`npm run typecheck`, `npm run check` and `npm test` run everything (27 tests: game rules, API integration, NIM engine against a mock, desktop deep links). CI does the same, then builds the web app and bundles the native app for web, iOS and Android.
+`npm run typecheck`, `npm run check` and `npm test` run everything (game rules, API integration on MongoDB, NIM engine against a mock, a two-instance cluster test, desktop deep links). CI does the same, then builds the web app and bundles the native app for web, iOS and Android.
 
 ---
 
@@ -107,12 +109,12 @@ The original files are in `design/brand/`: `chatlol-wordmark.webp` (text logo), 
 
 ## Production & scaling
 
-`docker compose up -d --build` runs the whole stack: Postgres 16, Redis 7, **2 API replicas** and nginx serving the web app and proxying `/api`, `/uploads` and `/socket.io`. Copy `.env.example` to `.env` first. Add `--profile turn` if you want a bundled coturn instead of your own.
+`docker compose up -d --build` runs the whole stack: MongoDB 8 (single-node replica set), Redis 7, **2 API replicas** and nginx serving the web app and proxying `/api`, `/uploads` and `/socket.io`. Copy `.env.example` to `.env` first. Add `--profile turn` if you want a bundled coturn instead of your own.
 
-- **Database:** Postgres via `DATABASE_URL` (SQLite via `DATABASE_PATH` for local dev). Versioned migrations run on boot, under an advisory lock so replicas never race.
+- **Database:** MongoDB via `MONGODB_URL` (MongoDB Atlas works as is: `mongodb+srv://…`). Use a replica set in production (Atlas always is one, and the compose file sets one up) so multi-document writes such as payouts and purchases run in transactions. Indexes are created on boot, and first-boot seeding takes a lock so replicas never race. Collections and indexes are listed in `apps/server/src/db.js` and `src/indexes.js`.
 - **Redis** (`REDIS_URL`): Socket.IO adapter (cross-instance fan-out), presence, rate limits, lounge and stream state, cluster-wide domain events, and a worker lease so exactly one instance runs the AI personas and Arena payouts.
 - **Uploads:** stored on the shared volume, or on S3 / Cloudflare R2 / MinIO with `S3_BUCKET` (+ `S3_ENDPOINT`, `S3_PUBLIC_URL`). Files are type-checked by their bytes, not their extension.
-- **Tests:** `npm test` runs everything on SQLite. Set `TEST_DATABASE_URL` and `TEST_REDIS_URL` to run the same suite on Postgres + Redis, plus a two-process cluster test.
+- **Tests:** `npm test` runs the server suite on an embedded MongoDB. Set `TEST_MONGODB_URL` (a replica set, e.g. `mongodb://localhost:27017/?replicaSet=rs0`) and `TEST_REDIS_URL` to run it on real servers, plus a two-process cluster test.
 
 ### Live video (your TURN server)
 
@@ -151,7 +153,7 @@ CHATLOL_API_URL=https://api.chatlol.app npm run build -w @chatlol/desktop   # dm
 
 **Web:** `npm run build:web`, then serve `apps/web/dist` with a SPA fallback and proxy `/api`, `/uploads` and `/socket.io` to the server. Set `VITE_API_URL` if the API is on another origin.
 
-**Server:** `npm start -w @chatlol/server` (or `node src/index.js` inside `apps/server`). Set `NODE_ENV=production`, `JWT_SECRET`, `PUBLIC_URL`, `CORS_ORIGINS` and a persistent `DATABASE_PATH` / `UPLOAD_DIR`.
+**Server:** `npm start -w @chatlol/server` (or `node src/index.js` inside `apps/server`). Set `NODE_ENV=production`, `JWT_SECRET`, `PUBLIC_URL`, `CORS_ORIGINS` `MONGODB_URL` and a persistent `UPLOAD_DIR` (or S3).
 
 ---
 

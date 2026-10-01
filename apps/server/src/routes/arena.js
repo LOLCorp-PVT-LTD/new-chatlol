@@ -10,42 +10,63 @@ import { assertClean } from '../lib/moderation.js';
 
 export const arenaRouter = Router();
 
+/** A new Hot Take document, open for `hours`. */
+export function newTake({ hours, ...fields }) {
+  return {
+    imageUrl: null,
+    agreePool: 0,
+    disagreePool: 0,
+    agreeCount: 0,
+    disagreeCount: 0,
+    endsAt: new Date(Date.now() + hours * 3_600_000).toISOString(),
+    resolved: false,
+    outcome: null,
+    createdAt: now(),
+    ...fields,
+  };
+}
+
 arenaRouter.get('/arena', optionalAuth, async (req, res) => {
   const author = authorCache(req.userId);
-  const rows = await db.all(
-    `SELECT * FROM hot_takes WHERE resolved = 0 OR ends_at > ? ORDER BY resolved ASC, (agree_pool + disagree_pool) DESC LIMIT 30`,
-    new Date(Date.now() - 86_400_000).toISOString(),
-  );
+  const rows = await db.hotTakes
+    .aggregate([
+      { $match: { $or: [{ resolved: false }, { endsAt: { $gt: new Date(Date.now() - 86_400_000).toISOString() } }] } },
+      { $addFields: { pool: { $add: ['$agreePool', '$disagreePool'] } } },
+      { $sort: { resolved: 1, pool: -1 } },
+      { $limit: 30 },
+    ])
+    .toArray();
   const takes = await Promise.all(rows.map((t) => serializeTake(t, req.userId, author)));
-  const pool = (await db.one('SELECT COALESCE(SUM(agree_pool + disagree_pool), 0) AS n FROM hot_takes WHERE resolved = 0')).n;
-  const myStaked = req.userId
-    ? (
-        await db.one(
-          'SELECT COALESCE(SUM(s.amount), 0) AS n FROM stakes s JOIN hot_takes t ON t.id = s.take_id WHERE s.user_id = ? AND t.resolved = 0',
-          req.userId,
-        )
-      ).n
-    : 0;
+  const [open] = await db.hotTakes
+    .aggregate([{ $match: { resolved: false } }, { $group: { _id: null, n: { $sum: { $add: ['$agreePool', '$disagreePool'] } } } }])
+    .toArray();
+  let myStaked = 0;
+  if (req.userId) {
+    const stakes = await db.stakes.find({ userId: req.userId }).toArray();
+    const live = new Set(await db.hotTakes.distinct('_id', { _id: { $in: stakes.map((x) => x.takeId) }, resolved: false }));
+    myStaked = stakes.filter((x) => live.has(x.takeId)).reduce((n, x) => n + x.amount, 0);
+  }
+  const pool = open?.n ?? 0;
   res.json({ takes, pool, myStaked });
 });
 
 /** Stakes are paid only in earned Sparks — purchased Gems can never enter a pool. */
 export async function placeStake(userId, takeId, side, amount) {
   return db.tx(async () => {
-    const take = await db.one('SELECT * FROM hot_takes WHERE id = ?', takeId);
-    if (!take || take.resolved || take.ends_at < now()) throw new HttpError(409, 'This take is locked');
-    const ins = await db.run(
-      'INSERT INTO stakes (take_id, user_id, side, amount) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING',
-      takeId,
-      userId,
-      side,
-      amount,
+    const take = await db.hotTakes.findOne({ _id: takeId });
+    if (!take || take.resolved || take.endsAt < now()) throw new HttpError(409, 'This take is locked');
+    const placed = await db.stakes.insertIfMissing({ takeId, userId }, { side, amount, createdAt: now() });
+    if (!placed) throw new HttpError(409, "You've already picked a side");
+    const paid = await db.users.updateOne({ _id: userId, sparks: { $gte: amount } }, { $inc: { sparks: -amount } });
+    if (!paid.modifiedCount) {
+      if (!db.transactions) await db.stakes.deleteOne({ takeId, userId }); // no transaction to roll back for us
+      throw new HttpError(402, 'Not enough Sparks — earn more in Roulette or Drops', 'insufficient_sparks');
+    }
+    return await db.hotTakes.findOneAndUpdate(
+      { _id: takeId },
+      { $inc: { [`${side}Pool`]: amount, [`${side}Count`]: 1 } },
+      { returnDocument: 'after' },
     );
-    if (!ins.changes) throw new HttpError(409, "You've already picked a side");
-    const paid = await db.run('UPDATE users SET sparks = sparks - ? WHERE id = ? AND sparks >= ?', amount, userId, amount);
-    if (!paid.changes) throw new HttpError(402, 'Not enough Sparks — earn more in Roulette or Drops', 'insufficient_sparks');
-    await db.run(`UPDATE hot_takes SET ${side}_pool = ${side}_pool + ?, ${side}_count = ${side}_count + 1 WHERE id = ?`, amount, takeId);
-    return await db.one('SELECT * FROM hot_takes WHERE id = ?', takeId);
   });
 }
 
@@ -58,7 +79,7 @@ arenaRouter.post('/arena/:id/stake', requireAuth, async (req, res) => {
   );
   const take = await placeStake(me, String(req.params.id), b.side, b.amount);
   await emitWallet(me);
-  res.json({ take: await serializeTake(take, me), sparks: (await db.one('SELECT sparks FROM users WHERE id = ?', me)).sparks });
+  res.json({ take: await serializeTake(take, me), sparks: (await db.users.findOne({ _id: me })).sparks });
 });
 
 arenaRouter.post('/arena', requireAuth, async (req, res) => {
@@ -66,17 +87,9 @@ arenaRouter.post('/arena', requireAuth, async (req, res) => {
   await rateLimit(`propose:${me}`, 2);
   const b = parse(z.object({ category: z.string().min(2).max(20), statement: z.string().min(10).max(160) }), req.body);
   assertClean(b.statement);
-  const id = newId('ht');
-  await db.run(
-    'INSERT INTO hot_takes (id, author_id, category, statement, ends_at, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-    id,
-    me,
-    b.category.toUpperCase(),
-    b.statement,
-    new Date(Date.now() + 12 * 3_600_000).toISOString(),
-    now(),
-  );
-  res.status(201).json({ take: await serializeTake(await db.one('SELECT * FROM hot_takes WHERE id = ?', id), me) });
+  const take = newTake({ _id: newId('ht'), authorId: me, category: b.category.toUpperCase(), statement: b.statement, hours: 12 });
+  await db.hotTakes.insertOne(take);
+  res.status(201).json({ take: await serializeTake(take, me) });
 });
 
 /**
@@ -85,27 +98,27 @@ arenaRouter.post('/arena', requireAuth, async (req, res) => {
  * The conditional UPDATE means exactly one instance pays out, even with several running.
  */
 export async function resolveExpiredTakes() {
-  const due = await db.all('SELECT * FROM hot_takes WHERE resolved = 0 AND ends_at <= ?', now());
+  const due = await db.hotTakes.find({ resolved: false, endsAt: { $lte: now() } }).toArray();
   for (const t of due) {
     const outcome =
-      t.agree_count === t.disagree_count
-        ? t.agree_pool >= t.disagree_pool
+      t.agreeCount === t.disagreeCount
+        ? t.agreePool >= t.disagreePool
           ? 'agree'
           : 'disagree'
-        : t.agree_count > t.disagree_count
+        : t.agreeCount > t.disagreeCount
           ? 'agree'
           : 'disagree';
-    const winPool = outcome === 'agree' ? t.agree_pool : t.disagree_pool;
-    const total = (t.agree_pool + t.disagree_pool) * (1 - ARENA_RAKE);
+    const winPool = outcome === 'agree' ? t.agreePool : t.disagreePool;
+    const total = (t.agreePool + t.disagreePool) * (1 - ARENA_RAKE);
     const results = await db.tx(async () => {
-      const claimed = await db.run('UPDATE hot_takes SET resolved = 1, outcome = ? WHERE id = ? AND resolved = 0', outcome, t.id);
-      if (!claimed.changes) return [];
+      const claimed = await db.hotTakes.updateOne({ _id: t._id, resolved: false }, { $set: { resolved: true, outcome } });
+      if (!claimed.modifiedCount) return [];
       const out = [];
-      for (const s of await db.all('SELECT * FROM stakes WHERE take_id = ?', t.id)) {
+      for (const s of await db.stakes.find({ takeId: t._id }).toArray()) {
         const won = s.side === outcome;
         const payout = won && winPool ? Math.floor((s.amount / winPool) * total) : 0;
-        if (payout) await grant(s.user_id, payout, 25, 'Hot Take win 🏆', false);
-        out.push({ userId: s.user_id, won, payout });
+        if (payout) await grant(s.userId, payout, 25, 'Hot Take win 🏆', false);
+        out.push({ userId: s.userId, won, payout });
       }
       return out;
     });

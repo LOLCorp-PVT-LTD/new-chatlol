@@ -5,22 +5,24 @@ import { createApi } from '@chatlol/shared';
 import { io as ioClient } from 'socket.io-client';
 
 /**
- * Two real API processes sharing Postgres + Redis: a socket on instance A must receive a DM sent
- * through instance B, and only one instance may hold the worker lease.
- * Runs only when TEST_DATABASE_URL and TEST_REDIS_URL are set.
+ * Two real API processes sharing MongoDB + Redis: a socket on instance A must receive a DM sent
+ * through instance B, only one instance may hold the worker lease, and booting both at once seeds once.
+ * Runs only when TEST_MONGODB_URL and TEST_REDIS_URL are set.
  */
-const DB = process.env.TEST_DATABASE_URL;
+const DB = process.env.TEST_MONGODB_URL;
+const DB_NAME = `chatlol_test_cluster_${process.pid}`;
 const REDIS = process.env.TEST_REDIS_URL;
 const skip = !DB || !REDIS;
 const procs = [];
 const logs = ['', ''];
 
 function start(port, i) {
-  const p = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', 'src/index.js'], {
+  const p = spawn(process.execPath, ['src/index.js'], {
     env: {
       ...process.env,
       PORT: String(port),
-      DATABASE_URL: DB,
+      MONGODB_URL: DB,
+      MONGODB_DB: DB_NAME,
       REDIS_URL: REDIS,
       AI_PERSONAS_ENABLED: '0',
       JWT_SECRET: 'cluster-test-secret',
@@ -50,12 +52,30 @@ before(async () => {
   const r = new Redis(REDIS);
   await r.flushdb(); // fresh rate-limit windows and leases
   r.disconnect();
+  // Both boot at once against an empty database: the seed lock must let exactly one of them seed.
   start(4711, 0);
-  await waitUp(4711); // first boot runs migrations + seed
   start(4712, 1);
-  await waitUp(4712);
+  await Promise.all([waitUp(4711), waitUp(4712)]);
 });
-after(() => procs.forEach((p) => p.kill('SIGTERM')));
+after(async () => {
+  procs.forEach((p) => p.kill('SIGTERM'));
+  if (skip) return;
+  const { MongoClient } = await import('mongodb');
+  const c = await MongoClient.connect(DB);
+  await c.db(DB_NAME).dropDatabase();
+  await c.close();
+});
+
+test('two instances booting together seed the database exactly once', { skip }, async () => {
+  const { MongoClient } = await import('mongodb');
+  const c = await MongoClient.connect(DB);
+  const posts = await c.db(DB_NAME).collection('posts').countDocuments();
+  const dms = await c.db(DB_NAME).collection('conversations').countDocuments();
+  await c.close();
+  assert.equal(posts, 50, 'one seed run = 48 photos + 2 battles');
+  assert.equal(dms, 1);
+  assert.equal((logs.join('\n').match(/Seed complete/g) ?? []).length, 1);
+});
 
 test('socket on instance A receives a DM sent via instance B (Redis adapter)', { skip }, async () => {
   const a = createApi({ baseUrl: 'http://127.0.0.1:4711', getToken: () => null });

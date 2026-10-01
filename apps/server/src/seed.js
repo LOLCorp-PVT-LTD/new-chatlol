@@ -1,6 +1,6 @@
 import { db, newId, now, today, initDb } from './db.js';
 import { PERSONAS } from './ai/personas.js';
-import { DEFAULT_SETTINGS } from './lib/serialize.js';
+import { newUser } from './lib/serialize.js';
 import { hashPassword } from './lib/auth.js';
 import { ensureDrop } from './lib/drops.js';
 
@@ -162,330 +162,298 @@ const SEED_CAPTIONS = [
 ];
 
 export async function seed(reset = false) {
-  if (reset) {
-    for (const t of [
-      'email_tokens',
-      'purchases',
-      'daily_counters',
-      'reports',
-      'push_tokens',
-      'stream_gifts',
-      'streams',
-      'inventory',
-      'store_items',
-      'notifications',
-      'messages',
-      'conversation_members',
-      'conversations',
-      'lounges',
-      'replies',
-      'thread_votes',
-      'threads',
-      'boards',
-      'stakes',
-      'hot_takes',
-      'drops',
-      'comments',
-      'reactions',
-      'ratings',
-      'battle_votes',
-      'battle_options',
-      'posts',
-      'blocks',
-      'follows',
-      'users',
-    ])
-      await db.run(`DELETE FROM ${t}`);
-  }
+  if (reset) await db.dropDatabase();
   const t = now();
-  for (const [i, [id, name, emoji]] of BOARDS.entries())
-    await db.run('INSERT INTO boards (id, name, emoji, position) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING', id, name, emoji, i);
-  for (const [i, [id, name, emoji, topic, np, cover]] of LOUNGES.entries()) {
-    await db.run(
-      'INSERT INTO lounges (id, name, emoji, topic, now_playing, cover_url, position) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING',
-      id,
+  const upsertAll = (col, docs) =>
+    docs.length &&
+    col.bulkWrite(docs.map(({ _id, ...d }) => ({ updateOne: { filter: { _id }, update: { $setOnInsert: d }, upsert: true } })));
+
+  await upsertAll(
+    db.boards,
+    BOARDS.map(([id, name, emoji], i) => ({ _id: id, name, emoji, position: i })),
+  );
+  await upsertAll(
+    db.lounges,
+    LOUNGES.map(([id, name, emoji, topic, nowPlaying, coverUrl], i) => ({
+      _id: id,
       name,
       emoji,
       topic,
-      np,
-      cover,
-      i,
-    );
-  }
-  for (const [i, [id, kind, name, desc, price, rarity, emoji, preview, limited]] of STORE.entries()) {
-    await db.run(
-      'INSERT INTO store_items (id, kind, name, description, price, rarity, emoji, preview, limited, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING',
-      id,
+      nowPlaying,
+      coverUrl,
+      position: i,
+    })),
+  );
+  await upsertAll(
+    db.storeItems,
+    STORE.map(([id, kind, name, description, price, rarity, emoji, preview, limited], i) => ({
+      _id: id,
       kind,
       name,
-      desc,
+      description,
       price,
       rarity,
       emoji,
       preview,
-      limited ?? 0,
-      i,
-    );
-  }
+      limited: !!limited,
+      position: i,
+    })),
+  );
 
-  // AI personas as users — always flagged is_ai = 1 (shown as an AI badge in every client).
+  // AI personas as users — always flagged isAi (shown as an AI badge in every client).
   const personaIds = [];
-  for (const p of PERSONAS) {
+  const personas = PERSONAS.map((p) => {
     const id = `ai_${p.id}`;
     personaIds.push(id);
-    const born = `${new Date().getFullYear() - p.age}-0${1 + (p.age % 9)}-1${p.age % 9}`;
-    await db.run(
-      `INSERT INTO users (id, handle, display_name, avatar_url, bio, pronouns, city, birthdate, interests, xp, sparks, streak_days, last_drop_day, badges, settings, is_ai, persona_id, last_seen_at, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?) ON CONFLICT DO NOTHING`,
-      id,
-      p.handle,
-      p.displayName,
-      `https://i.pravatar.cc/300?img=${p.avatarSeed}`,
-      p.bio,
-      p.pronouns,
-      p.city,
-      born,
-      JSON.stringify(p.interests),
-      Math.floor(2000 + Math.random() * 40000),
-      800,
-      Math.floor(3 + Math.random() * 40),
-      today(new Date(Date.now() - 86_400_000)),
-      JSON.stringify(['ai_persona']),
-      JSON.stringify(DEFAULT_SETTINGS),
-      p.id,
-      t,
-      ago(24 * 60),
-    );
-  }
+    return newUser({
+      _id: id,
+      handle: p.handle,
+      displayName: p.displayName,
+      avatarUrl: `https://i.pravatar.cc/300?img=${p.avatarSeed}`,
+      bio: p.bio,
+      pronouns: p.pronouns,
+      city: p.city,
+      birthdate: `${new Date().getFullYear() - p.age}-0${1 + (p.age % 9)}-1${p.age % 9}`,
+      interests: p.interests,
+      xp: Math.floor(2000 + Math.random() * 40000),
+      sparks: 800,
+      streakDays: Math.floor(3 + Math.random() * 40),
+      lastDropDay: today(new Date(Date.now() - 86_400_000)),
+      badges: ['ai_persona'],
+      isAi: true,
+      personaId: p.id,
+      lastSeenAt: t,
+      createdAt: ago(24 * 60),
+    });
+  });
+  await upsertAll(db.users, personas);
 
   // Demo human account so you can log straight in.
-  if (!(await db.one("SELECT 1 AS x FROM users WHERE id = 'u_demo'"))) {
-    await db.run(
-      `INSERT INTO users (id, email, password_hash, handle, display_name, avatar_url, bio, pronouns, city, birthdate, interests, xp, sparks, gems, streak_days, last_drop_day, badges, settings, email_verified_at, last_seen_at, created_at)
-       VALUES (?, 'demo@chatlol.app', ?, 'jordan_vibe', 'Jordan Vance', 'https://i.pravatar.cc/300?img=11', 'photographer + lo-fi beatmaker 🎧 golden hour chaser', 'he/they', 'Seattle, WA', '2001-05-14', ?, 14200, 1420, 120, 21, ?, ?, ?, ?, ?, ?)`,
-      'u_demo',
-      await hashPassword('sunset123'),
-      JSON.stringify(['photography', 'lofi', 'filmcamera', 'thrifted']),
-      today(new Date(Date.now() - 86_400_000)),
-      JSON.stringify(['early_spark', 'streak_7', 'streak_14', 'streak_21']),
-      JSON.stringify(DEFAULT_SETTINGS),
-      t,
-      t,
-      ago(24 * 90),
-    );
-  }
+  await upsertAll(db.users, [
+    newUser({
+      _id: 'u_demo',
+      email: 'demo@chatlol.app',
+      passwordHash: await hashPassword('sunset123'),
+      handle: 'jordan_vibe',
+      displayName: 'Jordan Vance',
+      avatarUrl: 'https://i.pravatar.cc/300?img=11',
+      bio: 'photographer + lo-fi beatmaker 🎧 golden hour chaser',
+      pronouns: 'he/they',
+      city: 'Seattle, WA',
+      birthdate: '2001-05-14',
+      interests: ['photography', 'lofi', 'filmcamera', 'thrifted'],
+      xp: 14200,
+      sparks: 1420,
+      gems: 120,
+      streakDays: 21,
+      lastDropDay: today(new Date(Date.now() - 86_400_000)),
+      badges: ['early_spark', 'streak_7', 'streak_14', 'streak_21'],
+      cosmetics: { frame: 'frame_sunset', flair: 'flair_fire', theme: null, banner: null },
+      emailVerifiedAt: t,
+      lastSeenAt: t,
+      createdAt: ago(24 * 90),
+    }),
+  ]);
   const everyone = [...personaIds, 'u_demo'];
+  const follows = [];
   for (const a of everyone)
-    for (const b of everyone) {
-      if (a !== b && Math.random() < 0.45)
-        await db.run('INSERT INTO follows (follower_id, followee_id, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING', a, b, t);
-    }
+    for (const b of everyone) if (a !== b && Math.random() < 0.45) follows.push({ followerId: a, followeeId: b, createdAt: t });
+  await db.follows.bulkWrite(
+    follows.map((f) => ({
+      updateOne: { filter: { followerId: f.followerId, followeeId: f.followeeId }, update: { $setOnInsert: f }, upsert: true },
+    })),
+  );
 
-  await db.tx(async () => {
-    // Seed posts
-    const drop = await ensureDrop();
-    const postIds = [];
-    for (let i = 0; i < 48; i++) {
-      const author = pick(personaIds);
-      const id = newId('p');
-      const isDrop = i < 10;
-      const created = isDrop ? ago(Math.random() * 10) : ago(Math.random() * 60);
-      const body = pick(SEED_CAPTIONS);
-      await db.run(
-        'INSERT INTO posts (id, author_id, kind, body, media_url, tags, drop_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        id,
-        author,
-        isDrop ? 'drop' : 'photo',
-        body,
-        `https://picsum.photos/seed/${id}/768/960`,
-        JSON.stringify((body.match(/#(\w+)/g) ?? []).map((x) => x.slice(1))),
-        isDrop ? drop.id : null,
-        created,
-      );
-      postIds.push(id);
+  // Posts, with persona ratings biased per post so consensus tiers exist for roulette.
+  const drop = await ensureDrop();
+  const emptyPost = { mediaUrl: null, dropId: null, soundtrack: null, battle: null, commentCount: 0, hidden: false };
+  const posts = [];
+  const ratings = [];
+  for (let i = 0; i < 48; i++) {
+    const isDrop = i < 10;
+    const body = pick(SEED_CAPTIONS);
+    const post = {
+      ...emptyPost,
+      _id: newId('p'),
+      authorId: pick(personaIds),
+      kind: isDrop ? 'drop' : 'photo',
+      body,
+      tags: (body.match(/#(\w+)/g) ?? []).map((x) => x.slice(1)),
+      dropId: isDrop ? drop._id : null,
+      createdAt: isDrop ? ago(Math.random() * 10) : ago(Math.random() * 60),
+    };
+    post.mediaUrl = `https://picsum.photos/seed/${post._id}/768/960`;
+    const base = 2.5 + Math.random() * 2.5;
+    const dist = [0, 0, 0, 0, 0];
+    for (const rater of everyone) {
+      if (rater === post.authorId || Math.random() < 0.35) continue;
+      const score = Math.min(5, Math.max(1, Math.round(base + (Math.random() - 0.5) * 1.6)));
+      ratings.push({ postId: post._id, userId: rater, score, createdAt: t });
+      dist[score - 1]++;
     }
-    // A couple of battles
-    for (const [q, a, b] of [
-      ['Setup A vs Setup B — which vibe are you gaming in tonight?', 'Sunset Glow', 'Clean Minimal'],
-      ['Coffee or matcha for the 3pm slump?', 'Coffee ☕', 'Matcha 🍵'],
-    ]) {
-      const id = newId('p');
-      await db.run(
-        'INSERT INTO posts (id, author_id, kind, body, tags, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-        id,
-        pick(personaIds),
-        'battle',
-        q,
-        '["setupwars"]',
-        ago(Math.random() * 8),
-      );
-      await db.run(
-        'INSERT INTO battle_options (id, post_id, label, media_url, votes, position) VALUES (?, ?, ?, NULL, ?, 0)',
-        newId('bo'),
-        id,
-        a,
-        400 + Math.floor(Math.random() * 600),
-      );
-      await db.run(
-        'INSERT INTO battle_options (id, post_id, label, media_url, votes, position) VALUES (?, ?, ?, NULL, ?, 1)',
-        newId('bo'),
-        id,
-        b,
-        200 + Math.floor(Math.random() * 400),
-      );
-    }
-    // Ratings from personas, biased per post, so consensus tiers exist for roulette.
-    for (const pid of postIds) {
-      const post = await db.one('SELECT author_id FROM posts WHERE id = ?', pid);
-      const base = 2.5 + Math.random() * 2.5;
-      const dist = [0, 0, 0, 0, 0];
-      for (const rater of everyone) {
-        if (rater === post.author_id || Math.random() < 0.35) continue;
-        const s = Math.min(5, Math.max(1, Math.round(base + (Math.random() - 0.5) * 1.6)));
-        await db.run(
-          'INSERT INTO ratings (post_id, user_id, score, created_at) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING',
-          pid,
-          rater,
-          s,
-          t,
-        );
-        dist[s - 1]++;
-      }
-      await db.run('UPDATE posts SET r1 = ?, r2 = ?, r3 = ?, r4 = ?, r5 = ? WHERE id = ?', ...dist, pid);
-    }
-    const COMMENTS = [
-      'the colors in this 😮‍💨',
-      'ok this is a W',
-      'saving for inspo',
-      'where is this??',
-      'lowkey god tier',
-      'the vibe is immaculate',
-      'need this energy today',
-    ];
-    for (const pid of postIds.slice(0, 30)) {
-      const n = 1 + Math.floor(Math.random() * 3);
-      for (let k = 0; k < n; k++)
-        await db.run(
-          'INSERT INTO comments (id, post_id, author_id, body, created_at) VALUES (?, ?, ?, ?, ?)',
-          newId('c'),
-          pid,
-          pick(everyone),
-          pick(COMMENTS),
-          t,
-        );
-      await db.run('UPDATE posts SET comment_count = ? WHERE id = ?', n, pid);
-    }
-
-    // Hot takes
-    for (const [cat, stmt, a, d] of TAKES) {
-      await db.run(
-        'INSERT INTO hot_takes (id, author_id, category, statement, agree_pool, disagree_pool, agree_count, disagree_count, ends_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        newId('ht'),
-        pick(personaIds),
-        cat,
-        stmt,
-        a,
-        d,
-        Math.round(a / 12),
-        Math.round(d / 12),
-        ahead(2 + Math.random() * 10),
-        t,
-      );
-    }
-
-    // Threads
-    const THREADS = [
-      ['daily', 'What’s your go-to golden hour spot?', 'Mine is the parking garage roof by my apartment. Unbeatable views, zero crowds.'],
-      [
-        'hottakes',
-        'Pineapple on pizza is elite and I’m tired of pretending it’s not',
-        'Sweet + salty is a whole cuisine. Defend yourselves.',
+    [post.r1, post.r2, post.r3, post.r4, post.r5] = dist;
+    posts.push(post);
+  }
+  // A couple of battles
+  for (const [q, a, b] of [
+    ['Setup A vs Setup B — which vibe are you gaming in tonight?', 'Sunset Glow', 'Clean Minimal'],
+    ['Coffee or matcha for the 3pm slump?', 'Coffee ☕', 'Matcha 🍵'],
+  ]) {
+    posts.push({
+      ...emptyPost,
+      _id: newId('p'),
+      authorId: pick(personaIds),
+      kind: 'battle',
+      body: q,
+      tags: ['setupwars'],
+      battle: [
+        { id: newId('bo'), label: a, mediaUrl: null, votes: 400 + Math.floor(Math.random() * 600) },
+        { id: newId('bo'), label: b, mediaUrl: null, votes: 200 + Math.floor(Math.random() * 400) },
       ],
-      ['gaming', 'Cozy games recs for a rainy weekend?', 'Already did Stardew and Unpacked. Need more.'],
-      ['music', 'Drop the song that’s on repeat for you rn', 'I’ll start: Tycho — Awake. Every. Single. Day.'],
-      ['fits', 'Best thrift find of the month thread 👟', 'Found a 90s windbreaker for $8. I’m unstoppable.'],
-      ['tech', 'Post your desk setup, we rate 1–10', 'Mechanical keyboard people, show yourselves.'],
-    ];
-    for (const [i, [board, title, body]] of THREADS.entries()) {
-      const id = newId('t');
-      await db.run(
-        'INSERT INTO threads (id, board_id, author_id, title, body, upvotes, reply_count, pinned, last_activity_at, created_at) VALUES (?, ?, ?, ?, ?, ?, 3, ?, ?, ?)',
-        id,
-        board,
-        pick(personaIds),
-        title,
-        body,
-        Math.floor(Math.random() * 300),
-        i === 0 ? 1 : 0,
-        ago(Math.random() * 10),
-        ago(24),
-      );
-      for (let k = 0; k < 3; k++) {
-        await db.run(
-          'INSERT INTO replies (id, thread_id, author_id, body, upvotes, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-          newId('r'),
-          id,
-          pick(personaIds),
-          pick(['this is so real', 'hard agree', 'respectfully... no 😂', 'adding this to my list', 'ok this thread is gold']),
-          Math.floor(Math.random() * 40),
-          ago(Math.random() * 10),
-        );
-      }
-    }
+      r1: 0,
+      r2: 0,
+      r3: 0,
+      r4: 0,
+      r5: 0,
+      createdAt: ago(Math.random() * 8),
+    });
+  }
+  const COMMENTS = [
+    'the colors in this 😮‍💨',
+    'ok this is a W',
+    'saving for inspo',
+    'where is this??',
+    'lowkey god tier',
+    'the vibe is immaculate',
+    'need this energy today',
+  ];
+  const comments = [];
+  for (const post of posts.slice(0, 30)) {
+    const n = 1 + Math.floor(Math.random() * 3);
+    for (let k = 0; k < n; k++)
+      comments.push({ _id: newId('c'), postId: post._id, authorId: pick(everyone), body: pick(COMMENTS), createdAt: t });
+    post.commentCount = n;
+  }
+  await db.posts.insertMany(posts);
+  await db.ratings.insertMany(ratings);
+  await db.comments.insertMany(comments);
 
-    // Lounge history
-    const LINES = [
-      'who else is up rn',
-      'this track is carrying my whole evening',
-      'drop your current song 🎧',
-      'just did my drop go rate it 👀',
-      'the sunset today was insane',
-      'ok what are we rating today',
-    ];
-    for (const [lid] of LOUNGES) {
-      for (let k = 0; k < 6; k++) {
-        await db.run(
-          `INSERT INTO messages (id, room_type, room_id, author_id, body, created_at) VALUES (?, 'lounge', ?, ?, ?, ?)`,
-          newId('m'),
-          lid,
-          pick(personaIds),
-          pick(LINES),
-          ago((6 - k) * 0.2),
-        );
-      }
-    }
+  // Hot takes
+  await db.hotTakes.insertMany(
+    TAKES.map(([category, statement, a, d]) => ({
+      _id: newId('ht'),
+      authorId: pick(personaIds),
+      category,
+      statement,
+      imageUrl: null,
+      agreePool: a,
+      disagreePool: d,
+      agreeCount: Math.round(a / 12),
+      disagreeCount: Math.round(d / 12),
+      endsAt: ahead(2 + Math.random() * 10),
+      resolved: false,
+      outcome: null,
+      createdAt: t,
+    })),
+  );
 
-    // Welcome DM from a persona to the demo account
-    const conv = newId('dm');
-    await db.run('INSERT INTO conversations (id, updated_at) VALUES (?, ?)', conv, t);
-    await db.run('INSERT INTO conversation_members (conversation_id, user_id, last_read_at) VALUES (?, ?, ?)', conv, 'u_demo', ago(1));
-    await db.run('INSERT INTO conversation_members (conversation_id, user_id, last_read_at) VALUES (?, ?, ?)', conv, 'ai_mia', t);
-    await db.run(
-      `INSERT INTO messages (id, room_type, room_id, author_id, body, created_at) VALUES (?, 'dm', ?, 'ai_mia', ?, ?)`,
-      newId('m'),
-      conv,
-      'your golden hour drop yesterday was so good 🧡 what film stock was that?',
-      ago(0.5),
-    );
+  // Threads
+  const THREADS = [
+    ['daily', 'What’s your go-to golden hour spot?', 'Mine is the parking garage roof by my apartment. Unbeatable views, zero crowds.'],
+    [
+      'hottakes',
+      'Pineapple on pizza is elite and I’m tired of pretending it’s not',
+      'Sweet + salty is a whole cuisine. Defend yourselves.',
+    ],
+    ['gaming', 'Cozy games recs for a rainy weekend?', 'Already did Stardew and Unpacked. Need more.'],
+    ['music', 'Drop the song that’s on repeat for you rn', 'I’ll start: Tycho — Awake. Every. Single. Day.'],
+    ['fits', 'Best thrift find of the month thread 👟', 'Found a 90s windbreaker for $8. I’m unstoppable.'],
+    ['tech', 'Post your desk setup, we rate 1–10', 'Mechanical keyboard people, show yourselves.'],
+  ];
+  const threads = [];
+  const replies = [];
+  for (const [i, [boardId, title, body]] of THREADS.entries()) {
+    const id = newId('t');
+    threads.push({
+      _id: id,
+      boardId,
+      authorId: pick(personaIds),
+      title,
+      body,
+      upvotes: Math.floor(Math.random() * 300),
+      replyCount: 3,
+      pinned: i === 0,
+      lastActivityAt: ago(Math.random() * 10),
+      createdAt: ago(24),
+    });
+    for (let k = 0; k < 3; k++)
+      replies.push({
+        _id: newId('r'),
+        threadId: id,
+        authorId: pick(personaIds),
+        body: pick(['this is so real', 'hard agree', 'respectfully... no 😂', 'adding this to my list', 'ok this thread is gold']),
+        upvotes: Math.floor(Math.random() * 40),
+        createdAt: ago(Math.random() * 10),
+      });
+  }
+  await db.threads.insertMany(threads);
+  await db.replies.insertMany(replies);
 
-    // Starter inventory for demo
-    for (const item of ['frame_sunset', 'flair_fire', 'streak_freeze'])
-      await db.run(
-        'INSERT INTO inventory (user_id, item_id, qty, acquired_at) VALUES (?, ?, 1, ?) ON CONFLICT DO NOTHING',
-        'u_demo',
-        item,
-        t,
-      );
-    await db.run(
-      `UPDATE users SET cosmetics = '{"frame":"frame_sunset","flair":"flair_fire","theme":null,"banner":null}' WHERE id = 'u_demo'`,
-    );
+  // Lounge history
+  const LINES = [
+    'who else is up rn',
+    'this track is carrying my whole evening',
+    'drop your current song 🎧',
+    'just did my drop go rate it 👀',
+    'the sunset today was insane',
+    'ok what are we rating today',
+  ];
+  const message = (roomType, roomId, authorId, body, createdAt) => ({
+    _id: newId('m'),
+    roomType,
+    roomId,
+    authorId,
+    body,
+    mediaUrl: null,
+    kind: 'text',
+    replyToId: null,
+    createdAt,
   });
+  const messages = [];
+  for (const [lid] of LOUNGES)
+    for (let k = 0; k < 6; k++) messages.push(message('lounge', lid, pick(personaIds), pick(LINES), ago((6 - k) * 0.2)));
+
+  // Welcome DM from a persona to the demo account
+  const pairKey = ['ai_mia', 'u_demo'].sort().join('|');
+  const conv = newId('dm');
+  const dm = await db.conversations.insertIfMissing(
+    { pairKey },
+    {
+      _id: conv,
+      members: [
+        { userId: 'u_demo', lastReadAt: ago(1) },
+        { userId: 'ai_mia', lastReadAt: t },
+      ],
+      updatedAt: t,
+    },
+  );
+  if (dm)
+    messages.push(message('dm', conv, 'ai_mia', 'your golden hour drop yesterday was so good 🧡 what film stock was that?', ago(0.5)));
+  await db.messages.insertMany(messages);
+
+  // Starter inventory for demo
+  await db.inventory.bulkWrite(
+    ['frame_sunset', 'flair_fire', 'streak_freeze'].map((itemId) => ({
+      updateOne: { filter: { userId: 'u_demo', itemId }, update: { $setOnInsert: { qty: 1, acquiredAt: t } }, upsert: true },
+    })),
+  );
 }
 
 export async function seedIfEmpty() {
   if (process.env.SEED === '0') return;
-  await db.exclusive(async () => {
-    if (await db.one('SELECT 1 AS x FROM boards LIMIT 1')) return;
+  // Several API replicas may boot at once; one seeds, the others wait and then see the data.
+  await db.exclusive('seed', async () => {
+    if (await db.boards.findOne({})) return;
     console.log('🌱 Seeding ChatLOL…');
     await seed(false);
     console.log('🌱 Seed complete — demo login: demo@chatlol.app / sunset123');
@@ -495,8 +463,9 @@ export async function seedIfEmpty() {
 if (process.argv[1]?.endsWith('seed.js') && process.argv.includes('--reset')) {
   initDb()
     .then(() => seed(true))
-    .then(() => {
+    .then(async () => {
       console.log('Reseeded.');
+      await db.close();
       process.exit(0);
     });
 }

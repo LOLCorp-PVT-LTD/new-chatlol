@@ -1,12 +1,12 @@
 import { Server } from 'socket.io';
-import { db, newId, now } from './db.js';
+import { db, now } from './db.js';
 import { authenticate } from './lib/auth.js';
 import { setIo, room } from './lib/io.js';
 import { presence } from './lib/presence.js';
 import { serializeMessage } from './lib/serialize.js';
 import { localCheck } from './lib/moderation.js';
-import { insertLoungeMessage, loungeKey } from './routes/social.js';
-import { streamKeys, endStream } from './routes/live.js';
+import { insertLoungeMessage, loungeKey, markRead, recentMessages } from './routes/social.js';
+import { streamKeys, endStream, insertStreamMessage } from './routes/live.js';
 import { bus } from './lib/events.js';
 import { shared, redisClient, duplicateRedis } from './lib/shared.js';
 import { config } from './config.js';
@@ -65,16 +65,14 @@ export async function attachRealtime(server) {
     socket.on(
       'lounge:join',
       safe(async (loungeId, ack) => {
-        if (typeof loungeId !== 'string' || !(await db.one('SELECT 1 AS x FROM lounges WHERE id = ?', loungeId))) return;
+        if (typeof loungeId !== 'string' || !(await db.lounges.findOne({ _id: loungeId }))) return;
         socket.join(room.lounge(loungeId));
         joinedLounges.add(loungeId);
         if (userId) {
           await shared().sadd(loungeKey(loungeId), userId);
           io.to(room.lounge(loungeId)).emit('lounge:presence', { loungeId, onlineCount: await shared().scard(loungeKey(loungeId)) });
         }
-        const rows = (
-          await db.all(`SELECT * FROM messages WHERE room_type = 'lounge' AND room_id = ? ORDER BY created_at DESC LIMIT 60`, loungeId)
-        ).reverse();
+        const rows = (await recentMessages('lounge', loungeId, 60)).reverse();
         ack?.(await Promise.all(rows.map((m) => serializeMessage(m))));
       }),
     );
@@ -112,10 +110,10 @@ export async function attachRealtime(server) {
         if (!userId) return;
         if (typing && Date.now() - (typingAt.get(conversationId) ?? 0) < 1500) return;
         typingAt.set(conversationId, Date.now());
-        const members = await db.all('SELECT user_id FROM conversation_members WHERE conversation_id = ?', conversationId);
-        if (!members.some((m) => m.user_id === userId)) return;
-        for (const m of members)
-          if (m.user_id !== userId) io.to(room.user(m.user_id)).emit('dm:typing', { conversationId, userId, typing: !!typing });
+        if (typeof conversationId !== 'string') return;
+        const c = await db.conversations.findOne({ _id: conversationId, 'members.userId': userId }, { projection: { members: 1 } });
+        for (const m of c?.members ?? [])
+          if (m.userId !== userId) io.to(room.user(m.userId)).emit('dm:typing', { conversationId, userId, typing: !!typing });
       }),
     );
 
@@ -123,20 +121,12 @@ export async function attachRealtime(server) {
       'dm:read',
       safe(async ({ conversationId }) => {
         if (!userId) return;
+        if (typeof conversationId !== 'string') return;
         const at = now();
-        const r = await db.run(
-          'UPDATE conversation_members SET last_read_at = ? WHERE conversation_id = ? AND user_id = ?',
-          at,
-          conversationId,
-          userId,
-        );
-        if (!r.changes) return;
-        for (const m of await db.all(
-          'SELECT user_id FROM conversation_members WHERE conversation_id = ? AND user_id != ?',
-          conversationId,
-          userId,
-        )) {
-          io.to(room.user(m.user_id)).emit('dm:read', { conversationId, userId, at });
+        if (!(await markRead(conversationId, userId, at))) return;
+        const c = await db.conversations.findOne({ _id: conversationId }, { projection: { members: 1 } });
+        for (const m of c?.members ?? []) {
+          if (m.userId !== userId) io.to(room.user(m.userId)).emit('dm:read', { conversationId, userId, at });
         }
       }),
     );
@@ -148,8 +138,7 @@ export async function attachRealtime(server) {
     socket.on(
       'stream:join',
       safe(async (streamId) => {
-        if (typeof streamId !== 'string' || !(await db.one('SELECT 1 AS x FROM streams WHERE id = ? AND ended_at IS NULL', streamId)))
-          return;
+        if (typeof streamId !== 'string' || !(await db.streams.findOne({ _id: streamId, endedAt: null }))) return;
         socket.join(room.stream(streamId));
         joinedStreams.add(streamId);
         await shared().sadd(streamKeys.watchers(streamId), socket.id);
@@ -174,17 +163,9 @@ export async function attachRealtime(server) {
           .trim()
           .slice(0, 300);
         if (!text || !localCheck(text).ok) return;
-        const id = newId('m');
-        await db.run(
-          `INSERT INTO messages (id, room_type, room_id, author_id, body, created_at) VALUES (?, 'stream', ?, ?, ?, ?)`,
-          id,
-          streamId,
-          userId,
-          text,
-          now(),
-        );
-        io.to(room.stream(streamId)).emit('stream:chat', await serializeMessage(await db.one('SELECT * FROM messages WHERE id = ?', id)));
-        bus.emitEvent('stream:chat', { streamId, messageId: id, authorId: userId });
+        const msg = await insertStreamMessage(streamId, userId, text);
+        io.to(room.stream(streamId)).emit('stream:chat', msg);
+        bus.emitEvent('stream:chat', { streamId, messageId: msg.id, authorId: userId });
       }),
     );
 
@@ -192,8 +173,8 @@ export async function attachRealtime(server) {
     socket.on(
       'rtc:host',
       safe(async (streamId, ack) => {
-        const s = userId ? await db.one('SELECT * FROM streams WHERE id = ? AND ended_at IS NULL', streamId) : undefined;
-        if (!s || s.host_id !== userId) return ack?.({ ok: false, error: 'Not your stream' });
+        const s = userId && typeof streamId === 'string' ? await db.streams.findOne({ _id: streamId, endedAt: null }) : null;
+        if (!s || s.hostId !== userId) return ack?.({ ok: false, error: 'Not your stream' });
         await shared().set(streamKeys.host(streamId), socket.id, 12 * 3600);
         await shared().del(streamKeys.rtcViewers(streamId));
         hosting.add(streamId);
@@ -208,7 +189,7 @@ export async function attachRealtime(server) {
       'rtc:watch',
       safe(async (streamId, ack) => {
         if (typeof streamId !== 'string' || !joinedStreams.has(streamId)) return ack?.({ ok: false, reason: 'offline' });
-        const s = await db.one('SELECT video FROM streams WHERE id = ? AND ended_at IS NULL', streamId);
+        const s = await db.streams.findOne({ _id: streamId, endedAt: null }, { projection: { video: 1 } });
         if (!s?.video) return ack?.({ ok: false, reason: 'no-video' });
         const host = await shared().get(streamKeys.host(streamId));
         if (!host) return ack?.({ ok: false, reason: 'offline' });
@@ -276,7 +257,7 @@ export async function attachRealtime(server) {
           }
         }
         if (userId && (await presence.disconnect(userId))) {
-          await db.run('UPDATE users SET last_seen_at = ? WHERE id = ?', now(), userId);
+          await db.users.updateOne({ _id: userId }, { $set: { lastSeenAt: now() } });
           io.to(room.global).emit('presence', { userId, online: false });
         }
       }),

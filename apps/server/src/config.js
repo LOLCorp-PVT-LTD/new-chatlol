@@ -10,9 +10,16 @@ export const config = {
   isProd,
   corsOrigins: (env.CORS_ORIGINS ?? 'http://localhost:5173,http://localhost:8081,app://chatlol').split(',').map((s) => s.trim()),
   jwtSecret: env.JWT_SECRET ?? randomBytes(32).toString('hex'),
-  /** postgres://… → Postgres (production). Otherwise SQLite at DATABASE_PATH (dev/tests). */
-  databaseUrl: env.DATABASE_URL ?? '',
-  dbPath: env.DATABASE_PATH ?? './data/chatlol.db',
+  /**
+   * MongoDB connection string (Atlas: mongodb+srv://…). Empty in dev = local mongod on 27017 if running,
+   * else an embedded MongoDB stored in MONGODB_EMBEDDED_PATH. Use a replica set in production (Atlas is one)
+   * so multi-document writes run in transactions.
+   */
+  mongo: {
+    url: env.MONGODB_URL ?? env.MONGODB_URI ?? '',
+    dbName: env.MONGODB_DB ?? '',
+    embeddedPath: env.MONGODB_EMBEDDED_PATH ?? './data/mongo',
+  },
   redisUrl: env.REDIS_URL ?? '',
   /** Set to 0 on extra instances so only one runs the AI persona engine & schedulers (a Redis lock also guards this). */
   runWorkers: (env.RUN_WORKERS ?? '1') !== '0',

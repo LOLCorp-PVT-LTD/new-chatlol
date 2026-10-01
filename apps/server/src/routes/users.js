@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { db, now, json, newId } from '../db.js';
+import { db, now, newId, escapeRegex } from '../db.js';
 import { optionalAuth, requireAuth, uid } from '../lib/auth.js';
 import { HttpError, parse } from '../lib/http.js';
 import { userPublic, serializePosts, invalidateStats, DEFAULT_SETTINGS } from '../lib/serialize.js';
@@ -20,28 +20,28 @@ usersRouter.get('/users', optionalAuth, async (req, res) => {
     }),
     req.query,
   );
-  const where = ['deleted_at IS NULL'];
-  const args = [];
+  const filter = { deletedAt: null };
   if (p.q) {
-    where.push('(LOWER(handle) LIKE ? OR LOWER(display_name) LIKE ? OR LOWER(city) LIKE ?)');
-    const like = `%${p.q.toLowerCase()}%`;
-    args.push(like, like, like);
+    const re = new RegExp(escapeRegex(p.q), 'i');
+    filter.$or = [{ handle: re }, { displayName: re }, { city: re }];
   }
-  if (p.interest) {
-    where.push('interests LIKE ?');
-    args.push(`%"${p.interest}"%`);
-  }
+  if (p.interest) filter.interests = p.interest;
   if (req.userId) {
-    where.push('id != ?', 'id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = ?)');
-    args.push(req.userId, req.userId);
+    const blocked = await db.blocks.distinct('blockedId', { blockerId: req.userId });
+    filter._id = { $nin: [req.userId, ...blocked] };
   }
-  const viewer = req.userId ? await db.one('SELECT settings FROM users WHERE id = ?', req.userId) : null;
-  if (viewer && !{ ...DEFAULT_SETTINGS, ...json(viewer.settings, {}) }.showAIPersonas) where.push('is_ai = 0');
-  const order = { vibe: 'xp DESC', new: 'created_at DESC', level: 'xp DESC', streak: 'streak_days DESC' }[p.sort ?? 'vibe'];
+  const viewer = req.userId ? await db.users.findOne({ _id: req.userId }, { projection: { settings: 1 } }) : null;
+  if (viewer && !{ ...DEFAULT_SETTINGS, ...viewer.settings }.showAIPersonas) filter.isAi = false;
+  const sort = { vibe: { xp: -1 }, new: { createdAt: -1 }, level: { xp: -1 }, streak: { streakDays: -1 } }[p.sort ?? 'vibe'];
   const offset = p.cursor ?? 0;
-  let rows = await db.all(`SELECT * FROM users WHERE ${where.join(' AND ')} ORDER BY ${order} LIMIT 200 OFFSET ?`, ...args, offset);
+  let rows = await db.users
+    .find(filter)
+    .sort({ ...sort, _id: 1 })
+    .skip(offset)
+    .limit(200)
+    .toArray();
   if (p.online) {
-    const flags = await Promise.all(rows.map((r) => presence.isOnline(r.id)));
+    const flags = await Promise.all(rows.map((r) => presence.isOnline(r._id)));
     rows = rows.filter((_, i) => flags[i]);
   }
   const items = await Promise.all(rows.slice(0, 24).map((r) => userPublic(r, req.userId)));
@@ -50,28 +50,22 @@ usersRouter.get('/users', optionalAuth, async (req, res) => {
 });
 
 usersRouter.get('/users/:handle', optionalAuth, async (req, res) => {
-  const row = await db.one('SELECT * FROM users WHERE LOWER(handle) = LOWER(?) AND deleted_at IS NULL', String(req.params.handle));
-  if (!row) throw new HttpError(404, 'No one here by that name');
-  const posts = await db.all('SELECT * FROM posts WHERE author_id = ? AND hidden = 0 ORDER BY created_at DESC LIMIT 30', row.id);
-  res.json({ user: await userPublic(row, req.userId), posts: await serializePosts(posts, req.userId) });
+  const u = await db.users.findOne({ handleLower: String(req.params.handle).toLowerCase(), deletedAt: null });
+  if (!u) throw new HttpError(404, 'No one here by that name');
+  const posts = await db.posts.find({ authorId: u._id, hidden: false }).sort({ createdAt: -1 }).limit(30).toArray();
+  res.json({ user: await userPublic(u, req.userId), posts: await serializePosts(posts, req.userId) });
 });
 
 usersRouter.post('/users/:id/follow', requireAuth, async (req, res) => {
   const me = uid(req);
-  const target = await db.one('SELECT * FROM users WHERE id = ? AND deleted_at IS NULL', String(req.params.id));
-  if (!target || target.id === me) throw new HttpError(404, 'User not found');
-  const existing = await db.one('SELECT 1 AS x FROM follows WHERE follower_id = ? AND followee_id = ?', me, target.id);
-  if (existing) await db.run('DELETE FROM follows WHERE follower_id = ? AND followee_id = ?', me, target.id);
-  else {
-    await db.run(
-      'INSERT INTO follows (follower_id, followee_id, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING',
-      me,
-      target.id,
-      now(),
-    );
-    const meRow = await db.one('SELECT handle FROM users WHERE id = ?', me);
-    const mutual = await db.one('SELECT 1 AS x FROM follows WHERE follower_id = ? AND followee_id = ?', target.id, me);
-    await notify(target.id, {
+  const target = await db.users.findOne({ _id: String(req.params.id), deletedAt: null });
+  if (!target || target._id === me) throw new HttpError(404, 'User not found');
+  const existing = (await db.follows.deleteOne({ followerId: me, followeeId: target._id })).deletedCount > 0;
+  if (!existing) {
+    await db.follows.insertIfMissing({ followerId: me, followeeId: target._id }, { createdAt: now() });
+    const meRow = await db.users.findOne({ _id: me }, { projection: { handle: 1 } });
+    const mutual = await db.follows.findOne({ followerId: target._id, followeeId: me });
+    await notify(target._id, {
       kind: 'follow',
       actorId: me,
       link: `/u/${meRow.handle}`,
@@ -80,7 +74,7 @@ usersRouter.post('/users/:id/follow', requireAuth, async (req, res) => {
     });
   }
   invalidateStats(me);
-  invalidateStats(target.id);
+  invalidateStats(target._id);
   res.json({ following: !existing });
 });
 
@@ -88,14 +82,15 @@ usersRouter.post('/users/:id/block', requireAuth, async (req, res) => {
   const me = uid(req);
   const other = String(req.params.id);
   if (other === me) throw new HttpError(400, "You can't block yourself");
-  await db.run('INSERT INTO blocks (blocker_id, blocked_id) VALUES (?, ?) ON CONFLICT DO NOTHING', me, other);
-  await db.run(
-    'DELETE FROM follows WHERE (follower_id = ? AND followee_id = ?) OR (follower_id = ? AND followee_id = ?)',
-    me,
-    other,
-    other,
-    me,
-  );
+  await db.blocks.insertIfMissing({ blockerId: me, blockedId: other }, { createdAt: now() });
+  await db.follows.deleteMany({
+    $or: [
+      { followerId: me, followeeId: other },
+      { followerId: other, followeeId: me },
+    ],
+  });
+  invalidateStats(me);
+  invalidateStats(other);
   res.json({ ok: true });
 });
 
@@ -108,21 +103,18 @@ usersRouter.post('/reports', requireAuth, async (req, res) => {
     }),
     req.body,
   );
-  await db.run(
-    'INSERT INTO reports (id, reporter_id, target_type, target_id, reason, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-    newId('rep'),
-    uid(req),
-    b.targetType,
-    b.targetId,
-    b.reason,
-    now(),
-  );
+  await db.reports.insertOne({
+    _id: newId('rep'),
+    reporterId: uid(req),
+    targetType: b.targetType,
+    targetId: b.targetId,
+    reason: b.reason,
+    createdAt: now(),
+  });
   // Auto-hide posts that collect several distinct reports until a human reviews them.
   if (b.targetType === 'post') {
-    const n = (
-      await db.one(`SELECT COUNT(DISTINCT reporter_id) AS n FROM reports WHERE target_type = 'post' AND target_id = ?`, b.targetId)
-    ).n;
-    if (n >= 3) await db.run('UPDATE posts SET hidden = 1 WHERE id = ?', b.targetId);
+    const n = (await db.reports.distinct('reporterId', { targetType: 'post', targetId: b.targetId })).length;
+    if (n >= 3) await db.posts.updateOne({ _id: b.targetId }, { $set: { hidden: true } });
   }
   res.json({ ok: true });
 });

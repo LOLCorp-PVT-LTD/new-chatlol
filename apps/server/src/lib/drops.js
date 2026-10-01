@@ -22,20 +22,13 @@ export function dayIndex(day) {
 }
 
 export async function ensureDrop(day = today()) {
-  let d = await db.one('SELECT * FROM drops WHERE id = ?', day);
+  let d = await db.drops.findOne({ _id: day });
   if (!d) {
     const [prompt, emoji] = DROP_PROMPTS[dayIndex(day) % DROP_PROMPTS.length];
-    const starts = `${day}T00:00:00.000Z`;
-    const ends = new Date(Date.parse(starts) + 86_400_000 - 1).toISOString();
-    await db.run(
-      'INSERT INTO drops (id, prompt, emoji, starts_at, ends_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING',
-      day,
-      prompt,
-      emoji,
-      starts,
-      ends,
-    );
-    d = await db.one('SELECT * FROM drops WHERE id = ?', day);
+    const startsAt = `${day}T00:00:00.000Z`;
+    const endsAt = new Date(Date.parse(startsAt) + 86_400_000 - 1).toISOString();
+    await db.drops.insertIfMissing({ _id: day }, { prompt, emoji, startsAt, endsAt });
+    d = await db.drops.findOne({ _id: day });
   }
   return d;
 }

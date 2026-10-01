@@ -1,37 +1,32 @@
 import { levelForXp, levelTitle, REWARDS, STREAK_MILESTONES } from '@chatlol/shared';
-import { db, newId, now, today, json } from '../db.js';
+import { db, newId, now, today } from '../db.js';
 import { io, room } from './io.js';
 import { sendPush } from './push.js';
 import { serializeNotification, DEFAULT_SETTINGS, userPublic } from './serialize.js';
 import { presence } from './presence.js';
 
 export async function bumpCounter(userId, key, by = 1) {
-  await db.run(
-    `INSERT INTO daily_counters (user_id, day, key, n) VALUES (?, ?, ?, ?)
-     ON CONFLICT (user_id, day, key) DO UPDATE SET n = daily_counters.n + excluded.n`,
-    userId,
-    today(),
-    key,
-    by,
+  const day = today();
+  const r = await db.dailyCounters.findOneAndUpdate(
+    { _id: `${userId}:${day}:${key}` },
+    { $inc: { n: by }, $setOnInsert: { userId, day, key, at: new Date() } },
+    { upsert: true, returnDocument: 'after' },
   );
-  return (await db.one('SELECT n FROM daily_counters WHERE user_id = ? AND day = ? AND key = ?', userId, today(), key)).n;
+  return r.n;
 }
 
 export async function grant(userId, sparks, xp, reason, emit = true) {
-  const before = await db.one('SELECT xp, is_ai FROM users WHERE id = ?', userId);
+  const before = await db.users.findOne({ _id: userId }, { projection: { xp: 1, sparks: 1, isAi: 1 } });
   if (!before) return { sparks: 0, xp: 0, reason };
-  await db.run(
-    'UPDATE users SET sparks = CASE WHEN sparks + ? < 0 THEN 0 ELSE sparks + ? END, xp = xp + ? WHERE id = ?',
-    sparks,
-    sparks,
-    xp,
-    userId,
-  );
+  // Sparks never go below zero.
+  await db.users.updateOne({ _id: userId }, [
+    { $set: { sparks: { $max: [0, { $add: ['$sparks', sparks] }] }, xp: { $add: ['$xp', xp] } } },
+  ]);
   const from = levelForXp(before.xp);
   const to = levelForXp(before.xp + xp);
   const ev = { sparks, xp, reason, levelUp: to > from ? { from, to } : null };
-  if (to > from && !before.is_ai) {
-    await db.run('UPDATE users SET sparks = sparks + ? WHERE id = ?', to * 10, userId);
+  if (to > from && !before.isAi) {
+    await db.users.updateOne({ _id: userId }, { $inc: { sparks: to * 10 } });
     await notify(userId, {
       kind: 'level',
       title: `Level ${to} unlocked! 🎉`,
@@ -39,16 +34,16 @@ export async function grant(userId, sparks, xp, reason, emit = true) {
       link: '/locker',
     });
   }
-  if (emit && !before.is_ai) await emitWallet(userId, ev);
+  if (emit && !before.isAi) await emitWallet(userId, ev);
   return ev;
 }
 
 export async function emitWallet(userId, ev) {
-  const u = await db.one('SELECT sparks, gems, xp FROM users WHERE id = ?', userId);
+  const u = await db.users.findOne({ _id: userId }, { projection: { sparks: 1, gems: 1, xp: 1 } });
   if (!u) return;
   io()
     ?.to(room.user(userId))
-    .emit('wallet', { sparks: u.sparks, gems: u.gems, xp: u.xp, level: levelForXp(u.xp) });
+    .emit('wallet', { sparks: u.sparks, gems: u.gems ?? 0, xp: u.xp, level: levelForXp(u.xp) });
   if (ev && (ev.sparks || ev.xp)) io()?.to(room.user(userId)).emit('reward', ev);
 }
 
@@ -65,48 +60,45 @@ export async function progressRatingQuest(userId) {
 }
 
 export async function recordDropStreak(userId) {
-  const u = await db.one('SELECT streak_days, last_drop_day, badges FROM users WHERE id = ?', userId);
+  const u = await db.users.findOne({ _id: userId }, { projection: { streakDays: 1, lastDropDay: 1, badges: 1 } });
   const t = today();
   const y = today(new Date(Date.now() - 86_400_000));
-  if (u.last_drop_day === t) return { streak: u.streak_days, milestone: null };
-  let streak = u.last_drop_day === y ? u.streak_days + 1 : 1;
+  if (u.lastDropDay === t) return { streak: u.streakDays, milestone: null };
+  let streak = u.lastDropDay === y ? u.streakDays + 1 : 1;
   // Streak freeze: consumes one if you missed exactly one day.
   const dby = today(new Date(Date.now() - 2 * 86_400_000));
-  if (u.last_drop_day === dby) {
-    const used = await db.run(`UPDATE inventory SET qty = qty - 1 WHERE user_id = ? AND item_id = 'streak_freeze' AND qty > 0`, userId);
-    if (used.changes) streak = u.streak_days + 1;
+  if (u.lastDropDay === dby) {
+    const used = await db.inventory.updateOne({ userId, itemId: 'streak_freeze', qty: { $gt: 0 } }, { $inc: { qty: -1 } });
+    if (used.modifiedCount) streak = u.streakDays + 1;
   }
-  await db.run('UPDATE users SET streak_days = ?, last_drop_day = ? WHERE id = ?', streak, t, userId);
   const milestone = STREAK_MILESTONES.includes(streak) ? streak : null;
-  if (milestone) {
-    const badges = json(u.badges, []);
-    const b = `streak_${milestone}`;
-    if (!badges.includes(b)) await db.run('UPDATE users SET badges = ? WHERE id = ?', JSON.stringify([...badges, b]), userId);
-  }
+  await db.users.updateOne(
+    { _id: userId },
+    { $set: { streakDays: streak, lastDropDay: t }, ...(milestone ? { $addToSet: { badges: `streak_${milestone}` } } : {}) },
+  );
   return { streak, milestone };
 }
 
 export async function notify(userId, n) {
-  const target = await db.one('SELECT is_ai, settings FROM users WHERE id = ?', userId);
-  if (!target || target.is_ai) return;
-  if (n.actorId && (await db.one('SELECT 1 AS x FROM blocks WHERE blocker_id = ? AND blocked_id = ?', userId, n.actorId))) return;
-  const id = newId('ntf');
-  await db.run(
-    'INSERT INTO notifications (id, user_id, kind, title, body, actor_id, link, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-    id,
+  const target = await db.users.findOne({ _id: userId }, { projection: { isAi: 1, settings: 1 } });
+  if (!target || target.isAi) return;
+  if (n.actorId && (await db.blocks.findOne({ blockerId: userId, blockedId: n.actorId }))) return;
+  const doc = {
+    _id: newId('ntf'),
     userId,
-    n.kind,
-    n.title,
-    n.body,
-    n.actorId ?? null,
-    n.link ?? null,
-    now(),
-  );
-  const row = await db.one('SELECT * FROM notifications WHERE id = ?', id);
+    kind: n.kind,
+    title: n.title,
+    body: n.body,
+    actorId: n.actorId ?? null,
+    link: n.link ?? null,
+    read: false,
+    createdAt: now(),
+  };
+  await db.notifications.insertOne(doc);
   io()
     ?.to(room.user(userId))
-    .emit('notification', await serializeNotification(row));
-  const settings = { ...DEFAULT_SETTINGS, ...json(target.settings, {}) };
+    .emit('notification', await serializeNotification(doc));
+  const settings = { ...DEFAULT_SETTINGS, ...target.settings };
   // Only push when the user isn't connected anywhere, so we never double-notify.
   if (settings.pushEnabled && !(await presence.isConnectedAnywhere(userId))) {
     void sendPush(userId, n.title, n.body, { link: n.link });
@@ -114,7 +106,7 @@ export async function notify(userId, n) {
 }
 
 export async function ticker(text, actorId) {
-  const actor = actorId ? await db.one('SELECT * FROM users WHERE id = ?', actorId) : null;
+  const actor = actorId ? await db.users.findOne({ _id: actorId }) : null;
   io()
     ?.to(room.global)
     .emit('ticker', { id: newId('tk'), text, actor: actor ? await userPublic(actor) : null, at: now() });

@@ -6,9 +6,9 @@ import { createHmac } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-// Runs against SQLite by default; set TEST_DATABASE_URL=postgres://… (and TEST_REDIS_URL) to run the same suite on Postgres/Redis.
-if (process.env.TEST_DATABASE_URL) process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
-else process.env.DATABASE_PATH = ':memory:';
+// MongoDB from TEST_MONGODB_URL (or an embedded one); set TEST_REDIS_URL too to run the same suite on Redis.
+const { useTestMongo } = await import('./testDb.js');
+const mongo = await useTestMongo('api');
 if (process.env.TEST_REDIS_URL) process.env.REDIS_URL = process.env.TEST_REDIS_URL;
 process.env.UPLOAD_DIR = join(tmpdir(), 'chatlol-test-uploads');
 process.env.AI_PERSONAS_ENABLED = '0';
@@ -52,7 +52,9 @@ before(async () => {
 after(async () => {
   await new Promise((r) => ioServer.close(() => r()));
   server.closeAllConnections();
+  await db.dropDatabase({ reindex: false });
   await db.close();
+  await mongo.stop();
   await closeShared();
 });
 
@@ -150,15 +152,12 @@ test('arena: stake deducts sparks atomically, no double stake, resolution pays o
   assert.equal(r.sparks, before - 10);
   await assert.rejects(client.stake(takes[0].id, 'disagree', 10), (e) => e.status === 409);
   const { resolveExpiredTakes } = await import('./routes/arena.js');
-  await db.run('UPDATE hot_takes SET ends_at = ? WHERE id = ?', new Date(Date.now() - 1000).toISOString(), takes[0].id);
+  await db.hotTakes.updateOne({ _id: takes[0].id }, { $set: { endsAt: new Date(Date.now() - 1000).toISOString() } });
   await Promise.all([resolveExpiredTakes(), resolveExpiredTakes()]); // two "instances" racing
-  const resolved = await db.one('SELECT resolved FROM hot_takes WHERE id = ?', takes[0].id);
-  assert.equal(resolved.resolved, 1);
-  const wins = await db.all(
-    'SELECT * FROM notifications WHERE user_id = (SELECT id FROM users WHERE handle = ?) AND kind = ?',
-    'sam_sunset',
-    'arena',
-  );
+  const resolved = await db.hotTakes.findOne({ _id: takes[0].id });
+  assert.equal(resolved.resolved, true);
+  const sam = await db.users.findOne({ handleLower: 'sam_sunset' });
+  const wins = await db.notifications.find({ userId: sam._id, kind: 'arena' }).toArray();
   assert.equal(wins.length, 1, 'exactly one payout notification');
 });
 

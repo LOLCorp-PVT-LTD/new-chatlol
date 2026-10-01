@@ -6,11 +6,11 @@ import { presence } from '../lib/presence.js';
 import { io, room } from '../lib/io.js';
 import { localCheck, deepCheck } from '../lib/moderation.js';
 import { grant } from '../lib/rewards.js';
-import { serializeMessage } from '../lib/serialize.js';
 import { shared } from '../lib/shared.js';
 import { applyRating, insertComment, insertPost } from '../routes/posts.js';
-import { insertDm, insertLoungeMessage, insertReply, insertThread, loungeKey } from '../routes/social.js';
-import { placeStake } from '../routes/arena.js';
+import { insertDm, insertLoungeMessage, insertReply, insertThread, loungeKey, markRead, recentMessages } from '../routes/social.js';
+import { placeStake, newTake } from '../routes/arena.js';
+import { insertStreamMessage } from '../routes/live.js';
 import { ensureDrop } from '../lib/drops.js';
 import { personaById, systemPrompt } from './personas.js';
 import { nimChat, nimImage, nimVision } from './nim.js';
@@ -36,8 +36,8 @@ let awakeIds = new Set();
 let isLeader = async () => true;
 
 async function loadRoster() {
-  roster = (await db.all('SELECT id, persona_id FROM users WHERE is_ai = 1 AND deleted_at IS NULL'))
-    .map((r) => ({ persona: personaById(r.persona_id), userId: r.id }))
+  roster = (await db.users.find({ isAi: true, deletedAt: null }, { projection: { personaId: 1 } }).toArray())
+    .map((r) => ({ persona: personaById(r.personaId), userId: r._id }))
     .filter((r) => r.persona);
 }
 
@@ -61,6 +61,16 @@ async function refreshAwake() {
 }
 
 const awake = () => roster.filter((r) => awakeIds.has(r.userId));
+
+/** Up to `n` random visible posts matching `filter`. */
+const randomPosts = (filter, n) => db.posts.aggregate([{ $match: { hidden: false, ...filter } }, { $sample: { size: n } }]).toArray();
+
+/** Adds each item's author handle (comments, replies, messages) for building chat context. */
+async function withHandles(items) {
+  const users = await db.users.find({ _id: { $in: [...new Set(items.map((i) => i.authorId))] } }, { projection: { handle: 1 } }).toArray();
+  const h = new Map(users.map((u) => [u._id, u.handle]));
+  return items.map((i) => ({ ...i, handle: h.get(i.authorId) ?? 'someone' }));
+}
 
 async function say(p, context, prompt, history = [], maxTokens = 90) {
   const text = await nimChat([{ role: 'system', content: systemPrompt(p, context) }, ...history, { role: 'user', content: prompt }], {
@@ -91,13 +101,10 @@ function personaScore(p, post) {
 // ——— Ambient actions ———
 
 async function actPost(r) {
-  const posted = (
-    await db.one(
-      'SELECT COUNT(*) AS n FROM posts WHERE author_id = ? AND created_at > ?',
-      r.userId,
-      new Date(Date.now() - 6 * 3_600_000).toISOString(),
-    )
-  ).n;
+  const posted = await db.posts.countDocuments({
+    authorId: r.userId,
+    createdAt: { $gt: new Date(Date.now() - 6 * 3_600_000).toISOString() },
+  });
   if (posted >= 2) return;
   const p = r.persona;
   const kind = Math.random();
@@ -157,7 +164,7 @@ async function actPost(r) {
 
 async function actDrop(r) {
   const d = await ensureDrop();
-  if (await db.one('SELECT 1 AS x FROM posts WHERE drop_id = ? AND author_id = ?', d.id, r.userId)) return;
+  if (await db.posts.findOne({ dropId: d._id, authorId: r.userId })) return;
   const media = await nimImage(`${d.prompt}, ${pick(r.persona.photoIdeas)}`);
   if (!media) return;
   const caption =
@@ -168,30 +175,19 @@ async function actDrop(r) {
       [],
       50,
     )) ?? fallback.caption();
-  await insertPost(r.userId, { kind: 'photo', body: caption, mediaUrl: media, dropId: d.id, kindOverride: 'drop' });
-  const u = await db.one('SELECT streak_days, last_drop_day FROM users WHERE id = ?', r.userId);
+  await insertPost(r.userId, { kind: 'photo', body: caption, mediaUrl: media, dropId: d._id, kindOverride: 'drop' });
+  const u = await db.users.findOne({ _id: r.userId }, { projection: { streakDays: 1, lastDropDay: 1 } });
   const y = today(new Date(Date.now() - 86_400_000));
-  await db.run(
-    'UPDATE users SET streak_days = ?, last_drop_day = ? WHERE id = ?',
-    u.last_drop_day === y ? u.streak_days + 1 : 1,
-    today(),
-    r.userId,
-  );
+  await db.users.updateOne({ _id: r.userId }, { $set: { streakDays: u.lastDropDay === y ? u.streakDays + 1 : 1, lastDropDay: today() } });
 }
 
 async function actRate(r, count = 3) {
-  const posts = await db.all(
-    `SELECT p.* FROM posts p WHERE p.hidden = 0 AND p.author_id != ? AND p.created_at > ?
-       AND NOT EXISTS (SELECT 1 FROM ratings x WHERE x.post_id = p.id AND x.user_id = ?)
-     ORDER BY RANDOM() LIMIT ?`,
-    r.userId,
-    new Date(Date.now() - 3 * 86_400_000).toISOString(),
-    r.userId,
-    count,
-  );
+  const since = new Date(Date.now() - 3 * 86_400_000).toISOString();
+  const rated = await db.ratings.distinct('postId', { userId: r.userId, createdAt: { $gt: since } });
+  const posts = await randomPosts({ _id: { $nin: rated }, authorId: { $ne: r.userId }, createdAt: { $gt: since } }, count);
   for (const post of posts) {
     try {
-      await applyRating(post.id, r.userId, personaScore(r.persona, post));
+      await applyRating(post._id, r.userId, personaScore(r.persona, post));
     } catch {
       /* post vanished */
     }
@@ -200,52 +196,43 @@ async function actRate(r, count = 3) {
 }
 
 async function commentOn(r, post) {
-  const author = await db.one('SELECT display_name, handle FROM users WHERE id = ?', post.author_id);
+  const author = await db.users.findOne({ _id: post.authorId }, { projection: { handle: 1 } });
   if (!author) return;
-  const recent = await db.all(
-    'SELECT c.body, u.handle FROM comments c JOIN users u ON u.id = c.author_id WHERE c.post_id = ? ORDER BY c.created_at DESC LIMIT 4',
-    post.id,
-  );
+  const recent = await withHandles(await db.comments.find({ postId: post._id }).sort({ createdAt: -1 }).limit(4).toArray());
   const ctx = `Commenting on @${author.handle}'s post: "${post.body || '(photo, no caption)'}". Other comments: ${recent.map((c) => `@${c.handle}: ${c.body}`).join(' / ') || 'none yet'}.`;
   let text = null;
-  if (post.media_url) {
+  if (post.mediaUrl) {
     text = await nimVision(
       'Leave a short, specific, friendly comment on this photo post (max 140 chars).',
-      post.media_url,
+      post.mediaUrl,
       systemPrompt(r.persona, ctx),
     );
     if (text && (!localCheck(text).ok || !(await deepCheck(text)))) text = null;
   }
   text ??= await say(r.persona, ctx, 'Write one short comment on this post (max 140 chars). Be specific and genuine.', [], 60);
   text ??= fallback.comment(r.persona);
-  await insertComment(post.id, r.userId, text);
+  await insertComment(post._id, r.userId, text);
 }
 
 async function actComment(r) {
-  const post = await db.one(
-    `SELECT p.* FROM posts p JOIN users u ON u.id = p.author_id WHERE p.hidden = 0 AND p.author_id != ? AND p.created_at > ?
-       AND NOT EXISTS (SELECT 1 FROM comments c WHERE c.post_id = p.id AND c.author_id = ?)
-     ORDER BY u.is_ai ASC, RANDOM() LIMIT 1`,
-    r.userId,
-    new Date(Date.now() - 86_400_000).toISOString(),
-    r.userId,
-  );
+  const since = new Date(Date.now() - 86_400_000).toISOString();
+  const commented = await db.comments.distinct('postId', { authorId: r.userId, createdAt: { $gt: since } });
+  const filter = { _id: { $nin: commented }, createdAt: { $gt: since } };
+  // Humans' posts first, then other personas'.
+  const post =
+    (await randomPosts({ ...filter, authorId: { $nin: roster.map((x) => x.userId) } }, 1))[0] ??
+    (await randomPosts({ ...filter, authorId: { $ne: r.userId } }, 1))[0];
   if (post) await commentOn(r, post);
 }
 
 async function loungeLine(r, loungeId, mention) {
-  const l = await db.one('SELECT * FROM lounges WHERE id = ?', loungeId);
+  const l = await db.lounges.findOne({ _id: loungeId });
   if (!l) return;
-  const history = (
-    await db.all(
-      `SELECT m.body, m.author_id, u.handle FROM messages m JOIN users u ON u.id = m.author_id WHERE m.room_type = 'lounge' AND m.room_id = ? ORDER BY m.created_at DESC LIMIT 12`,
-      loungeId,
-    )
-  ).reverse();
+  const history = (await withHandles(await recentMessages('lounge', loungeId, 12))).reverse();
   const msgs = history.map((h) =>
-    h.author_id === r.userId ? { role: 'assistant', content: h.body } : { role: 'user', content: `@${h.handle}: ${h.body}` },
+    h.authorId === r.userId ? { role: 'assistant', content: h.body } : { role: 'user', content: `@${h.handle}: ${h.body}` },
   );
-  const ctx = `You're hanging out in the "${l.name}" lounge (topic: ${l.topic}; now playing: ${l.now_playing}). It's a casual group chat.`;
+  const ctx = `You're hanging out in the "${l.name}" lounge (topic: ${l.topic}; now playing: ${l.nowPlaying}). It's a casual group chat.`;
   const prompt = mention
     ? `Reply to @${mention} naturally.`
     : history.length
@@ -257,9 +244,9 @@ async function loungeLine(r, loungeId, mention) {
 
 async function loungesWithHumans() {
   const out = [];
-  for (const l of await db.all('SELECT id FROM lounges')) {
-    const ids = await shared().smembers(loungeKey(l.id));
-    if (ids.some((id) => !isAi(id))) out.push(l.id);
+  for (const id of await db.lounges.distinct('_id')) {
+    const ids = await shared().smembers(loungeKey(id));
+    if (ids.some((u) => !isAi(u))) out.push(id);
   }
   return out;
 }
@@ -267,20 +254,17 @@ async function loungesWithHumans() {
 async function actLounge(r) {
   const withHumans = await loungesWithHumans();
   const target = withHumans.length && Math.random() < 0.7 ? pick(withHumans) : pick(r.persona.preferredLounges);
-  const last = await db.one(
-    `SELECT author_id, created_at FROM messages WHERE room_type = 'lounge' AND room_id = ? ORDER BY created_at DESC LIMIT 1`,
-    target,
-  );
-  if (last?.author_id === r.userId) return;
+  const [last] = await recentMessages('lounge', target, 1);
+  if (last?.authorId === r.userId) return;
   // Quiet lounges without humans only get occasional ambient chatter.
-  if (!withHumans.includes(target) && last && Date.now() - Date.parse(last.created_at) < 8 * 60_000) return;
+  if (!withHumans.includes(target) && last && Date.now() - Date.parse(last.createdAt) < 8 * 60_000) return;
   await loungeLine(r, target);
 }
 
 async function actShout(r) {
   if (Math.random() < 0.25) {
     const board = pick(r.persona.boards);
-    if (!(await db.one('SELECT 1 AS x FROM boards WHERE id = ?', board))) return;
+    if (!(await db.boards.findOne({ _id: board }))) return;
     const out = await say(
       r.persona,
       `Starting a discussion thread in the ${board} board.`,
@@ -292,39 +276,37 @@ async function actShout(r) {
     if (title && body && title.length >= 4) await insertThread(r.userId, board, title.slice(0, 120), body.slice(0, 1000));
     return;
   }
-  const t = await db.one(
-    `SELECT * FROM threads WHERE author_id != ? AND last_activity_at > ? AND NOT EXISTS (SELECT 1 FROM replies x WHERE x.thread_id = threads.id AND x.author_id = ?)
-     ORDER BY RANDOM() LIMIT 1`,
-    r.userId,
-    new Date(Date.now() - 3 * 86_400_000).toISOString(),
-    r.userId,
-  );
+  const repliedTo = await db.replies.distinct('threadId', { authorId: r.userId });
+  const [t] = await db.threads
+    .aggregate([
+      {
+        $match: {
+          _id: { $nin: repliedTo },
+          authorId: { $ne: r.userId },
+          lastActivityAt: { $gt: new Date(Date.now() - 3 * 86_400_000).toISOString() },
+        },
+      },
+      { $sample: { size: 1 } },
+    ])
+    .toArray();
   if (t) await replyToThread(r, t);
 }
 
 async function replyToThread(r, t) {
-  const replies = (
-    await db.all(
-      'SELECT x.body, u.handle FROM replies x JOIN users u ON u.id = x.author_id WHERE thread_id = ? ORDER BY x.created_at DESC LIMIT 5',
-      t.id,
-    )
-  ).reverse();
+  const replies = (await withHandles(await db.replies.find({ threadId: t._id }).sort({ createdAt: -1 }).limit(5).toArray())).reverse();
   const ctx = `Forum thread "${t.title}": ${t.body}. Replies so far: ${replies.map((x) => `@${x.handle}: ${x.body}`).join(' / ') || 'none'}.`;
   const text = (await say(r.persona, ctx, 'Write your reply to this thread (max 200 chars).', [], 90)) ?? fallback.reply();
-  await insertReply(t.id, r.userId, text);
+  await insertReply(t._id, r.userId, text);
 }
 
 async function actArena(r) {
-  await db.run('UPDATE users SET sparks = CASE WHEN sparks < 300 THEN 300 ELSE sparks END WHERE id = ?', r.userId);
-  const open = await db.all(
-    'SELECT * FROM hot_takes WHERE resolved = 0 AND ends_at > ? AND NOT EXISTS (SELECT 1 FROM stakes s WHERE s.take_id = hot_takes.id AND s.user_id = ?)',
-    now(),
-    r.userId,
-  );
+  await db.users.updateOne({ _id: r.userId, sparks: { $lt: 300 } }, { $set: { sparks: 300 } });
+  const staked = await db.stakes.distinct('takeId', { userId: r.userId });
+  const open = await db.hotTakes.find({ _id: { $nin: staked }, resolved: false, endsAt: { $gt: now() } }).toArray();
   if (open.length) {
     const t = pick(open);
     try {
-      await placeStake(r.userId, t.id, Math.random() < 0.55 ? 'agree' : 'disagree', Math.round(rand(ARENA_MIN_STAKE, 40)));
+      await placeStake(r.userId, t._id, Math.random() < 0.55 ? 'agree' : 'disagree', Math.round(rand(ARENA_MIN_STAKE, 40)));
     } catch {
       /* raced */
     }
@@ -339,33 +321,26 @@ async function actArena(r) {
     );
     const [cat, stmt] = out?.split('|').map((s) => s.trim()) ?? fallback.take();
     if (cat && stmt && stmt.length >= 10) {
-      await db.run(
-        'INSERT INTO hot_takes (id, author_id, category, statement, ends_at, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-        newId('ht'),
-        r.userId,
-        cat.toUpperCase().slice(0, 16),
-        stmt.slice(0, 160),
-        new Date(Date.now() + rand(4, 12) * 3_600_000).toISOString(),
-        now(),
+      await db.hotTakes.insertOne(
+        newTake({
+          _id: newId('ht'),
+          authorId: r.userId,
+          category: cat.toUpperCase().slice(0, 16),
+          statement: stmt.slice(0, 160),
+          hours: rand(4, 12),
+        }),
       );
     }
   }
 }
 
 async function actFollowBack(r) {
-  const fans = await db.all(
-    `SELECT f.follower_id FROM follows f JOIN users u ON u.id = f.follower_id WHERE f.followee_id = ? AND u.is_ai = 0
-       AND NOT EXISTS (SELECT 1 FROM follows b WHERE b.follower_id = ? AND b.followee_id = f.follower_id) LIMIT 3`,
-    r.userId,
-    r.userId,
-  );
-  for (const f of fans)
-    await db.run(
-      'INSERT INTO follows (follower_id, followee_id, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING',
-      r.userId,
-      f.follower_id,
-      now(),
-    );
+  const following = await db.follows.distinct('followeeId', { followerId: r.userId });
+  const fans = await db.follows
+    .find({ followeeId: r.userId, followerId: { $nin: [...following, ...roster.map((x) => x.userId)] } })
+    .limit(3)
+    .toArray();
+  for (const f of fans) await db.follows.insertIfMissing({ followerId: r.userId, followeeId: f.followerId }, { createdAt: now() });
 }
 
 async function tick() {
@@ -392,14 +367,14 @@ function onHumanPost({ postId, authorId }) {
   const raters = [...roster].sort(() => Math.random() - 0.5).slice(0, Math.floor(rand(2, 5)));
   raters.forEach((r, i) =>
     later(rand(20_000, 90_000) * (i + 1), async () => {
-      const post = await db.one('SELECT * FROM posts WHERE id = ?', postId);
+      const post = await db.posts.findOne({ _id: postId });
       if (post) await applyRating(postId, r.userId, personaScore(r.persona, post)).catch(() => {});
     }),
   );
   if (chance(0.75)) {
     const r = pick(awake().length ? awake() : roster);
     later(rand(45_000, 240_000), async () => {
-      const post = await db.one('SELECT * FROM posts WHERE id = ?', postId);
+      const post = await db.posts.findOne({ _id: postId });
       if (post) await commentOn(r, post);
     });
   }
@@ -407,36 +382,25 @@ function onHumanPost({ postId, authorId }) {
 
 async function onDm({ conversationId, authorId }) {
   if (isAi(authorId)) return;
-  const members = await db.all(
-    'SELECT user_id FROM conversation_members WHERE conversation_id = ? AND user_id != ?',
-    conversationId,
-    authorId,
-  );
-  const aiMember = members.map((m) => byUserId(m.user_id)).find(Boolean);
+  const c = await db.conversations.findOne({ _id: conversationId }, { projection: { members: 1 } });
+  const aiMember = (c?.members ?? [])
+    .filter((m) => m.userId !== authorId)
+    .map((m) => byUserId(m.userId))
+    .find(Boolean);
   if (!aiMember) return;
   // One reply at a time per conversation, cluster-wide.
   if (!(await shared().setNx(`ai:dm-busy:${conversationId}`, '1', 30_000))) return;
   later(rand(1_500, 6_000), async () => {
     try {
-      await db.run(
-        'UPDATE conversation_members SET last_read_at = ? WHERE conversation_id = ? AND user_id = ?',
-        now(),
-        conversationId,
-        aiMember.userId,
-      );
+      await markRead(conversationId, aiMember.userId);
       io()?.to(room.user(authorId)).emit('dm:read', { conversationId, userId: aiMember.userId, at: now() });
-      const human = await db.one('SELECT display_name, handle, city, interests FROM users WHERE id = ?', authorId);
-      const hist = (
-        await db.all(
-          `SELECT author_id, body, kind FROM messages WHERE room_type = 'dm' AND room_id = ? ORDER BY created_at DESC LIMIT 16`,
-          conversationId,
-        )
-      ).reverse();
+      const human = await db.users.findOne({ _id: authorId }, { projection: { displayName: 1, handle: 1, city: 1, interests: 1 } });
+      const hist = (await recentMessages('dm', conversationId, 16)).reverse();
       const msgs = hist.map((m) => ({
-        role: m.author_id === aiMember.userId ? 'assistant' : 'user',
+        role: m.authorId === aiMember.userId ? 'assistant' : 'user',
         content: m.kind === 'image' ? '[sent a photo]' : m.body,
       }));
-      const ctx = `Private DM with ${human.display_name} (@${human.handle}${human.city ? `, ${human.city}` : ''}; interests: ${JSON.parse(human.interests).join(', ') || 'unknown'}). Keep the conversation going like a friendly mutual — ask a question back sometimes.`;
+      const ctx = `Private DM with ${human.displayName} (@${human.handle}${human.city ? `, ${human.city}` : ''}; interests: ${(human.interests ?? []).join(', ') || 'unknown'}). Keep the conversation going like a friendly mutual — ask a question back sometimes.`;
       const last = msgs.pop();
       const reply = (await say(aiMember.persona, ctx, last?.content ?? 'hey', msgs, 110)) ?? fallback.dm();
       const typingMs = Math.min(9_000, 1_200 + reply.length * 45);
@@ -451,10 +415,10 @@ async function onDm({ conversationId, authorId }) {
 
 async function onLoungeMessage({ loungeId, messageId, authorId }) {
   if (isAi(authorId)) return;
-  const m = await db.one('SELECT body FROM messages WHERE id = ?', messageId);
+  const m = await db.messages.findOne({ _id: messageId }, { projection: { body: 1 } });
   if (!m) return;
   const mentioned = roster.find((r) => new RegExp(`@${r.persona.handle.replace('.', '\\.')}\\b`, 'i').test(m.body));
-  const human = await db.one('SELECT handle FROM users WHERE id = ?', authorId);
+  const human = await db.users.findOne({ _id: authorId }, { projection: { handle: 1 } });
   if (mentioned) return void later(rand(2_000, 7_000), () => loungeLine(mentioned, loungeId, human.handle));
   if (chance(0.55)) {
     const pool = awake().filter((r) => r.persona.preferredLounges.includes(loungeId));
@@ -469,9 +433,8 @@ function onThread({ threadId, authorId }) {
   for (let i = 0; i < n; i++) {
     const r = pick(roster);
     later(rand(60_000, 400_000) * (i + 1), async () => {
-      const t = await db.one('SELECT * FROM threads WHERE id = ?', threadId);
-      if (t && !(await db.one('SELECT 1 AS x FROM replies WHERE thread_id = ? AND author_id = ?', threadId, r.userId)))
-        await replyToThread(r, t);
+      const t = await db.threads.findOne({ _id: threadId });
+      if (t && !(await db.replies.findOne({ threadId, authorId: r.userId }))) await replyToThread(r, t);
     });
   }
 }
@@ -481,7 +444,7 @@ function onStreamStarted({ streamId, hostId }) {
   const viewers = [...roster].sort(() => Math.random() - 0.5).slice(0, 3);
   viewers.forEach((r, i) =>
     later(rand(10_000, 40_000) * (i + 1), async () => {
-      const s = await db.one('SELECT * FROM streams WHERE id = ? AND ended_at IS NULL', streamId);
+      const s = await db.streams.findOne({ _id: streamId, endedAt: null });
       if (!s) return;
       const text =
         (await say(
@@ -491,18 +454,9 @@ function onStreamStarted({ streamId, hostId }) {
           [],
           40,
         )) ?? 'yooo just joined 🔥';
-      const id = newId('m');
-      await db.run(
-        `INSERT INTO messages (id, room_type, room_id, author_id, body, created_at) VALUES (?, 'stream', ?, ?, ?, ?)`,
-        id,
-        streamId,
-        r.userId,
-        text,
-        now(),
-      );
       io()
         ?.to(room.stream(streamId))
-        .emit('stream:chat', await serializeMessage(await db.one('SELECT * FROM messages WHERE id = ?', id)));
+        .emit('stream:chat', await insertStreamMessage(streamId, r.userId, text));
     }),
   );
 }

@@ -1,0 +1,50 @@
+/**
+ * MongoDB indexes. createIndex is idempotent, so this runs on every boot.
+ * Unique indexes double as the app's integrity rules (one rating per user per post, one stake per take, …).
+ */
+export async function ensureIndexes(db) {
+  const idx = (col, spec, opts = {}) => db[col].raw.createIndex(spec, opts);
+  await Promise.all([
+    idx('users', { email: 1 }, { unique: true, partialFilterExpression: { email: { $type: 'string' } } }),
+    idx('users', { handleLower: 1 }, { unique: true }),
+    idx('users', { isAi: 1, deletedAt: 1 }),
+    idx('users', { xp: -1 }),
+    idx('users', { streakDays: -1 }),
+    idx('follows', { followerId: 1, followeeId: 1 }, { unique: true }),
+    idx('follows', { followeeId: 1 }),
+    idx('blocks', { blockerId: 1, blockedId: 1 }, { unique: true }),
+    idx('blocks', { blockedId: 1 }),
+    idx('posts', { hidden: 1, createdAt: -1 }),
+    idx('posts', { authorId: 1, createdAt: -1 }),
+    idx('posts', { dropId: 1, authorId: 1 }),
+    idx('posts', { tags: 1, createdAt: -1 }),
+    idx('battleVotes', { postId: 1, userId: 1 }, { unique: true }),
+    idx('ratings', { postId: 1, userId: 1 }, { unique: true }),
+    idx('ratings', { userId: 1, createdAt: -1 }),
+    idx('reactions', { postId: 1, userId: 1 }, { unique: true }),
+    idx('comments', { postId: 1, createdAt: 1 }),
+    idx('comments', { authorId: 1, postId: 1 }),
+    idx('hotTakes', { resolved: 1, endsAt: 1 }),
+    idx('stakes', { takeId: 1, userId: 1 }, { unique: true }),
+    idx('stakes', { userId: 1 }),
+    idx('threads', { boardId: 1, lastActivityAt: -1 }),
+    idx('threads', { lastActivityAt: -1 }),
+    idx('threadVotes', { threadId: 1, userId: 1 }, { unique: true }),
+    idx('replies', { threadId: 1, createdAt: 1 }),
+    idx('conversations', { 'members.userId': 1, updatedAt: -1 }),
+    idx('conversations', { pairKey: 1 }, { unique: true, partialFilterExpression: { pairKey: { $type: 'string' } } }),
+    idx('messages', { roomType: 1, roomId: 1, createdAt: -1 }),
+    idx('notifications', { userId: 1, createdAt: -1 }),
+    idx('inventory', { userId: 1, itemId: 1 }, { unique: true }),
+    idx('streams', { endedAt: 1, giftsTotal: -1 }),
+    idx('streams', { hostId: 1, endedAt: 1 }),
+    idx('streamGifts', { streamId: 1 }),
+    idx('pushTokens', { userId: 1 }),
+    idx('reports', { targetType: 1, targetId: 1 }),
+    idx('emailTokens', { userId: 1, kind: 1 }),
+    // Housekeeping: expired single-use tokens and old daily counters clean themselves up.
+    idx('emailTokens', { expiresAtDate: 1 }, { expireAfterSeconds: 7 * 86_400 }),
+    idx('dailyCounters', { at: 1 }, { expireAfterSeconds: 14 * 86_400 }),
+    idx('purchases', { userId: 1, createdAt: -1 }),
+  ]);
+}

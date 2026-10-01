@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import multer from 'multer';
 import { CRATE_ODDS, gemPriceFor } from '@chatlol/shared';
-import { db, now, today, json } from '../db.js';
+import { db, now, today } from '../db.js';
 import { optionalAuth, requireAuth, uid } from '../lib/auth.js';
 import { HttpError, parse, rateLimit } from '../lib/http.js';
 import { serializeStoreItem } from '../lib/serialize.js';
@@ -13,30 +13,30 @@ import { rollRarity } from '@chatlol/shared';
 export const storeRouter = Router();
 
 async function equippedSet(userId) {
-  const c = json((await db.one('SELECT cosmetics FROM users WHERE id = ?', userId)).cosmetics, {});
-  return new Set(Object.values(c).filter(Boolean));
+  const u = await db.users.findOne({ _id: userId }, { projection: { cosmetics: 1 } });
+  return new Set(Object.values(u?.cosmetics ?? {}).filter(Boolean));
 }
 
 storeRouter.get('/store', optionalAuth, async (req, res) => {
-  const owned = req.userId
-    ? new Set((await db.all('SELECT item_id FROM inventory WHERE user_id = ? AND qty > 0', req.userId)).map((r) => r.item_id))
-    : new Set();
+  const owned = new Set(req.userId ? await db.inventory.distinct('itemId', { userId: req.userId, qty: { $gt: 0 } }) : []);
   const eq = req.userId ? await equippedSet(req.userId) : new Set();
-  const items = (await db.all('SELECT * FROM store_items ORDER BY position')).map((r) =>
-    serializeStoreItem(r, owned.has(r.id), eq.has(r.id)),
+  const items = (await db.storeItems.find({}).sort({ position: 1 }).toArray()).map((r) =>
+    serializeStoreItem(r, owned.has(r._id), eq.has(r._id)),
   );
-  const wallet = req.userId ? await db.one('SELECT sparks, gems FROM users WHERE id = ?', req.userId) : null;
+  const wallet = req.userId ? await db.users.findOne({ _id: req.userId }, { projection: { sparks: 1, gems: 1 } }) : null;
   res.json({ items, sparks: wallet?.sparks ?? 0, gems: wallet?.gems ?? 0, crateOdds: CRATE_ODDS });
 });
 
 storeRouter.get('/store/inventory', requireAuth, async (req, res) => {
   const me = uid(req);
   const eq = await equippedSet(me);
-  const rows = await db.all(
-    'SELECT s.* FROM inventory i JOIN store_items s ON s.id = i.item_id WHERE i.user_id = ? AND i.qty > 0 ORDER BY i.acquired_at DESC',
-    me,
-  );
-  res.json({ items: rows.map((r) => serializeStoreItem(r, true, eq.has(r.id))) });
+  const inv = await db.inventory
+    .find({ userId: me, qty: { $gt: 0 } })
+    .sort({ acquiredAt: -1 })
+    .toArray();
+  const byId = new Map((await db.storeItems.find({ _id: { $in: inv.map((i) => i.itemId) } }).toArray()).map((s) => [s._id, s]));
+  const rows = inv.map((i) => byId.get(i.itemId)).filter(Boolean);
+  res.json({ items: rows.map((r) => serializeStoreItem(r, true, eq.has(r._id))) });
 });
 
 const STACKABLE = new Set(['streak_freeze', 'boost', 'gift']);
@@ -45,7 +45,7 @@ storeRouter.post('/store/:id/buy', requireAuth, async (req, res) => {
   const me = uid(req);
   await rateLimit(`buy:${me}`, 20);
   const { currency } = parse(z.object({ currency: z.enum(['sparks', 'gems']).default('sparks') }), req.body ?? {});
-  const item = await db.one('SELECT * FROM store_items WHERE id = ?', String(req.params.id));
+  const item = await db.storeItems.findOne({ _id: String(req.params.id) });
   if (!item) throw new HttpError(404, 'Item not found');
   const gemPrice = gemPriceFor(item.kind, item.price);
   if (currency === 'gems' && gemPrice === null) throw new HttpError(400, 'This can only be unlocked with earned Sparks', 'sparks_only');
@@ -53,54 +53,41 @@ storeRouter.post('/store/:id/buy', requireAuth, async (req, res) => {
   const col = currency === 'gems' ? 'gems' : 'sparks';
 
   const won = await db.tx(async () => {
-    if (
-      !STACKABLE.has(item.kind) &&
-      item.kind !== 'crate' &&
-      (await db.one('SELECT 1 AS x FROM inventory WHERE user_id = ? AND item_id = ?', me, item.id))
-    ) {
-      throw new HttpError(409, 'Already in your locker');
-    }
-    const paid = await db.run(`UPDATE users SET ${col} = ${col} - ? WHERE id = ? AND ${col} >= ?`, cost, me, cost);
-    if (!paid.changes) {
-      const have = (await db.one(`SELECT ${col} AS n FROM users WHERE id = ?`, me)).n;
+    const stackable = STACKABLE.has(item.kind) || item.kind === 'crate';
+    if (!stackable && (await db.inventory.findOne({ userId: me, itemId: item._id }))) throw new HttpError(409, 'Already in your locker');
+    const paid = await db.users.updateOne({ _id: me, [col]: { $gte: cost } }, { $inc: { [col]: -cost } });
+    if (!paid.modifiedCount) {
+      const have = (await db.users.findOne({ _id: me }, { projection: { [col]: 1 } }))?.[col] ?? 0;
       throw new HttpError(402, `You need ${cost - have} more ${currency === 'gems' ? 'Gems' : 'Sparks'}`, `insufficient_${currency}`);
     }
     if (item.kind === 'crate') {
       // Published odds (CRATE_ODDS). Duplicates convert to Sparks so a crate is never a dud.
-      const pool = await db.all(
-        `SELECT * FROM store_items WHERE rarity = ? AND kind IN ('frame', 'flair', 'theme', 'banner')`,
-        rollRarity(),
-      );
-      const pick = pool[Math.floor(Math.random() * pool.length)] ?? null;
+      const [pick] = await db.storeItems
+        .aggregate([{ $match: { rarity: rollRarity(), kind: { $in: ['frame', 'flair', 'theme', 'banner'] } } }, { $sample: { size: 1 } }])
+        .toArray();
       if (pick) {
-        const ins = await db.run(
-          'INSERT INTO inventory (user_id, item_id, qty, acquired_at) VALUES (?, ?, 1, ?) ON CONFLICT DO NOTHING',
-          me,
-          pick.id,
-          now(),
-        );
-        if (!ins.changes) await db.run('UPDATE users SET sparks = sparks + ? WHERE id = ?', Math.round(pick.price * 0.4), me);
+        const fresh = await db.inventory.insertIfMissing({ userId: me, itemId: pick._id }, { qty: 1, acquiredAt: now() });
+        if (!fresh) await db.users.updateOne({ _id: me }, { $inc: { sparks: Math.round(pick.price * 0.4) } });
       }
-      return pick;
+      return pick ?? null;
     }
-    await db.run(
-      'INSERT INTO inventory (user_id, item_id, qty, acquired_at) VALUES (?, ?, 1, ?) ON CONFLICT (user_id, item_id) DO UPDATE SET qty = inventory.qty + 1',
-      me,
-      item.id,
-      now(),
+    await db.inventory.updateOne(
+      { userId: me, itemId: item._id },
+      { $inc: { qty: 1 }, $setOnInsert: { acquiredAt: now() } },
+      { upsert: true },
     );
     return null;
   });
   if (won && (won.rarity === 'legendary' || won.rarity === 'epic')) {
-    const h = await db.one('SELECT handle FROM users WHERE id = ?', me);
+    const h = await db.users.findOne({ _id: me }, { projection: { handle: 1 } });
     void ticker(`@${h?.handle} pulled a ${won.rarity.toUpperCase()} ${won.name} ${won.emoji}`, me);
   }
   const reward = await grant(me, 0, Math.round(item.price / 10), 'Vault purchase');
-  const w = await db.one('SELECT sparks, gems FROM users WHERE id = ?', me);
+  const w = await db.users.findOne({ _id: me }, { projection: { sparks: 1, gems: 1 } });
   res.json({
     item: serializeStoreItem(item, true),
     sparks: w.sparks,
-    gems: w.gems,
+    gems: w.gems ?? 0,
     won: won ? serializeStoreItem(won, true) : null,
     reward,
   });
@@ -109,13 +96,12 @@ storeRouter.post('/store/:id/buy', requireAuth, async (req, res) => {
 storeRouter.post('/store/daily', requireAuth, async (req, res) => {
   const me = uid(req);
   const nextAt = new Date(Date.parse(`${today()}T00:00:00Z`) + 86_400_000).toISOString();
-  const claimed = await db.run(
-    'INSERT INTO daily_counters (user_id, day, key, n) VALUES (?, ?, ?, 1) ON CONFLICT DO NOTHING',
-    me,
-    today(),
-    'daily_chest',
+  const day = today();
+  const claimed = await db.dailyCounters.insertIfMissing(
+    { _id: `${me}:${day}:daily_chest` },
+    { userId: me, day, key: 'daily_chest', n: 1, at: new Date() },
   );
-  if (!claimed.changes) return res.json({ claimed: false, nextAt, reward: null });
+  if (!claimed) return res.json({ claimed: false, nextAt, reward: null });
   const amount = 25 + Math.floor(Math.random() * 51);
   const reward = await grant(me, amount, 20, `Daily Sunset Chest: +${amount} Sparks`);
   res.json({ claimed: true, nextAt, reward });

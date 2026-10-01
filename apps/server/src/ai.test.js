@@ -32,7 +32,6 @@ const nim = createServer((req, res) => {
 await new Promise((r) => nim.listen(0, r));
 const nimUrl = `http://127.0.0.1:${nim.address().port}`;
 
-process.env.DATABASE_PATH = ':memory:';
 process.env.UPLOAD_DIR = join(tmpdir(), 'chatlol-ai-test');
 process.env.NVIDIA_API_KEY = 'nvapi-test';
 process.env.NIM_BASE_URL = `${nimUrl}/v1`;

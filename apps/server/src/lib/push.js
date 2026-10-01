@@ -6,7 +6,7 @@ import { db } from '../db.js';
  * Desktop receives notifications over the socket and shows them with the OS notification centre.
  */
 export async function sendPush(userId, title, body, data = {}) {
-  const tokens = (await db.all('SELECT token FROM push_tokens WHERE user_id = ?', userId)).map((r) => r.token);
+  const tokens = (await db.pushTokens.find({ userId }, { projection: { _id: 1 } }).toArray()).map((r) => r._id);
   if (!tokens.length) return;
   const messages = tokens.map((to) => ({ to, title, body, data, sound: 'default', channelId: 'default' }));
   try {
@@ -21,8 +21,7 @@ export async function sendPush(userId, title, body, data = {}) {
     });
     const out = await res.json().catch(() => null);
     for (const [i, t] of (out?.data ?? []).entries()) {
-      if (t.status === 'error' && t.details?.error === 'DeviceNotRegistered')
-        await db.run('DELETE FROM push_tokens WHERE token = ?', tokens[i]);
+      if (t.status === 'error' && t.details?.error === 'DeviceNotRegistered') await db.pushTokens.deleteOne({ _id: tokens[i] });
     }
   } catch (e) {
     console.warn('[push] failed', e.message);

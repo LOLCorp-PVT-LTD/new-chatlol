@@ -57,9 +57,9 @@ export const passwordVersion = (hash) => (hash ? createHmac('sha256', config.jwt
 export async function authenticate(token) {
   const t = verifyToken(token);
   if (!t) return null;
-  const u = await db.one('SELECT password_hash, is_ai FROM users WHERE id = ? AND deleted_at IS NULL', t.sub);
-  if (!u || u.is_ai) return null;
-  if (t.pv && t.pv !== passwordVersion(u.password_hash)) return null;
+  const u = await db.users.findOne({ _id: t.sub, deletedAt: null }, { projection: { passwordHash: 1, isAi: 1 } });
+  if (!u || u.isAi) return null;
+  if (t.pv && t.pv !== passwordVersion(u.passwordHash)) return null;
   return t.sub;
 }
 
@@ -83,7 +83,7 @@ export async function requireAuth(req, _res, next) {
     const uid = await authenticate(bearer(req));
     if (!uid) return next(new HttpError(401, 'Sign in to keep the vibe going'));
     req.userId = uid;
-    void db.run('UPDATE users SET last_seen_at = ? WHERE id = ?', now(), uid).catch(() => {});
+    void db.users.updateOne({ _id: uid }, { $set: { lastSeenAt: now() } }).catch(() => {});
     next();
   } catch (e) {
     next(e);

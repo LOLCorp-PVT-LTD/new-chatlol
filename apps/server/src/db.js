@@ -1,183 +1,217 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
 import { randomBytes } from 'node:crypto';
+import { MongoClient } from 'mongodb';
 import { config } from './config.js';
-import { MIGRATIONS } from './migrations.js';
+import { ensureIndexes } from './indexes.js';
 
 /**
- * Async database layer with two drivers:
- *  - Postgres (DATABASE_URL=postgres://…) for production and horizontal scaling
- *  - SQLite (node:sqlite, DATABASE_PATH) for local dev and tests
- * All SQL in the app is written in the portable subset both understand, with `?` placeholders.
+ * MongoDB data layer (official `mongodb` driver).
+ *
+ *  - `db.users`, `db.posts`, … are the app's collections. Every call made inside `db.tx()` automatically
+ *    joins that transaction, so route code never has to thread a session through.
+ *  - Transactions need a replica set (MongoDB Atlas, or `mongod --replSet`). On a standalone server
+ *    `db.tx()` runs its body without one; the app's writes are written to stay correct either way
+ *    (conditional updates like `{ sparks: { $gte: cost } }` and unique indexes do the real guarding).
+ *  - With no MONGODB_URL in development, a local mongod on 27017 is used if one is running,
+ *    otherwise an embedded MongoDB (mongodb-memory-server) that keeps its data in ./data/mongo.
  */
 
+export const COLLECTIONS = [
+  'users',
+  'follows',
+  'blocks',
+  'posts',
+  'battleVotes',
+  'ratings',
+  'reactions',
+  'comments',
+  'drops',
+  'hotTakes',
+  'stakes',
+  'boards',
+  'threads',
+  'threadVotes',
+  'replies',
+  'lounges',
+  'conversations',
+  'messages',
+  'notifications',
+  'storeItems',
+  'inventory',
+  'streams',
+  'streamGifts',
+  'pushTokens',
+  'reports',
+  'dailyCounters',
+  'emailTokens',
+  'purchases',
+  'locks',
+];
+
 const txStore = new AsyncLocalStorage();
-
-async function createPostgres(url) {
-  const pg = await import('pg');
-  pg.default.types.setTypeParser(20, (v) => Number(v)); // int8 (COUNT) → number
-  pg.default.types.setTypeParser(1700, (v) => Number(v)); // numeric (SUM/AVG) → number
-  const pool = new pg.default.Pool({ connectionString: url, max: Number(process.env.PG_POOL_MAX ?? 20) });
-  return pgDriver(pool, toPg);
-}
-
-/** Converts `?` placeholders to `$1…$n`, leaving `?` inside quoted string literals alone. */
-export function toPg(sql) {
-  let out = '';
-  let n = 0;
-  let quoted = false;
-  for (const ch of sql) {
-    if (ch === "'") quoted = !quoted;
-    out += ch === '?' && !quoted ? `$${++n}` : ch;
-  }
-  return out;
-}
-
-function pgDriver(pool, toPg) {
-  return {
-    kind: 'postgres',
-    async exclusive(fn) {
-      const client = await pool.connect();
-      try {
-        await client.query('SELECT pg_advisory_lock(727272)');
-        return await fn();
-      } finally {
-        await client.query('SELECT pg_advisory_unlock(727272)').catch(() => {});
-        client.release();
-      }
-    },
-    async query(sql, params, tx) {
-      const client = tx ?? pool;
-      try {
-        const r = await client.query(toPg(sql), params);
-        return { rows: r.rows, changes: r.rowCount ?? 0 };
-      } catch (e) {
-        e.message += ` — in: ${sql.replace(/\s+/g, ' ').slice(0, 200)}`;
-        throw e;
-      }
-    },
-    async tx(fn) {
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
-        const out = await txStore.run(client, fn);
-        await client.query('COMMIT');
-        return out;
-      } catch (e) {
-        await client.query('ROLLBACK').catch(() => {});
-        throw e;
-      } finally {
-        client.release();
-      }
-    },
-    close: () => pool.end(),
-  };
-}
-
-async function createSqlite(path) {
-  const { DatabaseSync } = await import('node:sqlite');
-  if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
-  const d = new DatabaseSync(path);
-  d.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
-  // SQLite has one connection, so transactions are serialised and other queries wait for them.
-  let lock = Promise.resolve();
-  let locked = false;
-  return {
-    kind: 'sqlite',
-    exclusive: (fn) => fn(),
-    async query(sql, params, tx) {
-      if (!tx) while (locked) await lock;
-      const stmt = d.prepare(sql);
-      if (/^\s*(SELECT|WITH)\b/i.test(sql) || /\bRETURNING\b/i.test(sql)) return { rows: stmt.all(...params), changes: 0 };
-      const r = stmt.run(...params);
-      return { rows: [], changes: Number(r.changes) };
-    },
-    async tx(fn) {
-      while (locked) await lock;
-      let release;
-      lock = new Promise((r) => (release = r));
-      locked = true;
-      try {
-        d.exec('BEGIN IMMEDIATE');
-        const out = await txStore.run(true, fn);
-        d.exec('COMMIT');
-        return out;
-      } catch (e) {
-        try {
-          d.exec('ROLLBACK');
-        } catch {
-          /* already rolled back */
-        }
-        throw e;
-      } finally {
-        locked = false;
-        release();
-      }
-    },
-    close: async () => d.close(),
-  };
-}
-
-let driver = null;
+let client = null;
+let database = null;
+let embedded = null;
+let transactions = false;
 let ready = null;
+
+/** The session to pass along, but only while its transaction is still open (fire-and-forget work may outlive it). */
+function sessionOpt() {
+  const s = txStore.getStore();
+  return s && !s.hasEnded && s.inTransaction() ? { session: s } : {};
+}
+
+/** Wraps a collection so every call picks up the current transaction's session. */
+function wrap(name) {
+  const c = () => {
+    if (!database) throw new Error('Database not initialised — await initDb() first');
+    return database.collection(name);
+  };
+  const o = (opts) => ({ ...opts, ...sessionOpt() });
+  return {
+    get raw() {
+      return c();
+    },
+    findOne: (filter, opts) => c().findOne(filter, o(opts)),
+    find: (filter, opts) => c().find(filter, o(opts)),
+    countDocuments: (filter, opts) => c().countDocuments(filter, o(opts)),
+    distinct: (key, filter = {}, opts) => c().distinct(key, filter, o(opts)),
+    aggregate: (pipeline, opts) => c().aggregate(pipeline, o(opts)),
+    insertOne: (doc, opts) => c().insertOne(doc, o(opts)),
+    insertMany: (docs, opts) => c().insertMany(docs, o(opts)),
+    updateOne: (filter, update, opts) => c().updateOne(filter, update, o(opts)),
+    updateMany: (filter, update, opts) => c().updateMany(filter, update, o(opts)),
+    replaceOne: (filter, doc, opts) => c().replaceOne(filter, doc, o(opts)),
+    deleteOne: (filter, opts) => c().deleteOne(filter, o(opts)),
+    deleteMany: (filter, opts) => c().deleteMany(filter, o(opts)),
+    findOneAndUpdate: (filter, update, opts) => c().findOneAndUpdate(filter, update, o(opts)),
+    findOneAndDelete: (filter, opts) => c().findOneAndDelete(filter, o(opts)),
+    bulkWrite: (ops, opts) => c().bulkWrite(ops, o(opts)),
+    /** Inserts unless a document matching `filter` exists. Returns true if it inserted. */
+    async insertIfMissing(filter, doc) {
+      try {
+        const r = await c().updateOne(filter, { $setOnInsert: doc }, o({ upsert: true }));
+        return r.upsertedCount === 1;
+      } catch (e) {
+        if (isDuplicateKey(e)) return false; // two upserts raced; the other one won
+        throw e;
+      }
+    },
+  };
+}
+
+export const isDuplicateKey = (e) => e?.code === 11000;
+
+async function connect(url) {
+  const c = new MongoClient(url, { maxPoolSize: Number(process.env.MONGODB_POOL_MAX ?? 50), serverSelectionTimeoutMS: 10_000 });
+  await c.connect();
+  return c;
+}
+
+async function startEmbedded() {
+  let mms;
+  try {
+    mms = await import('mongodb-memory-server-core');
+  } catch {
+    throw new Error(
+      'No MongoDB found. Set MONGODB_URL (e.g. mongodb://127.0.0.1:27017/chatlol or a MongoDB Atlas URL), or run `npm install` to get the embedded dev database.',
+    );
+  }
+  mkdirSync(config.mongo.embeddedPath, { recursive: true });
+  console.log(`🍃 No MongoDB on localhost — starting an embedded one (data in ${config.mongo.embeddedPath})`);
+  embedded = await mms.MongoMemoryServer.create({ instance: { dbPath: config.mongo.embeddedPath, storageEngine: 'wiredTiger' } });
+  return embedded.getUri();
+}
+
+async function resolveUrl() {
+  if (config.mongo.url) return config.mongo.url;
+  if (config.isProd) throw new Error('MONGODB_URL must be set in production');
+  // Dev: prefer a locally running mongod, else fall back to the embedded server.
+  const local = 'mongodb://127.0.0.1:27017/chatlol';
+  const probe = new MongoClient(local, { serverSelectionTimeoutMS: 1_500 });
+  try {
+    await probe.connect();
+    await probe.db('admin').command({ ping: 1 });
+    return local;
+  } catch {
+    return startEmbedded();
+  } finally {
+    await probe.close().catch(() => {});
+  }
+}
 
 export function initDb() {
   ready ??= (async () => {
-    driver = config.databaseUrl ? await createPostgres(config.databaseUrl) : await createSqlite(config.dbPath);
-    const d = driver;
-    await d.exclusive(() => migrate(d));
-    return d;
+    client = await connect(await resolveUrl());
+    database = client.db(config.mongo.dbName || undefined);
+    if (database.databaseName === 'test' && !config.mongo.dbName) database = client.db('chatlol');
+    const hello = await database.admin().command({ hello: 1 });
+    transactions = !!hello.setName || hello.msg === 'isdbgrid';
+    await ensureIndexes(db);
+    return db;
   })();
   return ready;
 }
 
-async function migrate(d) {
-  await d.query(
-    'CREATE TABLE IF NOT EXISTS schema_migrations (id INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL)',
-    [],
-    undefined,
-  );
-  const done = new Set((await d.query('SELECT id FROM schema_migrations', [], undefined)).rows.map((r) => Number(r.id)));
-  for (const m of MIGRATIONS) {
-    if (done.has(m.id)) continue;
-    await d.tx(async () => {
-      const tx = txStore.getStore();
-      for (const stmt of m.sql
-        .split(/;\s*\n/)
-        .map((s) => s.trim())
-        .filter(Boolean))
-        await d.query(stmt, [], tx);
-      await d.query('INSERT INTO schema_migrations (id, name, applied_at) VALUES (?, ?, ?)', [m.id, m.name, new Date().toISOString()], tx);
-    });
-  }
-}
-
-function drv() {
-  if (!driver) throw new Error('Database not initialised — await initDb() first');
-  return driver;
-}
-
 export const db = {
-  get kind() {
-    return drv().kind;
+  kind: 'mongodb',
+  get name() {
+    return database?.databaseName ?? '';
   },
-  async one(sql, ...p) {
-    return (await drv().query(sql, p, txStore.getStore())).rows[0];
+  get transactions() {
+    return transactions;
   },
-  async all(sql, ...p) {
-    return (await drv().query(sql, p, txStore.getStore())).rows;
+  /** Runs fn atomically (when the deployment supports transactions). Nested calls join the outer one. */
+  async tx(fn) {
+    if (txStore.getStore() || !transactions) return fn();
+    const session = client.startSession();
+    try {
+      let out;
+      await session.withTransaction(async () => {
+        out = await txStore.run(session, fn);
+      });
+      return out;
+    } finally {
+      await session.endSession();
+    }
   },
-  async run(sql, ...p) {
-    return { changes: (await drv().query(sql, p, txStore.getStore())).changes };
+  /**
+   * Cluster-wide mutex (seeding on first boot when several replicas start at once).
+   * A lock document with a unique _id; stale locks from crashed processes expire after `ttlMs`.
+   */
+  async exclusive(name, fn, ttlMs = 120_000) {
+    const locks = database.collection('locks');
+    for (;;) {
+      const t = Date.now();
+      try {
+        await locks.insertOne({ _id: name, until: t + ttlMs });
+        break;
+      } catch (e) {
+        if (!isDuplicateKey(e)) throw e;
+        await locks.deleteOne({ _id: name, until: { $lt: t } });
+        await new Promise((r) => setTimeout(r, 250));
+      }
+    }
+    try {
+      return await fn();
+    } finally {
+      await locks.deleteOne({ _id: name }).catch(() => {});
+    }
   },
-  /** Runs fn in a transaction; nested calls join the outer transaction. */
-  tx(fn) {
-    return txStore.getStore() ? fn() : drv().tx(fn);
+  /** Wipes every collection (seed --reset, tests). Indexes are recreated unless `reindex` is false. */
+  async dropDatabase({ reindex = true } = {}) {
+    await database.dropDatabase();
+    if (reindex) await ensureIndexes(db);
   },
-  close: () => driver?.close(),
-  exclusive: (fn) => drv().exclusive(fn),
+  async close() {
+    await client?.close();
+    await embedded?.stop();
+    client = database = embedded = null;
+    ready = null;
+  },
 };
+for (const name of COLLECTIONS) db[name] = wrap(name);
 
 const ALPHA = '0123456789abcdefghijklmnopqrstuvwxyz';
 export function newId(prefix = '') {
@@ -189,11 +223,5 @@ export function newId(prefix = '') {
 
 export const now = () => new Date().toISOString();
 export const today = (d = new Date()) => d.toISOString().slice(0, 10);
-export const json = (s, fallback) => {
-  if (!s) return fallback;
-  try {
-    return JSON.parse(s);
-  } catch {
-    return fallback;
-  }
-};
+/** Escapes user text for use inside a $regex. */
+export const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

@@ -26,21 +26,23 @@ export async function creditPurchase(p) {
   if (!pack) throw new HttpError(400, `Unknown product ${p.productId}`);
   const gems = pack.gems + pack.bonus;
   const credited = await db.tx(async () => {
-    if (!(await db.one('SELECT 1 AS x FROM users WHERE id = ?', p.userId))) return false;
-    const ins = await db.run(
-      `INSERT INTO purchases (id, user_id, provider, product_id, gems, amount_cents, currency, status, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'completed', ?) ON CONFLICT (id) DO NOTHING`,
-      p.id,
-      p.userId,
-      p.provider,
-      p.productId,
-      gems,
-      p.amountCents ?? null,
-      p.currency ?? null,
-      now(),
+    if (!(await db.users.findOne({ _id: p.userId }, { projection: { _id: 1 } }))) return false;
+    // The provider's transaction id is the purchase _id, so a retried webhook can't credit twice.
+    const fresh = await db.purchases.insertIfMissing(
+      { _id: p.id },
+      {
+        userId: p.userId,
+        provider: p.provider,
+        productId: p.productId,
+        gems,
+        amountCents: p.amountCents ?? null,
+        currency: p.currency ?? null,
+        status: 'completed',
+        createdAt: now(),
+      },
     );
-    if (!ins.changes) return false;
-    await db.run('UPDATE users SET gems = gems + ? WHERE id = ?', gems, p.userId);
+    if (!fresh) return false;
+    await db.users.updateOne({ _id: p.userId }, { $inc: { gems } });
     return true;
   });
   if (credited) {
@@ -58,22 +60,34 @@ export async function creditPurchase(p) {
 /** Refunds claw the Gems back (never below zero) and mark the purchase. */
 export async function refundPurchase(id) {
   const done = await db.tx(async () => {
-    const p = await db.one(`SELECT * FROM purchases WHERE id = ? AND status = 'completed'`, id);
+    // Flipping the status is the claim: only one refund event can win it.
+    const p = await db.purchases.findOneAndUpdate({ _id: id, status: 'completed' }, { $set: { status: 'refunded' } });
     if (!p) return null;
-    await db.run(`UPDATE purchases SET status = 'refunded' WHERE id = ?`, id);
-    await db.run('UPDATE users SET gems = CASE WHEN gems - ? < 0 THEN 0 ELSE gems - ? END WHERE id = ?', p.gems, p.gems, p.user_id);
-    return p.user_id;
+    await db.users.updateOne({ _id: p.userId }, [{ $set: { gems: { $max: [0, { $subtract: ['$gems', p.gems] }] } } }]);
+    return p.userId;
   });
   if (done) await emitWallet(done);
   return !!done;
 }
 
 paymentsRouter.get('/payments/history', requireAuth, async (req, res) => {
-  const rows = await db.all(
-    'SELECT id, provider, product_id, gems, amount_cents, currency, status, created_at FROM purchases WHERE user_id = ? ORDER BY created_at DESC LIMIT 50',
-    uid(req),
-  );
-  res.json({ purchases: rows });
+  const rows = await db.purchases
+    .find({ userId: uid(req) })
+    .sort({ createdAt: -1 })
+    .limit(50)
+    .toArray();
+  res.json({
+    purchases: rows.map((p) => ({
+      id: p._id,
+      provider: p.provider,
+      product_id: p.productId,
+      gems: p.gems,
+      amount_cents: p.amountCents,
+      currency: p.currency,
+      status: p.status,
+      created_at: p.createdAt,
+    })),
+  });
 });
 
 // ——— Stripe (web + desktop) ———
@@ -95,8 +109,8 @@ paymentsRouter.post('/payments/stripe/checkout', requireAuth, async (req, res) =
   const { packId, returnUrl } = parse(z.object({ packId: z.string(), returnUrl: z.string().url().optional() }), req.body);
   const pack = gemPack(packId);
   if (!pack) throw new HttpError(404, 'Unknown pack');
-  const u = await db.one('SELECT email, email_verified_at FROM users WHERE id = ?', me);
-  if (!u.email_verified_at) throw new HttpError(403, 'Verify your email before buying Gems', 'email_unverified');
+  const u = await db.users.findOne({ _id: me }, { projection: { email: 1, emailVerifiedAt: 1 } });
+  if (!u.emailVerifiedAt) throw new HttpError(403, 'Verify your email before buying Gems', 'email_unverified');
   // Only return to our own web origin. Desktop checkouts land on the web Vault, which hands off to chatlol://.
   const toApp = !!returnUrl?.startsWith('chatlol://');
   const base = returnUrl && returnUrl.startsWith(config.appUrl) ? returnUrl : `${config.appUrl}/vault${toApp ? '?app=1' : ''}`;

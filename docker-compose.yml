@@ -1,26 +1,32 @@
-# Full ChatLOL stack: Postgres, Redis, 2× API, web (nginx). Optional coturn with `--profile turn`.
+# Full ChatLOL stack: MongoDB (single-node replica set), Redis, 2× API, web (nginx). Optional coturn with `--profile turn`.
 #   cp .env.example .env   # fill in secrets
 #   docker compose up -d --build
 #   docker compose --profile turn up -d   # if you want the bundled coturn instead of your own TURN server
 services:
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: chatlol
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chatlol}
-      POSTGRES_DB: chatlol
-    volumes: [pgdata:/var/lib/postgresql/data]
+  # A one-member replica set, so the API can use multi-document transactions.
+  # Not published to the host; only the API containers reach it. For managed hosting, use MongoDB Atlas instead.
+  mongo:
+    image: mongo:8
+    command: ['--replSet', 'rs0', '--bind_ip_all']
+    volumes: [mongodata:/data/db]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U chatlol"]
+      # Initiates the replica set on first boot, then reports healthy once this node is primary.
+      test:
+        - CMD
+        - mongosh
+        - --quiet
+        - --eval
+        - "try { rs.status() } catch (e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'mongo:27017' }] }) } quit(db.hello().isWritablePrimary ? 0 : 1)"
       interval: 5s
-      retries: 20
+      start_period: 10s
+      retries: 30
 
   redis:
     image: redis:7-alpine
-    command: ["redis-server", "--appendonly", "yes"]
+    command: ['redis-server', '--appendonly', 'yes']
     volumes: [redisdata:/data]
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
       retries: 20
 
@@ -30,17 +36,17 @@ services:
     deploy: { replicas: 2 }
     env_file: [.env]
     environment:
-      DATABASE_URL: postgres://chatlol:${POSTGRES_PASSWORD:-chatlol}@postgres:5432/chatlol
+      MONGODB_URL: ${MONGODB_URL:-mongodb://mongo:27017/chatlol?replicaSet=rs0}
       REDIS_URL: redis://redis:6379
     volumes: [uploads:/data/uploads]
     depends_on:
-      postgres: { condition: service_healthy }
+      mongo: { condition: service_healthy }
       redis: { condition: service_healthy }
 
   web:
     build: { context: ., dockerfile: apps/web/Dockerfile }
     image: chatlol-web
-    ports: ["${WEB_PORT:-8080}:80"]
+    ports: ['${WEB_PORT:-8080}:80']
     depends_on: [api]
 
   coturn:
@@ -63,6 +69,6 @@ services:
       - --denied-peer-ip=192.168.0.0-192.168.255.255
 
 volumes:
-  pgdata:
+  mongodata:
   redisdata:
   uploads:

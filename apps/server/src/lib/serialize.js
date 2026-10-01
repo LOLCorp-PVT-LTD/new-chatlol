@@ -1,5 +1,5 @@
 import { summarizeRatings, levelForXp, tierByScore, REWARDS, gemPriceFor } from '@chatlol/shared';
-import { db, json, today } from '../db.js';
+import { db, today } from '../db.js';
 import { presence } from './presence.js';
 
 export const DEFAULT_SETTINGS = {
@@ -15,6 +15,34 @@ export const DEFAULT_SETTINGS = {
   showAIPersonas: true,
 };
 
+/** A complete user document with defaults; pass the fields you know. */
+export function newUser(fields) {
+  return {
+    email: null,
+    passwordHash: null,
+    bio: '',
+    pronouns: '',
+    city: '',
+    interests: [],
+    xp: 0,
+    sparks: 250,
+    gems: 0,
+    streakDays: 0,
+    lastDropDay: null,
+    lastDailyClaim: null,
+    comboCount: 0,
+    badges: [],
+    cosmetics: { frame: null, flair: null, theme: null, banner: null },
+    settings: { ...DEFAULT_SETTINGS },
+    isAi: false,
+    personaId: null,
+    emailVerifiedAt: null,
+    deletedAt: null,
+    ...fields,
+    handleLower: fields.handle.toLowerCase(),
+  };
+}
+
 const statsCache = new Map();
 const STATS_TTL = 20_000;
 
@@ -25,92 +53,100 @@ export function invalidateStats(userId) {
 async function stats(userId) {
   const c = statsCache.get(userId);
   if (c && Date.now() - c.at < STATS_TTL) return c;
-  const r = await db.one(
-    `SELECT COALESCE(SUM(r1),0) AS r1, COALESCE(SUM(r2),0) AS r2, COALESCE(SUM(r3),0) AS r3, COALESCE(SUM(r4),0) AS r4, COALESCE(SUM(r5),0) AS r5
-     FROM posts WHERE author_id = ? AND hidden = 0`,
-    userId,
-  );
+  const [r = { r1: 0, r2: 0, r3: 0, r4: 0, r5: 0 }] = await db.posts
+    .aggregate([
+      { $match: { authorId: userId, hidden: false } },
+      {
+        $group: {
+          _id: null,
+          r1: { $sum: '$r1' },
+          r2: { $sum: '$r2' },
+          r3: { $sum: '$r3' },
+          r4: { $sum: '$r4' },
+          r5: { $sum: '$r5' },
+        },
+      },
+    ])
+    .toArray();
   const n = r.r1 + r.r2 + r.r3 + r.r4 + r.r5;
   const avg = n ? (r.r1 + 2 * r.r2 + 3 * r.r3 + 4 * r.r4 + 5 * r.r5) / n : 0;
-  const f = await db.one(
-    `SELECT
-      (SELECT COUNT(*) FROM follows WHERE followee_id = ?) AS followers,
-      (SELECT COUNT(*) FROM follows WHERE follower_id = ?) AS following,
-      (SELECT COUNT(*) FROM follows a JOIN follows b ON a.followee_id = b.follower_id AND b.followee_id = a.follower_id WHERE a.follower_id = ?) AS friends`,
-    userId,
-    userId,
-    userId,
-  );
+  const followees = await db.follows.distinct('followeeId', { followerId: userId });
+  const [followers, friends] = await Promise.all([
+    db.follows.countDocuments({ followeeId: userId }),
+    followees.length ? db.follows.countDocuments({ followerId: { $in: followees }, followeeId: userId }) : 0,
+  ]);
   if (statsCache.size > 20_000) statsCache.clear();
   const s = {
     vibeAvg: Math.round(avg * 100) / 100,
     ratingsReceived: n,
-    friends: f.friends,
-    followers: f.followers,
-    following: f.following,
+    friends,
+    followers,
+    following: followees.length,
     at: Date.now(),
   };
   statsCache.set(userId, s);
   return s;
 }
 
-export async function userPublic(row, viewerId) {
-  const s = await stats(row.id);
-  const settings = { ...DEFAULT_SETTINGS, ...json(row.settings, {}) };
+const NO_COSMETICS = { frame: null, flair: null, theme: null, banner: null };
+
+export async function userPublic(u, viewerId) {
+  const s = await stats(u._id);
+  const settings = { ...DEFAULT_SETTINGS, ...u.settings };
   const out = {
-    id: row.id,
-    handle: row.handle,
-    displayName: row.display_name,
-    avatarUrl: row.avatar_url,
-    bio: row.bio,
-    pronouns: row.pronouns,
-    city: row.city,
-    interests: json(row.interests, []),
-    level: levelForXp(row.xp),
-    xp: row.xp,
+    id: u._id,
+    handle: u.handle,
+    displayName: u.displayName,
+    avatarUrl: u.avatarUrl,
+    bio: u.bio ?? '',
+    pronouns: u.pronouns ?? '',
+    city: u.city ?? '',
+    interests: u.interests ?? [],
+    level: levelForXp(u.xp),
+    xp: u.xp,
     vibeAvg: s.vibeAvg,
     vibeTier: s.ratingsReceived ? tierByScore(s.vibeAvg).key : 'chill',
     ratingsReceived: s.ratingsReceived,
-    streakDays: effectiveStreak(row),
+    streakDays: effectiveStreak(u),
     friendsCount: s.friends,
     followersCount: s.followers,
     followingCount: s.following,
-    online: settings.showOnline && (await presence.isOnline(row.id)),
-    lastSeenAt: row.last_seen_at,
-    badges: json(row.badges, []),
-    cosmetics: json(row.cosmetics, { frame: null, flair: null, theme: null, banner: null }),
-    isAI: !!row.is_ai,
-    createdAt: row.created_at,
+    online: settings.showOnline && (await presence.isOnline(u._id)),
+    lastSeenAt: u.lastSeenAt,
+    badges: u.badges ?? [],
+    cosmetics: { ...NO_COSMETICS, ...u.cosmetics },
+    isAI: !!u.isAi,
+    createdAt: u.createdAt,
   };
-  if (viewerId && viewerId !== row.id) {
-    out.isFollowing = !!(await db.one('SELECT 1 AS x FROM follows WHERE follower_id = ? AND followee_id = ?', viewerId, row.id));
+  if (viewerId && viewerId !== u._id) {
+    out.isFollowing = !!(await db.follows.findOne({ followerId: viewerId, followeeId: u._id }));
   }
   return out;
 }
 
 /** A streak survives until the end of the day after the last drop. */
-export function effectiveStreak(row) {
-  if (!row.last_drop_day) return 0;
+export function effectiveStreak(u) {
+  if (!u.lastDropDay) return 0;
   const yesterday = today(new Date(Date.now() - 86_400_000));
-  return row.last_drop_day >= yesterday ? row.streak_days : 0;
+  return u.lastDropDay >= yesterday ? u.streakDays : 0;
 }
 
-export async function userPrivate(row) {
-  const done = (await db.one('SELECT n FROM daily_counters WHERE user_id = ? AND day = ? AND key = ?', row.id, today(), 'rate'))?.n ?? 0;
+export async function userPrivate(u) {
+  const done = (await db.dailyCounters.findOne({ _id: `${u._id}:${today()}:rate` }))?.n ?? 0;
   return {
-    ...(await userPublic(row)),
+    ...(await userPublic(u)),
     online: true,
-    email: row.email ?? '',
-    emailVerified: !!row.email_verified_at,
-    sparks: row.sparks,
-    gems: row.gems ?? 0,
+    email: u.email ?? '',
+    emailVerified: !!u.emailVerifiedAt,
+    sparks: u.sparks,
+    gems: u.gems ?? 0,
     dailyGoal: { done: Math.min(done, REWARDS.questDailyOracle.target), target: REWARDS.questDailyOracle.target },
-    comboCount: row.combo_count,
-    settings: { ...DEFAULT_SETTINGS, ...json(row.settings, {}) },
+    comboCount: u.comboCount ?? 0,
+    settings: { ...DEFAULT_SETTINGS, ...u.settings },
   };
 }
 
-export const userById = (id) => db.one('SELECT * FROM users WHERE id = ?', id);
+export const userById = (id) => db.users.findOne({ _id: id });
 
 /** Per-request cache so a feed page doesn't re-query the same author 20 times. */
 export function authorCache(viewerId) {
@@ -153,39 +189,38 @@ function ghostUser(id) {
   };
 }
 
-export async function serializePost(row, viewerId, author = authorCache(viewerId)) {
-  const dist = [row.r1, row.r2, row.r3, row.r4, row.r5];
+export async function serializePost(p, viewerId, author = authorCache(viewerId)) {
+  const dist = [p.r1, p.r2, p.r3, p.r4, p.r5];
   const reactions = { fire: 0, heart: 0, lol: 0, wow: 0, hundred: 0 };
-  const [reactRows, battleRows, mine] = await Promise.all([
-    db.all('SELECT kind, COUNT(*) AS n FROM reactions WHERE post_id = ? GROUP BY kind', row.id),
-    row.kind === 'battle' ? db.all('SELECT * FROM battle_options WHERE post_id = ? ORDER BY position', row.id) : Promise.resolve(null),
+  const [reactRows, mine] = await Promise.all([
+    db.reactions.aggregate([{ $match: { postId: p._id } }, { $group: { _id: '$kind', n: { $sum: 1 } } }]).toArray(),
     viewerId
       ? Promise.all([
-          db.one('SELECT score FROM ratings WHERE post_id = ? AND user_id = ?', row.id, viewerId),
-          db.one('SELECT kind FROM reactions WHERE post_id = ? AND user_id = ?', row.id, viewerId),
-          db.one('SELECT option_id FROM battle_votes WHERE post_id = ? AND user_id = ?', row.id, viewerId),
+          db.ratings.findOne({ postId: p._id, userId: viewerId }),
+          db.reactions.findOne({ postId: p._id, userId: viewerId }),
+          p.kind === 'battle' ? db.battleVotes.findOne({ postId: p._id, userId: viewerId }) : null,
         ])
-      : Promise.resolve([undefined, undefined, undefined]),
+      : [null, null, null],
   ]);
-  for (const r of reactRows) reactions[r.kind] = r.n;
-  const battle = battleRows?.map((o) => ({ id: o.id, label: o.label, mediaUrl: o.media_url ?? undefined, votes: o.votes })) ?? null;
+  for (const r of reactRows) reactions[r._id] = r.n;
+  const battle = p.battle?.map((o) => ({ id: o.id, label: o.label, mediaUrl: o.mediaUrl ?? undefined, votes: o.votes })) ?? null;
   return {
-    id: row.id,
-    author: await author(row.author_id),
-    kind: row.kind,
-    body: row.body,
-    mediaUrl: row.media_url,
-    tags: json(row.tags, []),
-    dropId: row.drop_id,
+    id: p._id,
+    author: await author(p.authorId),
+    kind: p.kind,
+    body: p.body,
+    mediaUrl: p.mediaUrl ?? null,
+    tags: p.tags ?? [],
+    dropId: p.dropId ?? null,
     battle,
     ratings: summarizeRatings(dist),
     reactions,
-    commentCount: row.comment_count,
+    commentCount: p.commentCount,
     myRating: mine[0]?.score ?? null,
     myReaction: mine[1]?.kind ?? null,
-    myBattleVote: mine[2]?.option_id ?? null,
-    soundtrack: row.soundtrack,
-    createdAt: row.created_at,
+    myBattleVote: mine[2]?.optionId ?? null,
+    soundtrack: p.soundtrack ?? null,
+    createdAt: p.createdAt,
   };
 }
 
@@ -194,97 +229,97 @@ export const serializePosts = (rows, viewerId) => {
   return Promise.all(rows.map((r) => serializePost(r, viewerId, author)));
 };
 
-export async function serializeComment(row, author = authorCache()) {
-  const rating = (await db.one('SELECT score FROM ratings WHERE post_id = ? AND user_id = ?', row.post_id, row.author_id))?.score ?? null;
-  return { id: row.id, postId: row.post_id, author: await author(row.author_id), body: row.body, rating, createdAt: row.created_at };
+export async function serializeComment(c, author = authorCache()) {
+  const rating = (await db.ratings.findOne({ postId: c.postId, userId: c.authorId }))?.score ?? null;
+  return { id: c._id, postId: c.postId, author: await author(c.authorId), body: c.body, rating, createdAt: c.createdAt };
 }
 
-export async function serializeMessage(row, author = authorCache()) {
+export async function serializeMessage(m, author = authorCache()) {
   return {
-    id: row.id,
-    roomId: row.room_id,
-    author: await author(row.author_id),
-    body: row.body,
-    mediaUrl: row.media_url,
-    kind: row.kind,
-    replyToId: row.reply_to_id,
+    id: m._id,
+    roomId: m.roomId,
+    author: await author(m.authorId),
+    body: m.body,
+    mediaUrl: m.mediaUrl ?? null,
+    kind: m.kind ?? 'text',
+    replyToId: m.replyToId ?? null,
     reactions: {},
-    createdAt: row.created_at,
+    createdAt: m.createdAt,
   };
 }
 
-export async function serializeTake(row, viewerId, author = authorCache(viewerId)) {
-  const stake = viewerId ? await db.one('SELECT side, amount FROM stakes WHERE take_id = ? AND user_id = ?', row.id, viewerId) : undefined;
+export async function serializeTake(t, viewerId, author = authorCache(viewerId)) {
+  const stake = viewerId ? await db.stakes.findOne({ takeId: t._id, userId: viewerId }) : null;
   return {
-    id: row.id,
-    category: row.category,
-    statement: row.statement,
-    imageUrl: row.image_url,
-    agreePool: row.agree_pool,
-    disagreePool: row.disagree_pool,
-    agreeCount: row.agree_count,
-    disagreeCount: row.disagree_count,
-    endsAt: row.ends_at,
-    resolved: !!row.resolved,
-    outcome: row.outcome,
+    id: t._id,
+    category: t.category,
+    statement: t.statement,
+    imageUrl: t.imageUrl ?? null,
+    agreePool: t.agreePool,
+    disagreePool: t.disagreePool,
+    agreeCount: t.agreeCount,
+    disagreeCount: t.disagreeCount,
+    endsAt: t.endsAt,
+    resolved: !!t.resolved,
+    outcome: t.outcome ?? null,
     myStake: stake ? { side: stake.side, amount: stake.amount } : null,
-    author: row.author_id ? await author(row.author_id) : null,
+    author: t.authorId ? await author(t.authorId) : null,
   };
 }
 
-export async function serializeThread(row, viewerId, author = authorCache(viewerId)) {
-  const v = viewerId ? ((await db.one('SELECT v FROM thread_votes WHERE thread_id = ? AND user_id = ?', row.id, viewerId))?.v ?? 0) : 0;
+export async function serializeThread(t, viewerId, author = authorCache(viewerId)) {
+  const v = viewerId ? ((await db.threadVotes.findOne({ threadId: t._id, userId: viewerId }))?.v ?? 0) : 0;
   return {
-    id: row.id,
-    board: row.board_id,
-    title: row.title,
-    body: row.body,
-    author: await author(row.author_id),
-    upvotes: row.upvotes,
-    replyCount: row.reply_count,
-    pinned: !!row.pinned,
+    id: t._id,
+    board: t.boardId,
+    title: t.title,
+    body: t.body,
+    author: await author(t.authorId),
+    upvotes: t.upvotes,
+    replyCount: t.replyCount,
+    pinned: !!t.pinned,
     myVote: v,
-    lastActivityAt: row.last_activity_at,
-    createdAt: row.created_at,
+    lastActivityAt: t.lastActivityAt,
+    createdAt: t.createdAt,
   };
 }
 
-export async function serializeReply(row, author = authorCache()) {
+export async function serializeReply(r, author = authorCache()) {
   return {
-    id: row.id,
-    threadId: row.thread_id,
-    author: await author(row.author_id),
-    body: row.body,
-    upvotes: row.upvotes,
-    createdAt: row.created_at,
+    id: r._id,
+    threadId: r.threadId,
+    author: await author(r.authorId),
+    body: r.body,
+    upvotes: r.upvotes,
+    createdAt: r.createdAt,
   };
 }
 
-export async function serializeNotification(row, author = authorCache()) {
+export async function serializeNotification(n, author = authorCache()) {
   return {
-    id: row.id,
-    kind: row.kind,
-    title: row.title,
-    body: row.body,
-    actor: row.actor_id ? await author(row.actor_id) : null,
-    link: row.link,
-    read: !!row.read,
-    createdAt: row.created_at,
+    id: n._id,
+    kind: n.kind,
+    title: n.title,
+    body: n.body,
+    actor: n.actorId ? await author(n.actorId) : null,
+    link: n.link ?? null,
+    read: !!n.read,
+    createdAt: n.createdAt,
   };
 }
 
-export function serializeStoreItem(row, owned, equipped) {
+export function serializeStoreItem(i, owned, equipped) {
   return {
-    id: row.id,
-    kind: row.kind,
-    name: row.name,
-    description: row.description,
-    price: row.price,
-    gemPrice: gemPriceFor(row.kind, row.price),
-    rarity: row.rarity,
-    emoji: row.emoji,
-    preview: row.preview,
-    limited: !!row.limited,
+    id: i._id,
+    kind: i.kind,
+    name: i.name,
+    description: i.description,
+    price: i.price,
+    gemPrice: gemPriceFor(i.kind, i.price),
+    rarity: i.rarity,
+    emoji: i.emoji,
+    preview: i.preview,
+    limited: !!i.limited,
     owned,
     equipped,
   };

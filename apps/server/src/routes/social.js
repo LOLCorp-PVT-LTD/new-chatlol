@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { REWARDS } from '@chatlol/shared';
-import { db, newId, now, json } from '../db.js';
+import { db, newId, now, isDuplicateKey } from '../db.js';
 import { optionalAuth, requireAuth, uid } from '../lib/auth.js';
 import { HttpError, parse, rateLimit } from '../lib/http.js';
 import {
@@ -25,10 +25,12 @@ export const socialRouter = Router();
 
 // ——— Shouts / Forums ———
 socialRouter.get('/shouts/boards', async (_req, res) => {
-  const boards = await db.all(
-    'SELECT b.*, (SELECT COUNT(*) FROM threads t WHERE t.board_id = b.id) AS threads FROM boards b ORDER BY position',
-  );
-  res.json({ boards: boards.map((b) => ({ id: b.id, name: b.name, emoji: b.emoji, threads: b.threads })) });
+  const [boards, counts] = await Promise.all([
+    db.boards.find({}).sort({ position: 1 }).toArray(),
+    db.threads.aggregate([{ $group: { _id: '$boardId', n: { $sum: 1 } } }]).toArray(),
+  ]);
+  const n = new Map(counts.map((c) => [c._id, c.n]));
+  res.json({ boards: boards.map((b) => ({ id: b._id, name: b.name, emoji: b.emoji, threads: n.get(b._id) ?? 0 })) });
 });
 
 socialRouter.get('/shouts', optionalAuth, async (req, res) => {
@@ -37,21 +39,21 @@ socialRouter.get('/shouts', optionalAuth, async (req, res) => {
     req.query,
   );
   const offset = p.cursor ?? 0;
-  const where = p.board ? 'WHERE board_id = ?' : '';
-  const args = p.board ? [p.board] : [];
+  const filter = p.board ? { boardId: p.board } : {};
   let rows;
   if (p.sort === 'hot') {
     // Hot = (votes + 2×replies) decayed by hours since last activity; scored in JS over recent candidates.
-    const cand = await db.all(`SELECT * FROM threads ${where} ORDER BY last_activity_at DESC LIMIT 300`, ...args);
+    const cand = await db.threads.find(filter).sort({ lastActivityAt: -1 }).limit(300).toArray();
     const t = Date.now();
-    const hot = (r) => (r.pinned ? 1e9 : 0) + (r.upvotes + r.reply_count * 2 + 1) / ((t - Date.parse(r.last_activity_at)) / 3_600_000 + 2);
+    const hot = (r) => (r.pinned ? 1e9 : 0) + (r.upvotes + r.replyCount * 2 + 1) / ((t - Date.parse(r.lastActivityAt)) / 3_600_000 + 2);
     rows = cand.sort((a, b) => hot(b) - hot(a)).slice(offset, offset + 21);
   } else {
-    rows = await db.all(
-      `SELECT * FROM threads ${where} ORDER BY ${p.sort === 'new' ? 'pinned DESC, created_at DESC' : 'upvotes DESC'} LIMIT 21 OFFSET ?`,
-      ...args,
-      offset,
-    );
+    rows = await db.threads
+      .find(filter)
+      .sort(p.sort === 'new' ? { pinned: -1, createdAt: -1 } : { upvotes: -1, _id: 1 })
+      .skip(offset)
+      .limit(21)
+      .toArray();
   }
   const author = authorCache(req.userId);
   res.json({
@@ -61,10 +63,10 @@ socialRouter.get('/shouts', optionalAuth, async (req, res) => {
 });
 
 socialRouter.get('/shouts/:id', optionalAuth, async (req, res) => {
-  const t = await db.one('SELECT * FROM threads WHERE id = ?', String(req.params.id));
+  const t = await db.threads.findOne({ _id: String(req.params.id) });
   if (!t) throw new HttpError(404, 'Thread not found');
   const author = authorCache(req.userId);
-  const replies = await db.all('SELECT * FROM replies WHERE thread_id = ? ORDER BY created_at ASC LIMIT 300', t.id);
+  const replies = await db.replies.find({ threadId: t._id }).sort({ createdAt: 1 }).limit(300).toArray();
   res.json({
     thread: await serializeThread(t, req.userId, author),
     replies: await Promise.all(replies.map((r) => serializeReply(r, author))),
@@ -72,48 +74,43 @@ socialRouter.get('/shouts/:id', optionalAuth, async (req, res) => {
 });
 
 export async function insertThread(authorId, board, title, body) {
-  if (!(await db.one('SELECT 1 AS x FROM boards WHERE id = ?', board))) throw new HttpError(404, 'Board not found');
-  const id = newId('t');
+  if (!(await db.boards.findOne({ _id: board }))) throw new HttpError(404, 'Board not found');
   const t = now();
-  await db.run(
-    'INSERT INTO threads (id, board_id, author_id, title, body, last_activity_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    id,
-    board,
+  const thread = {
+    _id: newId('t'),
+    boardId: board,
     authorId,
     title,
     body,
-    t,
-    t,
-  );
-  bus.emitEvent('thread:created', { threadId: id, authorId });
-  return await db.one('SELECT * FROM threads WHERE id = ?', id);
+    upvotes: 0,
+    replyCount: 0,
+    pinned: false,
+    lastActivityAt: t,
+    createdAt: t,
+  };
+  await db.threads.insertOne(thread);
+  bus.emitEvent('thread:created', { threadId: thread._id, authorId });
+  return thread;
 }
 
 export async function insertReply(threadId, authorId, body) {
-  const t = await db.one('SELECT * FROM threads WHERE id = ?', threadId);
+  const t = await db.threads.findOne({ _id: threadId });
   if (!t) throw new HttpError(404, 'Thread not found');
-  const id = newId('r');
-  await db.run(
-    'INSERT INTO replies (id, thread_id, author_id, body, created_at) VALUES (?, ?, ?, ?, ?)',
-    id,
-    threadId,
-    authorId,
-    body,
-    now(),
-  );
-  await db.run('UPDATE threads SET reply_count = reply_count + 1, last_activity_at = ? WHERE id = ?', now(), threadId);
-  if (t.author_id !== authorId) {
-    const a = await db.one('SELECT display_name FROM users WHERE id = ?', authorId);
-    await notify(t.author_id, {
+  const reply = { _id: newId('r'), threadId, authorId, body, upvotes: 0, createdAt: now() };
+  await db.replies.insertOne(reply);
+  await db.threads.updateOne({ _id: threadId }, { $inc: { replyCount: 1 }, $set: { lastActivityAt: now() } });
+  if (t.authorId !== authorId) {
+    const a = await db.users.findOne({ _id: authorId }, { projection: { displayName: 1 } });
+    await notify(t.authorId, {
       kind: 'comment',
       actorId: authorId,
       link: `/shouts/${threadId}`,
-      title: `${a.display_name} replied to your shout`,
+      title: `${a.displayName} replied to your shout`,
       body: body.slice(0, 120),
     });
   }
-  bus.emitEvent('thread:replied', { threadId, replyId: id, authorId });
-  return await db.one('SELECT * FROM replies WHERE id = ?', id);
+  bus.emitEvent('thread:replied', { threadId, replyId: reply._id, authorId });
+  return reply;
 }
 
 socialRouter.post('/shouts', requireAuth, async (req, res) => {
@@ -143,43 +140,52 @@ socialRouter.post('/shouts/:id/vote', requireAuth, async (req, res) => {
   const me = uid(req);
   const threadId = String(req.params.id);
   const { v } = parse(z.object({ v: z.union([z.literal(1), z.literal(-1), z.literal(0)]) }), req.body);
-  if (!(await db.one('SELECT 1 AS x FROM threads WHERE id = ?', threadId))) throw new HttpError(404, 'Thread not found');
+  if (!(await db.threads.findOne({ _id: threadId }))) throw new HttpError(404, 'Thread not found');
   await db.tx(async () => {
-    const prev = (await db.one('SELECT v FROM thread_votes WHERE thread_id = ? AND user_id = ?', threadId, me))?.v ?? 0;
-    if (v === 0) await db.run('DELETE FROM thread_votes WHERE thread_id = ? AND user_id = ?', threadId, me);
-    else
-      await db.run(
-        'INSERT INTO thread_votes (thread_id, user_id, v) VALUES (?, ?, ?) ON CONFLICT (thread_id, user_id) DO UPDATE SET v = excluded.v',
-        threadId,
-        me,
-        v,
-      );
-    await db.run('UPDATE threads SET upvotes = upvotes + ? WHERE id = ?', v - prev, threadId);
+    const prev =
+      v === 0
+        ? await db.threadVotes.findOneAndDelete({ threadId, userId: me })
+        : await db.threadVotes.findOneAndUpdate({ threadId, userId: me }, { $set: { v } }, { upsert: true, returnDocument: 'before' });
+    const delta = v - (prev?.v ?? 0);
+    if (delta) await db.threads.updateOne({ _id: threadId }, { $inc: { upvotes: delta } });
   });
-  res.json({ thread: await serializeThread(await db.one('SELECT * FROM threads WHERE id = ?', threadId), me) });
+  res.json({ thread: await serializeThread(await db.threads.findOne({ _id: threadId }), me) });
 });
 
 // ——— Lounges ———
 export const loungeKey = (id) => `lounge:online:${id}`;
 
+const recentMessages = (roomType, roomId, limit, extra = {}) =>
+  db.messages
+    .find({ roomType, roomId, ...extra })
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .toArray();
+
 export async function serializeLounge(l, author) {
-  const ids = await shared().smembers(loungeKey(l.id));
+  const ids = await shared().smembers(loungeKey(l._id));
   const recent = (
-    await db.all(
-      `SELECT author_id, MAX(created_at) AS last FROM messages WHERE room_type = 'lounge' AND room_id = ? GROUP BY author_id ORDER BY last DESC LIMIT 12`,
-      l.id,
-    )
-  ).map((r) => r.author_id);
+    await db.messages
+      .aggregate([
+        { $match: { roomType: 'lounge', roomId: l._id } },
+        { $sort: { createdAt: -1 } },
+        { $limit: 200 },
+        { $group: { _id: '$authorId', last: { $max: '$createdAt' } } },
+        { $sort: { last: -1 } },
+        { $limit: 12 },
+      ])
+      .toArray()
+  ).map((r) => r._id);
   const recentOnline = (await Promise.all(recent.map(async (id) => ((await presence.isOnline(id)) ? id : null)))).filter(Boolean);
   const previewIds = [...new Set([...ids, ...recent])].slice(0, 5);
   const active = new Set([...ids, ...recentOnline]);
   return {
-    id: l.id,
+    id: l._id,
     name: l.name,
     emoji: l.emoji,
     topic: l.topic,
-    nowPlaying: l.now_playing,
-    coverUrl: l.cover_url,
+    nowPlaying: l.nowPlaying,
+    coverUrl: l.coverUrl,
     onlineCount: active.size,
     memberPreview: await Promise.all(previewIds.map(author)),
     isLive: active.size > 0,
@@ -188,167 +194,153 @@ export async function serializeLounge(l, author) {
 
 socialRouter.get('/lounges', optionalAuth, async (req, res) => {
   const author = authorCache(req.userId);
-  const lounges = await Promise.all((await db.all('SELECT * FROM lounges ORDER BY position')).map((l) => serializeLounge(l, author)));
+  const rows = await db.lounges.find({}).sort({ position: 1 }).toArray();
+  const lounges = await Promise.all(rows.map((l) => serializeLounge(l, author)));
   res.json({ lounges: lounges.sort((a, b) => b.onlineCount - a.onlineCount) });
 });
 
 socialRouter.get('/lounges/:id', optionalAuth, async (req, res) => {
-  const l = await db.one('SELECT * FROM lounges WHERE id = ?', String(req.params.id));
+  const l = await db.lounges.findOne({ _id: String(req.params.id) });
   if (!l) throw new HttpError(404, 'Lounge not found');
   const author = authorCache(req.userId);
-  const rows = (
-    await db.all(`SELECT * FROM messages WHERE room_type = 'lounge' AND room_id = ? ORDER BY created_at DESC LIMIT 60`, l.id)
-  ).reverse();
+  const rows = (await recentMessages('lounge', l._id, 60)).reverse();
   res.json({ lounge: await serializeLounge(l, author), messages: await Promise.all(rows.map((m) => serializeMessage(m, author))) });
 });
 
+export { recentMessages };
+
 export async function insertLoungeMessage(loungeId, authorId, body, replyToId = null) {
-  const id = newId('m');
-  await db.run(
-    `INSERT INTO messages (id, room_type, room_id, author_id, body, reply_to_id, created_at) VALUES (?, 'lounge', ?, ?, ?, ?, ?)`,
-    id,
-    loungeId,
+  const doc = {
+    _id: newId('m'),
+    roomType: 'lounge',
+    roomId: loungeId,
     authorId,
     body,
+    mediaUrl: null,
+    kind: 'text',
     replyToId,
-    now(),
-  );
-  const msg = await serializeMessage(await db.one('SELECT * FROM messages WHERE id = ?', id));
+    createdAt: now(),
+  };
+  await db.messages.insertOne(doc);
+  const msg = await serializeMessage(doc);
   io()?.to(room.lounge(loungeId)).emit('lounge:message', msg);
-  bus.emitEvent('lounge:sent', { loungeId, messageId: id, authorId });
+  bus.emitEvent('lounge:sent', { loungeId, messageId: doc._id, authorId });
   return msg;
 }
 
 // ——— Direct messages ———
+// A conversation document embeds its members: { _id, pairKey, members: [{ userId, lastReadAt }], updatedAt }.
 async function conversationFor(viewerId, c) {
   const author = authorCache(viewerId);
-  const members = await db.all('SELECT user_id, last_read_at FROM conversation_members WHERE conversation_id = ?', c.id);
-  const mine = members.find((m) => m.user_id === viewerId);
-  const last = await db.one(`SELECT * FROM messages WHERE room_type = 'dm' AND room_id = ? ORDER BY created_at DESC LIMIT 1`, c.id);
-  const unread = (
-    await db.one(
-      `SELECT COUNT(*) AS n FROM messages WHERE room_type = 'dm' AND room_id = ? AND author_id != ? AND created_at > ?`,
-      c.id,
-      viewerId,
-      mine?.last_read_at ?? '',
-    )
-  ).n;
+  const mine = c.members.find((m) => m.userId === viewerId);
+  const [[last], unread] = await Promise.all([
+    recentMessages('dm', c._id, 1),
+    db.messages.countDocuments({ roomType: 'dm', roomId: c._id, authorId: { $ne: viewerId }, createdAt: { $gt: mine?.lastReadAt ?? '' } }),
+  ]);
   return {
-    id: c.id,
-    members: await Promise.all(members.filter((m) => m.user_id !== viewerId).map((m) => author(m.user_id))),
+    id: c._id,
+    members: await Promise.all(c.members.filter((m) => m.userId !== viewerId).map((m) => author(m.userId))),
     lastMessage: last ? await serializeMessage(last, author) : null,
     unread,
-    updatedAt: c.updated_at,
+    updatedAt: c.updatedAt,
   };
 }
 
 socialRouter.get('/conversations', requireAuth, async (req, res) => {
   const me = uid(req);
-  const rows = await db.all(
-    'SELECT c.* FROM conversations c JOIN conversation_members m ON m.conversation_id = c.id WHERE m.user_id = ? ORDER BY c.updated_at DESC LIMIT 100',
-    me,
-  );
+  const rows = await db.conversations.find({ 'members.userId': me }).sort({ updatedAt: -1 }).limit(100).toArray();
   res.json({ conversations: await Promise.all(rows.map((c) => conversationFor(me, c))) });
 });
 
-/** 1:1 conversations get a deterministic id, so two simultaneous "message" taps can't create duplicates. */
+/** 1:1 conversations have a unique pairKey, so two simultaneous "message" taps can't create duplicates. */
 export async function getOrCreateDm(a, b) {
-  const existing = await db.one(
-    `SELECT c.* FROM conversations c
-     WHERE (SELECT COUNT(*) FROM conversation_members WHERE conversation_id = c.id) = 2
-       AND EXISTS (SELECT 1 FROM conversation_members WHERE conversation_id = c.id AND user_id = ?)
-       AND EXISTS (SELECT 1 FROM conversation_members WHERE conversation_id = c.id AND user_id = ?)`,
-    a,
-    b,
-  );
-  if (existing) return existing;
-  const id = `dm_${createHash('sha1').update([a, b].sort().join('|')).digest('hex').slice(0, 24)}`;
+  const pairKey = [a, b].sort().join('|');
   const t = now();
-  await db.tx(async () => {
-    await db.run('INSERT INTO conversations (id, updated_at) VALUES (?, ?) ON CONFLICT DO NOTHING', id, t);
-    await db.run(
-      'INSERT INTO conversation_members (conversation_id, user_id, last_read_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING',
-      id,
-      a,
-      t,
+  const upsert = () =>
+    db.conversations.findOneAndUpdate(
+      { pairKey },
+      {
+        $setOnInsert: {
+          _id: `dm_${createHash('sha1').update(pairKey).digest('hex').slice(0, 24)}`,
+          members: [
+            { userId: a, lastReadAt: t },
+            { userId: b, lastReadAt: t },
+          ],
+          updatedAt: t,
+        },
+      },
+      { upsert: true, returnDocument: 'after' },
     );
-    await db.run(
-      'INSERT INTO conversation_members (conversation_id, user_id, last_read_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING',
-      id,
-      b,
-      t,
-    );
-  });
-  return await db.one('SELECT * FROM conversations WHERE id = ?', id);
+  try {
+    return await upsert();
+  } catch (e) {
+    if (isDuplicateKey(e)) return await upsert(); // lost a race with the other tap; now it exists
+    throw e;
+  }
 }
 
 socialRouter.post('/conversations', requireAuth, async (req, res) => {
   const me = uid(req);
   const { userId } = parse(z.object({ userId: z.string() }), req.body);
-  const other = await db.one('SELECT * FROM users WHERE id = ? AND deleted_at IS NULL', userId);
-  if (!other || other.id === me) throw new HttpError(404, 'User not found');
+  const other = await db.users.findOne({ _id: userId, deletedAt: null });
+  if (!other || other._id === me) throw new HttpError(404, 'User not found');
   if (
-    await db.one(
-      'SELECT 1 AS x FROM blocks WHERE (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?)',
-      me,
-      userId,
-      userId,
-      me,
-    )
+    await db.blocks.findOne({
+      $or: [
+        { blockerId: me, blockedId: userId },
+        { blockerId: userId, blockedId: me },
+      ],
+    })
   ) {
     throw new HttpError(403, "You can't message this person");
   }
-  const s = { ...DEFAULT_SETTINGS, ...json(other.settings, {}) };
-  const followsMe = await db.one('SELECT 1 AS x FROM follows WHERE follower_id = ? AND followee_id = ?', other.id, me);
+  const s = { ...DEFAULT_SETTINGS, ...other.settings };
+  const followsMe = await db.follows.findOne({ followerId: other._id, followeeId: me });
   if (s.dmFrom === 'nobody' || (s.dmFrom === 'following' && !followsMe))
     throw new HttpError(403, `@${other.handle} isn't taking new DMs right now`);
-  res.json({ conversation: await conversationFor(me, await getOrCreateDm(me, other.id)) });
+  res.json({ conversation: await conversationFor(me, await getOrCreateDm(me, other._id)) });
 });
 
-async function assertMember(convId, userId) {
-  if (!(await db.one('SELECT 1 AS x FROM conversation_members WHERE conversation_id = ? AND user_id = ?', convId, userId)))
-    throw new HttpError(404, 'Conversation not found');
+async function memberConversation(convId, userId) {
+  const c = await db.conversations.findOne({ _id: convId, 'members.userId': userId });
+  if (!c) throw new HttpError(404, 'Conversation not found');
+  return c;
+}
+
+/** Marks a conversation read up to `at` for one member. Returns false if they aren't a member. */
+export async function markRead(convId, userId, at = now()) {
+  const r = await db.conversations.updateOne({ _id: convId, 'members.userId': userId }, { $set: { 'members.$.lastReadAt': at } });
+  return r.matchedCount > 0;
 }
 
 socialRouter.get('/conversations/:id/messages', requireAuth, async (req, res) => {
   const me = uid(req);
   const convId = String(req.params.id);
-  await assertMember(convId, me);
+  await memberConversation(convId, me);
   const before = typeof req.query.before === 'string' ? req.query.before : '9999';
   const author = authorCache(me);
-  const rows = (
-    await db.all(
-      `SELECT * FROM messages WHERE room_type = 'dm' AND room_id = ? AND created_at < ? ORDER BY created_at DESC LIMIT 50`,
-      convId,
-      before,
-    )
-  ).reverse();
-  await db.run('UPDATE conversation_members SET last_read_at = ? WHERE conversation_id = ? AND user_id = ?', now(), convId, me);
+  const rows = (await recentMessages('dm', convId, 50, { createdAt: { $lt: before } })).reverse();
+  await markRead(convId, me);
   res.json({
     messages: await Promise.all(rows.map((m) => serializeMessage(m, author))),
-    conversation: await conversationFor(me, await db.one('SELECT * FROM conversations WHERE id = ?', convId)),
+    conversation: await conversationFor(me, await db.conversations.findOne({ _id: convId })),
   });
 });
 
 export async function insertDm(convId, authorId, body, kind = 'text', mediaUrl = null) {
-  const id = newId('m');
   const t = now();
-  await db.run(
-    `INSERT INTO messages (id, room_type, room_id, author_id, body, media_url, kind, created_at) VALUES (?, 'dm', ?, ?, ?, ?, ?, ?)`,
-    id,
-    convId,
-    authorId,
-    body,
-    mediaUrl,
-    kind,
-    t,
+  const doc = { _id: newId('m'), roomType: 'dm', roomId: convId, authorId, body, mediaUrl, kind, replyToId: null, createdAt: t };
+  await db.messages.insertOne(doc);
+  const c = await db.conversations.findOneAndUpdate(
+    { _id: convId, 'members.userId': authorId },
+    { $set: { updatedAt: t, 'members.$.lastReadAt': t } },
+    { returnDocument: 'after' },
   );
-  await db.run('UPDATE conversations SET updated_at = ? WHERE id = ?', t, convId);
-  await db.run('UPDATE conversation_members SET last_read_at = ? WHERE conversation_id = ? AND user_id = ?', t, convId, authorId);
-  const msg = await serializeMessage(await db.one('SELECT * FROM messages WHERE id = ?', id));
-  for (const o of await db.all('SELECT user_id FROM conversation_members WHERE conversation_id = ? AND user_id != ?', convId, authorId)) {
-    io()?.to(room.user(o.user_id)).emit('dm:message', msg);
-    await notify(o.user_id, {
+  const msg = await serializeMessage(doc);
+  for (const o of c?.members ?? []) {
+    if (o.userId === authorId) continue;
+    io()?.to(room.user(o.userId)).emit('dm:message', msg);
+    await notify(o.userId, {
       kind: 'dm',
       actorId: authorId,
       link: `/messages/${convId}`,
@@ -357,7 +349,7 @@ export async function insertDm(convId, authorId, body, kind = 'text', mediaUrl =
     });
   }
   io()?.to(room.user(authorId)).emit('dm:message', msg);
-  bus.emitEvent('dm:sent', { conversationId: convId, messageId: id, authorId });
+  bus.emitEvent('dm:sent', { conversationId: convId, messageId: doc._id, authorId });
   return msg;
 }
 
@@ -365,7 +357,7 @@ socialRouter.post('/conversations/:id/messages', requireAuth, async (req, res) =
   const me = uid(req);
   const convId = String(req.params.id);
   await rateLimit(`dm:${me}`, 40);
-  await assertMember(convId, me);
+  await memberConversation(convId, me);
   const b = parse(
     z.object({
       body: z.string().max(2000).default(''),
@@ -376,24 +368,24 @@ socialRouter.post('/conversations/:id/messages', requireAuth, async (req, res) =
   );
   if (!b.body.trim() && !b.mediaUrl) throw new HttpError(400, 'Empty message');
   assertClean(b.body);
-  res
-    .status(201)
-    .json({
-      message: await insertDm(convId, me, b.body, b.mediaUrl ? (b.kind === 'text' ? 'image' : b.kind) : 'text', b.mediaUrl ?? null),
-    });
+  res.status(201).json({
+    message: await insertDm(convId, me, b.body, b.mediaUrl ? (b.kind === 'text' ? 'image' : b.kind) : 'text', b.mediaUrl ?? null),
+  });
 });
 
 // ——— Notifications ———
 socialRouter.get('/notifications', requireAuth, async (req, res) => {
   const me = uid(req);
   const author = authorCache(me);
-  const rows = await db.all('SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 60', me);
-  const unread = (await db.one('SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read = 0', me)).n;
+  const [rows, unread] = await Promise.all([
+    db.notifications.find({ userId: me }).sort({ createdAt: -1 }).limit(60).toArray(),
+    db.notifications.countDocuments({ userId: me, read: false }),
+  ]);
   res.json({ items: await Promise.all(rows.map((n) => serializeNotification(n, author))), unread });
 });
 
 socialRouter.post('/notifications/read', requireAuth, async (req, res) => {
-  await db.run('UPDATE notifications SET read = 1 WHERE user_id = ? AND read = 0', uid(req));
+  await db.notifications.updateMany({ userId: uid(req), read: false }, { $set: { read: true } });
   res.json({ ok: true });
 });
 
@@ -402,22 +394,41 @@ socialRouter.get('/leaderboard', optionalAuth, async (req, res) => {
   const kind = req.query.kind === 'streak' ? 'streak' : req.query.kind === 'xp' ? 'xp' : 'vibe';
   let rows;
   if (kind === 'vibe') {
-    rows = await db.all(
-      `SELECT * FROM (
-         SELECT p.author_id AS id, SUM(r1 + 2*r2 + 3*r3 + 4*r4 + 5*r5) * 1.0 / SUM(r1+r2+r3+r4+r5) AS score
-         FROM posts p JOIN users u ON u.id = p.author_id
-         WHERE p.hidden = 0 AND u.deleted_at IS NULL
-         GROUP BY p.author_id HAVING SUM(r1+r2+r3+r4+r5) >= 5
-       ) t ORDER BY score DESC LIMIT 100`,
-    );
+    rows = await db.posts
+      .aggregate([
+        { $match: { hidden: false } },
+        {
+          $group: {
+            _id: '$authorId',
+            w: {
+              $sum: {
+                $add: ['$r1', { $multiply: [2, '$r2'] }, { $multiply: [3, '$r3'] }, { $multiply: [4, '$r4'] }, { $multiply: [5, '$r5'] }],
+              },
+            },
+            n: { $sum: { $add: ['$r1', '$r2', '$r3', '$r4', '$r5'] } },
+          },
+        },
+        { $match: { n: { $gte: 5 } } },
+        { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'u', pipeline: [{ $project: { deletedAt: 1 } }] } },
+        { $match: { 'u.deletedAt': null } },
+        { $project: { score: { $divide: ['$w', '$n'] } } },
+        { $sort: { score: -1 } },
+        { $limit: 100 },
+      ])
+      .toArray();
     rows.forEach((r) => (r.score = Math.round(((r.score - 1) / 4) * 100) / 10));
   } else {
-    rows = await db.all(
-      `SELECT id, ${kind === 'xp' ? 'xp' : 'streak_days'} AS score FROM users WHERE deleted_at IS NULL ORDER BY score DESC LIMIT 100`,
-    );
+    const field = kind === 'xp' ? 'xp' : 'streakDays';
+    rows = (
+      await db.users
+        .find({ deletedAt: null }, { projection: { [field]: 1 } })
+        .sort({ [field]: -1, _id: 1 })
+        .limit(100)
+        .toArray()
+    ).map((u) => ({ _id: u._id, score: u[field] }));
   }
   const author = authorCache(req.userId);
-  res.json({ entries: await Promise.all(rows.map(async (r, i) => ({ rank: i + 1, user: await author(r.id), score: r.score }))) });
+  res.json({ entries: await Promise.all(rows.map(async (r, i) => ({ rank: i + 1, user: await author(r._id), score: r.score }))) });
 });
 
 export { userPublic };
