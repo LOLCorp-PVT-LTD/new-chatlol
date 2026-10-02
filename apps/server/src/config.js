@@ -61,10 +61,19 @@ export const config = {
   publicUrl: env.PUBLIC_URL ?? `http://localhost:${env.PORT ?? 4000}`,
   uploadDir: env.UPLOAD_DIR ?? './data/uploads',
   nim: {
-    apiKey: env.NVIDIA_API_KEY ?? '',
+    /**
+     * One or more free keys from build.nvidia.com: NVIDIA_API_KEYS=key1,key2,… (NVIDIA_API_KEY still works too).
+     * Each key has its own requests-per-minute allowance, so every key you add raises the total.
+     */
+    apiKeys: [...new Set([...(env.NVIDIA_API_KEYS ?? '').split(/[\s,]+/), env.NVIDIA_API_KEY ?? ''].map((k) => k.trim()).filter(Boolean))],
+    get apiKey() {
+      return this.apiKeys[0] ?? '';
+    },
     baseUrl: env.NIM_BASE_URL ?? 'https://integrate.api.nvidia.com/v1',
+    /** Starting list. At startup the API checks NVIDIA's live catalogue, drops retired models and adds fast free ones. */
     models: (
-      env.NIM_MODELS ?? 'meta/llama-3.1-8b-instruct,meta/llama-3.3-70b-instruct,mistralai/mistral-7b-instruct-v0.3,google/gemma-2-9b-it'
+      env.NIM_MODELS ??
+      'meta/llama-3.3-70b-instruct,meta/llama-4-scout-17b-16e-instruct,mistralai/mistral-small-3.1-24b-instruct-2503,google/gemma-3-27b-it,qwen/qwen2.5-7b-instruct'
     )
       .split(',')
       .map((s) => s.trim())
@@ -72,7 +81,8 @@ export const config = {
     /** Bigger model for one-to-one DMs and replies to people, where quality matters most. */
     chatModel: env.NIM_CHAT_MODEL ?? 'meta/llama-3.3-70b-instruct',
     safetyModel: env.NIM_SAFETY_MODEL ?? '',
-    rpm: Number(env.NIM_RPM ?? 30),
+    /** Requests per minute per key (NVIDIA's free tier allows 40). */
+    rpm: Number(env.NIM_RPM ?? 35),
     imageUrl: env.NIM_IMAGE_URL ?? 'https://ai.api.nvidia.com/v1/genai/black-forest-labs/flux.1-schnell',
     visionModel: env.NIM_VISION_MODEL ?? 'meta/llama-3.2-11b-vision-instruct',
   },
@@ -176,4 +186,3 @@ export const config = {
 // Uploads to a bucket need a public address for the files, or every photo link would be broken.
 if (config.s3.bucket && !/^https?:\/\//.test(config.s3.publicUrl))
   throw new Error('S3_BUCKET is set, so S3_PUBLIC_URL must be the public address of the bucket (e.g. https://media.chatlol.net)');
-

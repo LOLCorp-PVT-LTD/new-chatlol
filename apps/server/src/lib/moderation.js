@@ -62,13 +62,13 @@ export async function classify(text) {
   let modelUnsafe = false;
   if (config.nim.apiKey && config.nim.safetyModel) {
     try {
-      const res = await fetch(`${config.nim.baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.nim.apiKey}` },
-        body: JSON.stringify({ model: config.nim.safetyModel, messages: [{ role: 'user', content: text }], max_tokens: 64 }),
-        signal: AbortSignal.timeout(8000),
-      });
-      if (res.ok) {
+      const { nimPost } = await import('../ai/nim.js');
+      const res = await nimPost(
+        `${config.nim.baseUrl}/chat/completions`,
+        { model: config.nim.safetyModel, messages: [{ role: 'user', content: text }], max_tokens: 64 },
+        { timeout: 8000 },
+      );
+      if (res?.ok) {
         const content = (await res.json()).choices?.[0]?.message?.content ?? '';
         modelUnsafe = /"User Safety"\s*:\s*"unsafe"/i.test(content);
         const cats = content.match(/"Safety Categories"\s*:\s*"([^"]*)"/i)?.[1];

@@ -9,6 +9,7 @@ import { backfillFriendships } from './lib/friends.js';
 import { initShared, shared, sharedBackend } from './lib/shared.js';
 import { seedIfEmpty } from './seed.js';
 import { startPersonaEngine } from './ai/engine.js';
+import { refreshModels } from './ai/nim.js';
 import { resolveExpiredTakes } from './routes/arena.js';
 import { runBirthdays } from './lib/birthdays.js';
 
@@ -43,8 +44,20 @@ async function main() {
     console.log(`   Settings from: ${loadedEnvFiles.length ? loadedEnvFiles.join(', ') : 'environment only (no settings file found)'}`);
     void songSearchStatus().then((s) => console.log(`   Song search: ${s}`));
     console.log(
-      `   AI personas: ${config.ai.enabled ? (config.nim.apiKey ? `on (NVIDIA NIM: ${config.nim.models.length} models)` : '⚠️  NO NVIDIA_API_KEY — personas will not reply to DMs and only post canned filler. Get a free key at https://build.nvidia.com and put it in apps/server/.env') : 'off'}`,
+      `   AI personas: ${config.ai.enabled ? (config.nim.apiKey ? `on (NVIDIA NIM: ${config.nim.apiKeys.length} key${config.nim.apiKeys.length === 1 ? '' : 's'} × ${config.nim.rpm} requests/min)` : '⚠️  NO NVIDIA_API_KEY — personas will not reply to DMs and only post canned filler. Get a free key at https://build.nvidia.com and put it in apps/server/.env') : 'off'}`,
     );
+    if (config.nim.apiKey) {
+      const report = (r) =>
+        r
+          ? console.log(
+              `   NIM models: ${r.pool.join(', ')} · replies to people: ${r.chatModel}${r.removed.length ? ` · retired by NVIDIA, dropped: ${r.removed.join(', ')}` : ''}`,
+            )
+          : console.log(
+              `   NIM models: ${config.nim.models.join(', ')} (couldn't read NVIDIA's catalogue; retired models drop out on first use)`,
+            );
+      void refreshModels().then(report);
+      setInterval(() => void refreshModels(), 6 * 3_600_000).unref();
+    }
     console.log(
       `   Links in emails: ${config.appUrl}${/localhost|127\.0\.0\.1/.test(config.appUrl) && process.env.NODE_ENV === 'production' ? '  ⚠️  APP_URL isn’t set — verification and password-reset emails will point to localhost. Set APP_URL=https://your-domain' : ''}`,
     );
