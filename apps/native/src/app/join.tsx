@@ -3,12 +3,11 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'rea
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BrandMark } from '../components/chrome';
-import { ageFrom, MIN_AGE } from '@chatlol/shared';
+import { ageFrom, MIN_AGE, GENDERS, INTEREST_GROUPS, type Gender } from '@chatlol/shared';
 import { register } from '../lib/actions';
 import { useColors } from '../lib/theme';
 import { Button, Chip, IconButton, Input, Label, Row, Text } from '../components/ui';
 
-const INTERESTS = ['photography', 'music', 'lofi', 'gaming', 'fashion', 'thrifted', 'food', 'fitness', 'travel', 'art', 'tech', 'books', 'skate', 'anime'];
 
 export default function Join() {
   const c = useColors();
@@ -17,18 +16,19 @@ export default function Join() {
   const [f, setF] = useState({ displayName: '', handle: '', email: '', password: '' });
   const [dob, setDob] = useState({ y: '', m: '', d: '' });
   const [interests, setInterests] = useState<string[]>([]);
+  const [gender, setGender] = useState<Gender | null>(null);
   const [agree, setAgree] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const birthdate = `${dob.y.padStart(4, '0')}-${dob.m.padStart(2, '0')}-${dob.d.padStart(2, '0')}`;
   const validDob = /^\d{4}-\d{2}-\d{2}$/.test(birthdate) && !Number.isNaN(Date.parse(birthdate)) && dob.y.length === 4;
   const age = validDob ? ageFrom(birthdate) : null;
-  const ok = useMemo(() => f.displayName && /^[a-zA-Z0-9_.]{3,20}$/.test(f.handle) && f.email.includes('@') && f.password.length >= 8 && age !== null && age >= MIN_AGE && agree,
-    [f, age, agree]);
+  const ok = useMemo(() => f.displayName && /^[a-zA-Z0-9_.]{3,20}$/.test(f.handle) && f.email.includes('@') && f.password.length >= 8 && age !== null && age >= MIN_AGE && !!gender && agree,
+    [f, age, agree, gender]);
 
   async function submit() {
     setBusy(true); setErr('');
-    try { await register({ ...f, email: f.email.trim(), birthdate, interests }); router.replace('/drops'); }
+    try { await register({ ...f, email: f.email.trim(), birthdate, gender: gender!, interests }); router.replace('/drops'); }
     catch (e) { setErr((e as Error).message); setStep(1); } finally { setBusy(false); }
   }
   const set = (k: keyof typeof f) => (v: string) => setF((x) => ({ ...x, [k]: v }));
@@ -52,6 +52,15 @@ export default function Join() {
               <Input value={dob.y} onChangeText={(y) => setDob({ ...dob, y })} placeholder="YYYY" keyboardType="number-pad" maxLength={4} style={{ flex: 1.4, textAlign: 'center' }} />
             </Row>
             {age !== null && age < MIN_AGE ? <Text color={c.error}>ChatLOL is for adults {MIN_AGE}+ only.</Text> : null}
+            <Label>I am</Label>
+            <Row gap={8}>
+              {GENDERS.map((g) => (
+                <Pressable key={g.key} onPress={() => setGender(g.key)} accessibilityRole="radio" accessibilityState={{ checked: gender === g.key }}
+                  style={{ flex: 1, height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: gender === g.key ? c.flame : c.sandstone, backgroundColor: gender === g.key ? c.flame : 'transparent' }}>
+                  <Text variant="labelLg" color={gender === g.key ? '#fff' : c.onSurface}>{g.emoji} {g.label}</Text>
+                </Pressable>
+              ))}
+            </Row>
             <Pressable onPress={() => setAgree(!agree)} style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-start', paddingVertical: 4 }} accessibilityRole="checkbox" accessibilityState={{ checked: agree }}>
               <View style={{ width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: c.flame, backgroundColor: agree ? c.flame : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
                 {agree ? <Text color="#fff" variant="labelMd">✓</Text> : null}
@@ -65,9 +74,15 @@ export default function Join() {
           <>
             <Text variant="headlineXl">Pick your vibes</Text>
             <Text color={c.onSurfaceVariant}>We’ll match you with lounges and people who get it.</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {INTERESTS.map((i) => <Chip key={i} label={`#${i}`} active={interests.includes(i)} onPress={() => setInterests((x) => (x.includes(i) ? x.filter((y) => y !== i) : [...x, i]))} />)}
-            </View>
+            <Text variant="labelMd" color={c.flame}>{interests.length}/20 picked</Text>
+            {INTEREST_GROUPS.map((g) => (
+              <View key={g.label} style={{ gap: 6 }}>
+                <Label>{g.label}</Label>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {g.items.map((i) => <Chip key={i} label={`#${i}`} active={interests.includes(i)} onPress={() => setInterests((x) => (x.includes(i) ? x.filter((y) => y !== i) : x.length >= 20 ? x : [...x, i]))} />)}
+                </View>
+              </View>
+            ))}
             <Button title="Start vibing (+250 Sparks)" loading={busy} onPress={submit} style={{ marginTop: 12 }} />
           </>
         )}

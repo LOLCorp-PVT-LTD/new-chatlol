@@ -7,7 +7,7 @@ export type Palette = typeof colors;
 /** Resolves the Sunset Citrus palette for the user's appearance preference. */
 export function useColors(): Palette {
   const system = useColorScheme();
-  const pref = useSession((s) => s.user?.settings.darkMode ?? 'system');
+  const pref = useSession((s) => s.user?.settings.darkMode ?? s.themeOverride ?? 'system');
   const dark = pref === 'dark' || (pref === 'system' && system === 'dark');
   return (dark ? darkColors : colors) as Palette;
 }

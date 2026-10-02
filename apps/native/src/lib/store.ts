@@ -16,10 +16,12 @@ export interface SessionState {
   typing: Record<string, string | null>;
   levelUp: RewardEvent['levelUp'];
   locked: boolean;
+  /** Theme picked while signed out (signed-in members keep it in their settings). */
+  themeOverride: 'system' | 'light' | 'dark' | null;
 }
 
 let state: SessionState = {
-  ready: false, token: null, user: null, toasts: [], notifications: [], unread: 0, unreadDms: 0, ticker: [], typing: {}, levelUp: null, locked: false,
+  ready: false, token: null, user: null, toasts: [], notifications: [], unread: 0, unreadDms: 0, ticker: [], typing: {}, levelUp: null, locked: false, themeOverride: null,
 };
 const listeners = new Set<() => void>();
 

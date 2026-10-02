@@ -11,10 +11,13 @@ export default function TabsLayout() {
       <TopBar />
       <Tabs screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: c.surface } }} tabBar={(p) => <GlassTabBar {...(p as unknown as React.ComponentProps<typeof GlassTabBar>)} />}>
         <Tabs.Screen name="index" />
+        <Tabs.Screen name="feed" />
+        <Tabs.Screen name="shouts" />
         <Tabs.Screen name="roulette" />
+        <Tabs.Screen name="lounges" />
+        {/* Not in the tab bar (no TAB_ICONS entry) but still part of the tab stack: opened from Home. */}
         <Tabs.Screen name="drops" />
         <Tabs.Screen name="arena" />
-        <Tabs.Screen name="lounges" />
       </Tabs>
     </View>
   );

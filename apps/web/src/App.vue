@@ -4,7 +4,6 @@ import { useRoute } from 'vue-router';
 import type { Post } from '@chatlol/shared';
 import { useSession } from './stores/session';
 import TopBar from './components/TopBar.vue';
-import Sidebar from './components/Sidebar.vue';
 import RightRail from './components/RightRail.vue';
 import TabBar from './components/TabBar.vue';
 import Toasts from './components/Toasts.vue';
@@ -24,7 +23,9 @@ const showNotifs = ref(false);
 const drawer = ref(false);
 const breakDue = ref(false);
 const bare = computed(() => route.meta.layout === 'bare');
-const rails = computed(() => route.meta.rails !== false);
+// The right rail is opt-in per page; everything else gets the full width (navigation lives in the ☰ drawer).
+const rails = computed(() => route.meta.rails === true);
+watch(() => route.fullPath, () => (drawer.value = false));
 const posted = ref<Post | null>(null);
 // Remount a view only when its route changes, not its params: /messages → /messages/:id keeps the inbox
 // (and its loaded messages) mounted. Pages that show a different entity per param opt in with meta.remount.
@@ -51,7 +52,6 @@ function onPosted(p: Post) { posted.value = p; }
   <template v-else>
     <TopBar @menu="drawer = true" @compose="composing = true" @notifications="showNotifs = !showNotifs" />
     <div class="max-w-[1320px] mx-auto px-4 lg:px-10 py-5 lg:py-8 flex gap-6 pb-8 lg:pb-10">
-      <Sidebar class="hidden xl:block sticky top-28 self-start max-h-[calc(100dvh-8rem)] overflow-y-auto scrollbar-none" />
       <main class="flex-1 min-w-0">
         <VerifyBanner />
         <RouterView v-slot="{ Component }">
@@ -65,7 +65,7 @@ function onPosted(p: Post) { posted.value = p; }
       <nav class="flex gap-4" aria-label="Footer"><RouterLink to="/settings#safety" class="hover:text-primary">Community Guidelines</RouterLink><RouterLink to="/settings#privacy" class="hover:text-primary">Privacy</RouterLink><RouterLink to="/premium" class="hover:text-primary">Premium</RouterLink></nav>
     </footer>
     <TabBar @compose="composing = true" />
-    <button v-if="s.user && rails" class="lg:hidden fixed right-5 bottom-28 z-30 w-14 h-14 rounded-full bg-sunset text-white shadow-float flex items-center justify-center active:scale-95" aria-label="New post" @click="composing = true">
+    <button v-if="s.user && route.path === '/feed'" class="lg:hidden fixed right-5 bottom-28 z-30 w-14 h-14 rounded-full bg-sunset text-white shadow-float flex items-center justify-center active:scale-95" aria-label="New post" @click="composing = true">
       <span class="icon">add</span>
     </button>
     <Composer v-if="composing" @close="composing = false" @posted="onPosted" />

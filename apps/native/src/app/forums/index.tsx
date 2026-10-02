@@ -28,12 +28,12 @@ export default function Shouts() {
     setThreads((x) => x.map((y) => (y.id === t.id ? r.thread : y)));
   }
   async function create() {
-    try { const r = await api.createThread(draft); reward(r.reward); setComposing(false); router.push(`/shouts/${r.thread.id}`); } catch (e) { errorToast(e); }
+    try { const r = await api.createThread(draft); reward(r.reward); setComposing(false); router.push(`/forums/${r.thread.id}`); } catch (e) { errorToast(e); }
   }
   const b = (id: string) => boards.find((x) => x.id === id);
   return (
     <View style={{ flex: 1 }}>
-      <ScreenHeader title="Shouts 📣" right={<Button small title="New" icon="campaign" style={{ marginRight: 8 }} onPress={() => { setDraft((d) => ({ ...d, board: board ?? 'daily' })); setComposing(true); }} />} />
+      <ScreenHeader title="Forums 💬" right={<Button small title="New" icon="campaign" style={{ marginRight: 8 }} onPress={() => { setDraft((d) => ({ ...d, board: board ?? 'daily' })); setComposing(true); }} />} />
       <FlatList data={threads} keyExtractor={(t) => t.id} contentContainerStyle={{ padding: 16, gap: 12, maxWidth: 680, width: '100%', alignSelf: 'center' }}
         ListHeaderComponent={
           <View style={{ gap: 10 }}>
@@ -51,7 +51,7 @@ export default function Shouts() {
               <Text variant="labelLg">{compact(t.upvotes)}</Text>
               <IconButton name="arrow-downward" label="Downvote" size={34} color={t.myVote === -1 ? c.tertiary : undefined} onPress={() => vote(t, -1)} />
             </View>
-            <Tap onPress={() => router.push(`/shouts/${t.id}`)} style={{ flex: 1, gap: 4 }}>
+            <Tap onPress={() => router.push(`/forums/${t.id}`)} style={{ flex: 1, gap: 4 }}>
               <Text variant="labelSm" color={c.onSurfaceVariant}>{t.pinned ? '📌 ' : ''}{b(t.board)?.emoji} {b(t.board)?.name} • {timeAgo(t.lastActivityAt)}</Text>
               <Text variant="headlineSm">{t.title}</Text>
               <Text color={c.onSurfaceVariant} numberOfLines={2}>{t.body}</Text>

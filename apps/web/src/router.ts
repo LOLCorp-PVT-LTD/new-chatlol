@@ -7,7 +7,7 @@ declare module 'vue-router' {
 
 const routes: RouteRecordRaw[] = [
   { path: '/', component: () => import('./views/HomeView.vue'), meta: { rails: false, title: 'Home' } },
-  { path: '/feed', component: () => import('./views/FeedView.vue'), meta: { title: 'News Feed' } },
+  { path: '/feed', component: () => import('./views/FeedView.vue'), meta: { rails: true, title: 'News Feed' } },
   { path: '/welcome', component: () => import('./views/LandingView.vue'), meta: { layout: 'bare' } },
   { path: '/login', component: () => import('./views/LoginView.vue'), meta: { layout: 'bare', title: 'Log in' } },
   { path: '/join', component: () => import('./views/RegisterView.vue'), meta: { layout: 'bare', title: 'Join' } },

@@ -27,7 +27,7 @@ export default function Lounges() {
           <Text color={c.onSurfaceVariant}>Real-time rooms with a shared soundtrack.</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, marginTop: 10 }}>
             <Button small title="Live" icon="live-tv" variant="secondary" onPress={() => router.push('/live')} />
-            <Button small title="Shouts" icon="campaign" variant="secondary" onPress={() => router.push('/shouts')} />
+            <Button small title="Shouts" icon="campaign" variant="secondary" onPress={() => router.push('/forums')} />
             <Button small title="Members" icon="group" variant="secondary" onPress={() => router.push('/members')} />
             <Button small title="Hall of Fame" icon="emoji-events" variant="secondary" onPress={() => router.push('/leaderboard')} />
             <Button small title="Vault" icon="diamond" variant="secondary" onPress={() => router.push('/vault')} />

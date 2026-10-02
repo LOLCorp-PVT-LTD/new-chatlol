@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { FlatList, ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
 import type { UserPublic } from '@chatlol/shared';
-import { tierByKey, toTen } from '@chatlol/shared';
+import { tierByKey, toTen, INTERESTS, GENDERS, type Gender } from '@chatlol/shared';
 import { api } from '../lib/api';
 import { errorToast } from '../lib/actions';
 import { useColors } from '../lib/theme';
@@ -10,17 +10,17 @@ import { ScreenHeader } from '../components/chrome';
 import { Avatar, UserName } from '../components/people';
 import { Button, Card, Chip, IconButton, Input, Row, Tap, Text } from '../components/ui';
 
-const INTERESTS = ['photography', 'music', 'lofi', 'gaming', 'fashion', 'food', 'fitness', 'travel', 'art', 'tech'];
 export default function Members() {
   const c = useColors();
   const [q, setQ] = useState('');
   const [interest, setInterest] = useState<string | undefined>();
   const [online, setOnline] = useState(false);
+  const [gender, setGender] = useState<Gender | undefined>();
   const [users, setUsers] = useState<UserPublic[]>([]);
   useEffect(() => {
-    const t = setTimeout(() => { void api.members({ q: q || undefined, interest, online: online ? 1 : undefined }).then((r) => setUsers(r.items)); }, 250);
+    const t = setTimeout(() => { void api.members({ q: q || undefined, interest, gender, online: online ? 1 : undefined }).then((r) => setUsers(r.items)); }, 250);
     return () => clearTimeout(t);
-  }, [q, interest, online]);
+  }, [q, interest, online, gender]);
   async function follow(u: UserPublic) {
     const r = await api.follow(u.id);
     setUsers((x) => x.map((y) => (y.id === u.id ? { ...y, isFollowing: r.following } : y)));
@@ -37,6 +37,7 @@ export default function Members() {
             <Input value={q} onChangeText={setQ} placeholder="🔍  Name, @handle or city" autoCapitalize="none" />
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
               <Chip label="🟢 Online now" active={online} onPress={() => setOnline(!online)} />
+              {GENDERS.map((g) => <Chip key={g.key} label={`${g.emoji} ${g.label}`} active={gender === g.key} onPress={() => setGender(gender === g.key ? undefined : g.key)} />)}
               {INTERESTS.map((i) => <Chip key={i} label={`#${i}`} active={interest === i} onPress={() => setInterest(interest === i ? undefined : i)} />)}
             </ScrollView>
           </View>

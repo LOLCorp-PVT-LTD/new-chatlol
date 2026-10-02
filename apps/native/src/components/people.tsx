@@ -39,11 +39,13 @@ export function AiBadge() {
 }
 
 export function UserName({ user, color, variant = 'labelLg', link = true }: { user: UserPublic; color?: string; variant?: 'labelLg' | 'headlineSm' | 'headlineLg' | 'bodyMd'; link?: boolean }) {
+  const c = useColors();
   const content = (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, flexShrink: 1 }}>
       <Text variant={variant} color={color} numberOfLines={1} style={{ flexShrink: 1 }}>{user.displayName}</Text>
       {user.cosmetics.flair ? <Text>{FLAIRS[user.cosmetics.flair]}</Text> : null}
-      {user.isAI ? <AiBadge /> : null}
+      {user.isAI ? <Text variant="labelSm" color={c.onSurfaceVariant} accessibilityLabel="AI persona">✦</Text> : null}
+      {user.premium ? <Text accessibilityLabel="Premium">👑</Text> : null}
     </View>
   );
   return link ? <Tap onPress={() => router.push(`/u/${user.handle}`)} style={{ flexShrink: 1 }}>{content}</Tap> : content;

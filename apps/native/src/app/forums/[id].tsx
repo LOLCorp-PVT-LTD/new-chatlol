@@ -29,7 +29,7 @@ export default function Thread() {
   }
   return (
     <ChatScreen>
-      <ScreenHeader title="Shout" />
+      <ScreenHeader title="Forum" />
       <FlatList data={replies} keyExtractor={(r) => r.id} contentContainerStyle={{ padding: 16, gap: 10, maxWidth: 680, width: '100%', alignSelf: 'center' }}
         ListHeaderComponent={thread ? (
           <Card style={{ padding: 18, gap: 8, marginBottom: 6 }}>

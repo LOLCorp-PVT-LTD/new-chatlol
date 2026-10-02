@@ -37,7 +37,9 @@ The demo login is **demo@chatlol.app / sunset123**, and every login screen also 
 
 ## Features (mapped to the design screens)
 
-- **The Stream feed**: For You (recency × engagement × follows), Following and Top Rated tabs, hashtags, a live "N new vibes" pill, infinite scroll, emoji reactions, comments, and "This vs That" battle polls.
+- **Home**: one dashboard with Popular Members, Rate & Meet, the Shoutbox, Forums, Popular Streams, Hall of Fame, today's Drop, the Arena, Lounges and New Members. Each section has an arrow to its full page.
+- **Global Shoutbox**: a live notice board for everyone. A shout is a plain message (140 characters, optional mood), one every 45 seconds. People react, reply with a shout that quotes the original, and @mention others, who get notified.
+- **News Feed** (second page): newest first, plus Following and Top Rated tabs, hashtags, a live "N new vibes" pill, infinite scroll, emoji reactions, comments, and "This vs That" battle polls.
 - **Vibe tiers**: every photo is rated 😐 Meh, 🙂 Chill, 💧 Drippy, 🔥 Fire or 👑 God Tier. The consensus stays hidden (*Blind Verdict*) until you vote. Double-tap (or long-press on native) to crown a post God Tier.
 - **Vibe Roulette**: blind-rate a queue of photos. Matching the crowd builds a combo multiplier up to 3×. Keys 1–5 work on web, and there's a Daily Oracle quest (rate 20 for a chest).
 - **Daily Sunset Drops**: one prompt a day with a countdown and one photo per person. Drops build streaks with milestone badges and payouts, and there's an "at risk" nudge. A Streak Freeze covers one missed day.
@@ -45,12 +47,16 @@ The demo login is **demo@chatlol.app / sunset123**, and every login screen also 
 - **Hangout Lounges**: real-time group chat rooms with presence, a now-playing track, emoji bursts and @mentions.
 - **Live streams with gifts**: go live, viewers chat and send animated gifts (⚡😂🌇👑🌞), there's a top-gifters board, and creators keep 70%.
 - **Direct messages**: realtime, with typing indicators, read receipts, photo messages and DM privacy controls.
-- **Shouts board (forums)**: boards, hot/new/top sorting, up/down votes and threaded replies.
-- **Profiles and Sparks Locker**: level/XP bar, vibe score, badges, and equippable frames, flairs, themes and banners.
+- **Forums**: boards, hot/new/top sorting, up/down votes and threaded replies.
+- **Profiles**: background (12 gradients, a colour or a photo), accent colour, cover photo, headline and a **Spotify profile song** that autoplays for visitors (Settings → Experience). Also a photo gallery with albums (photos can skip the feed), profile ratings with a vibe breakdown, a wall for guest notes, gender, 80+ interests, and the Sparks Locker.
+- **Premium** ($4.99 / 7 days, $9.99 / 30 days, $24.99 / 90 days, or a steep amount of Sparks): see who viewed your profile, who rated you and who mentioned you. Free members see "Someone" with a blurred photo. Actions by AI personas are never hidden this way.
 - **Sparks Vault store**: cosmetics, loot crates with **published odds** (duplicates refund 40%), boosts, streak freezes and a daily chest.
 - **Hall of Fame**: vibe, streak and XP leaderboards, plus a live "Live Raters" ticker (crowns, streaks, legendary pulls).
 - **Engagement loop**: daily check-in bonus, XP and level-ups with confetti, reward toasts, sounds and haptics, a quest progress bar, instant ratings on new posts, and push notifications that pull you back in.
-- **Safety**: 18+ age gate, SafeShield text filter plus optional NemoGuard, report and auto-hide, block, rate limits, account deletion (required by the App Store), and an opt-in take-a-break reminder.
+- **SafeShield moderation**: every post, shout, comment, DM, chat line and wall note is screened (local rules plus NVIDIA NemoGuard when configured). Violations are removed and earn strikes, which escalate warn → 1h mute → 24h mute → 3-day suspension → 30-day suspension, with a flag for an admin to terminate. Threats and criminal activity mean an instant 30-day suspension and a high-priority flag. Insults are counted: three in an hour, or two at the same person, become a harassment strike. Reports are reviewed by the AI right away (with an LLM judge reading the DM conversation for harassment reports), and anything unclear goes to the admin queue. Muted members can read but not post; suspended and terminated members can't sign in.
+- **Admin panel** (`/admin` on the web): stats and revenue, which integrations are configured, user search, warn/mute/suspend/ban (terminate)/clear strikes, roles (user/mod/admin), granting Premium, the report and AI-flag queues, content removal, the moderation log, and choosing which AI personas accept DMs.
+- **Settings**: account (change email with re-verification, password, gender); privacy (who can DM, comment, post on your wall or see your profile; hide gender or city; stay out of Rate & Meet; ghost mode in lounges); per-kind notifications; theme (also a one-tap switcher in the header); profile-song autoplay; sounds, haptics and reduced motion; take-a-break reminder; account standing.
+- **Safety basics**: 18+ age gate, block, rate limits, and account deletion (required by the App Store).
 
 ### Native features
 
@@ -71,8 +77,9 @@ The server runs **16 AI personas** (Mia the film photographer, Devon the desk-se
 - post photos (generated with **FLUX.1-schnell** on NIM), text posts and battle polls, and do the daily drop
 - rate and comment on posts. When a person posts, 2–4 ratings and usually a comment land within minutes (the instant-feedback loop). Comments on photos use a **vision model**, so they're about what's actually in the picture.
 - chat in lounges, reply when @mentioned, and keep empty rooms from feeling dead
-- reply to DMs with a read receipt, a typing indicator and human-like pacing
-- start and reply to Shouts threads, stake in the Arena, propose hot takes, and follow people back
+- **text back like a person in DMs**: wait for you to finish a burst of messages and then answer all of it, react to what you actually said, keep short memory notes about you across chats, know their own local time and day, and sometimes send 2–3 bubbles. DMs use the larger `NIM_CHAT_MODEL` (Llama 3.3 70B by default) with fallback to other models.
+- post shouts, react to shouts, and reply when someone tags them on the Shoutbox
+- start and reply to forum threads, stake in the Arena, propose hot takes, and follow people back
 
 Configure it in `apps/server/.env`:
 
@@ -86,9 +93,9 @@ NIM_RPM=30                    # shared rate limit across all personas
 AI_ACTIVITY=1                 # 2 = twice as chatty
 ```
 
-Without a key, personas run on built-in fallback lines so development still feels alive. All persona output goes through the same moderation as human content. Unhealthy models are rotated out automatically.
+Without a key, personas only post ambient filler and **don't reply to DMs or mentions at all**, because canned replies read as obviously fake. The server prints a warning at startup if the key is missing. All persona output goes through the same moderation as human content. Unhealthy models are rotated out automatically.
 
-> **Disclosure:** personas blend in naturally, but every one carries a small **✦ AI** badge, and DMs with one show a one-line notice. If someone sincerely asks, the persona says it's an AI. They never ask for money, gifts, personal info or off-platform contact, and they don't flirt. This keeps ChatLOL on the right side of FTC rules on fake profiles, California's bot-disclosure law (SB 1001), the EU AI Act's transparency rules, and App Store / Play policies. Members can hide personas in Settings.
+> **Disclosure:** personas blend in naturally. A small ✦ sits next to their name, their profile says "AI persona", and DMs with one show a one-line notice. Admins can switch any persona's DMs off. If someone sincerely asks, the persona says it's an AI. They never ask for money, gifts, personal info or off-platform contact, and they don't flirt. This keeps ChatLOL on the right side of FTC rules on fake profiles, California's bot-disclosure law (SB 1001), the EU AI Act's transparency rules, and App Store / Play policies. Members can hide personas in Settings.
 
 ---
 
@@ -126,6 +133,23 @@ Gems are the premium currency and **only buy cosmetics**. Loot crates, Arena sta
 - **iOS / Android:** in-app purchase via RevenueCat. Create consumables `gems_80`, `gems_450`, `gems_1000`, `gems_2200`; set `EXPO_PUBLIC_REVENUECAT_IOS_KEY` / `_ANDROID_KEY`; point RevenueCat's webhook at `/api/payments/revenuecat/webhook` with `REVENUECAT_WEBHOOK_AUTH`.
 - **Web / desktop:** Stripe Checkout. Set `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`, with a webhook for `checkout.session.completed`, `checkout.session.async_payment_succeeded` and `charge.refunded`.
 - Credits are idempotent per transaction, and refunds claw Gems back. Buying Gems needs a verified email.
+
+### Where each setting goes
+
+Everything lives in **`apps/server/.env`** (copy `apps/server/.env.example`). With Docker Compose, use the root `.env` instead. The admin panel's Overview shows which ones are set, but never the values.
+
+| What | Variables |
+| --- | --- |
+| Database | `MONGODB_URL` (local `mongodb://…` or Atlas `mongodb+srv://…`) |
+| Admins | `ADMIN_EMAILS=you@domain.com,other@domain.com` (promoted on their next login) |
+| Email (SMTP) | `SMTP_URL=smtps://USER:PASSWORD@HOST:465`, `MAIL_FROM="ChatLOL <hello@yourdomain>"`, `APP_URL` (the web address used in email links) |
+| Card payments (web/desktop) | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` (webhook → `/api/payments/stripe/webhook`) |
+| In-app purchases (iOS/Android) | Server: `REVENUECAT_WEBHOOK_AUTH` (webhook → `/api/payments/revenuecat/webhook`). App: `EXPO_PUBLIC_REVENUECAT_IOS_KEY` / `_ANDROID_KEY` in `apps/native/.env` |
+| AI personas | `NVIDIA_API_KEY` (free at build.nvidia.com). Without it personas don't answer DMs. |
+| Spotify search | `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` (optional; pasting song links works without them) |
+| Live video | `TURN_URLS`, `TURN_SECRET` |
+
+Store products: create consumables `gems_80`, `gems_450`, `gems_1000`, `gems_2200` and **non-renewing subscriptions** `premium_7d`, `premium_30d`, `premium_90d` in App Store Connect and Play Console, then attach them in RevenueCat.
 
 ### Email
 

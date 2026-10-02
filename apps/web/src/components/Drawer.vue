@@ -1,24 +1,25 @@
 <script setup lang="ts">
-import { NAV } from './nav';
-import { useSession } from '../stores/session';
+import { onMounted, onUnmounted } from 'vue';
+import Sidebar from './Sidebar.vue';
 import Icon from './Icon.vue';
 import Logo from './Logo.vue';
+/** The navigation sidebar, opened from the ☰ button as a slide-in drawer (as in the Stitch design). */
 const emit = defineEmits<{ (e: 'close'): void }>();
-const s = useSession();
+const onKey = (e: KeyboardEvent) => e.key === 'Escape' && emit('close');
+onMounted(() => document.addEventListener('keydown', onKey));
+onUnmounted(() => document.removeEventListener('keydown', onKey));
 </script>
 <template>
   <Teleport to="body">
-    <div class="fixed inset-0 z-[75] bg-inverse-surface/40 backdrop-blur-sm" @click.self="emit('close')">
-      <nav class="absolute inset-y-0 left-0 w-[300px] bg-surface p-4 pt-[max(16px,env(safe-area-inset-top))] overflow-y-auto animate-[pop_.25s_ease-out]" aria-label="Menu">
-        <div class="flex items-center justify-between mb-4"><Logo variant="wordmark" size="sm" /><button class="btn-icon" aria-label="Close menu" @click="emit('close')"><Icon name="close" /></button></div>
-        <RouterLink v-for="n in NAV" :key="n.to" :to="n.to" class="flex items-center gap-3 px-3 py-3 rounded-full text-label-lg hover:bg-surface-container" active-class="bg-sunlit text-flame" @click="emit('close')">
-          <Icon :name="n.icon" /> {{ n.label }}
-          <span v-if="n.badge === 'dms' && s.unreadDms" class="ml-auto bg-coral text-white rounded-full px-2 text-label-sm">{{ s.unreadDms }}</span>
-        </RouterLink>
-        <hr class="my-3 border-sandstone" />
-        <RouterLink to="/locker" class="flex items-center gap-3 px-3 py-3 rounded-full text-label-lg hover:bg-surface-container" @click="emit('close')"><Icon name="inventory_2" /> My Locker</RouterLink>
-        <RouterLink to="/settings" class="flex items-center gap-3 px-3 py-3 rounded-full text-label-lg hover:bg-surface-container" @click="emit('close')"><Icon name="settings" /> Settings</RouterLink>
-      </nav>
+    <div class="fixed inset-0 z-[75] flex">
+      <div class="fixed inset-0 bg-inverse-surface/60 backdrop-blur-md" @click="emit('close')" />
+      <aside class="relative w-80 max-w-[85vw] h-full bg-surface-container-lowest shadow-float overflow-y-auto border-r border-sandstone p-4 pt-[max(16px,env(safe-area-inset-top))] animate-[pop_.25s_ease-out]" aria-label="Navigation">
+        <div class="flex items-center justify-between pb-3 mb-3 border-b border-sandstone">
+          <Logo variant="wordmark" size="sm" />
+          <button class="btn-icon w-9 h-9 bg-surface-container-low" aria-label="Close navigation" @click="emit('close')"><Icon name="close" :size="20" /></button>
+        </div>
+        <Sidebar class="!w-full" @navigate="emit('close')" />
+      </aside>
     </div>
   </Teleport>
 </template>

@@ -9,6 +9,7 @@ import Icon from './Icon.vue';
 import Progress from './Progress.vue';
 
 const s = useSession();
+defineEmits<{ (e: 'navigate'): void }>();
 const tags = ref<{ tag: string; count: number }[]>([]);
 const prog = computed(() => (s.user ? levelProgress(s.user.xp) : null));
 onMounted(async () => { tags.value = (await api.trending()).tags.slice(0, 6); });
@@ -20,7 +21,7 @@ onMounted(async () => { tags.value = (await api.trending()).tags.slice(0, 6); })
     <div v-if="s.user" class="rounded-lg bg-sunset-v text-white p-5 shadow-float relative overflow-hidden">
       <div class="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-white/10" />
       <span class="absolute top-4 right-4 bg-black/20 rounded-full px-2.5 py-1 text-label-sm">⭐ {{ tierByKey(s.user.vibeTier).label.toUpperCase() }}</span>
-      <RouterLink to="/locker" class="flex flex-col items-center text-center">
+      <RouterLink to="/locker" class="flex flex-col items-center text-center" @click="$emit('navigate')">
         <Avatar :user="s.user" :size="76" />
         <p class="text-headline-md mt-3">{{ s.user.displayName }}</p>
         <p class="text-body-sm opacity-90">@{{ s.user.handle }}<template v-if="s.user.pronouns"> • {{ s.user.pronouns }}</template></p>
@@ -47,7 +48,7 @@ onMounted(async () => { tags.value = (await api.trending()).tags.slice(0, 6); })
     <nav class="card p-3" aria-label="Main">
       <p class="label px-3 pt-1 pb-2">Navigation Sparks</p>
       <RouterLink v-for="n in NAV" :key="n.to" :to="n.to" custom v-slot="{ href, navigate, isExactActive, isActive }">
-        <a :href="href" @click="navigate" class="flex items-center gap-3 px-3 py-1.5 rounded-full text-label-lg transition-colors"
+        <a :href="href" @click="navigate($event); $emit('navigate')" class="flex items-center gap-3 px-3 py-1.5 rounded-full text-label-lg transition-colors"
           :class="(n.to === '/' ? isExactActive : isActive) ? 'bg-sunlit text-on-surface ring-1 ring-flame/20' : 'hover:bg-surface-container-low text-on-surface-variant'">
           <span class="w-8 h-8 rounded-full flex items-center justify-center" :class="(n.to === '/' ? isExactActive : isActive) ? 'bg-sunset text-white shadow-glow' : 'bg-surface-container-low'">
             <Icon :name="n.icon" :size="20" :fill="(n.to === '/' ? isExactActive : isActive)" />
@@ -62,9 +63,9 @@ onMounted(async () => { tags.value = (await api.trending()).tags.slice(0, 6); })
     <div class="card p-4">
       <div class="flex items-center justify-between px-1 mb-3"><p class="label">Hot Vibe Tags</p><Icon name="trending_up" class="text-flame" :size="18" /></div>
       <div class="flex flex-wrap gap-2">
-        <RouterLink v-for="t in tags" :key="t.tag" :to="`/feed?tag=${t.tag}`" class="chip h-8 hover:border-flame">#{{ t.tag }} <span class="text-on-surface-variant font-medium">{{ compact(t.count) }}</span></RouterLink>
+        <RouterLink v-for="t in tags" :key="t.tag" :to="`/feed?tag=${t.tag}`" class="chip h-8 hover:border-flame" @click="$emit('navigate')">#{{ t.tag }} <span class="text-on-surface-variant font-medium">{{ compact(t.count) }}</span></RouterLink>
       </div>
     </div>
-    <p class="text-body-sm text-on-surface-variant px-3">ChatLOL is moderated in real time by SafeShield 🛡️ • <RouterLink to="/settings" class="underline">Settings</RouterLink></p>
+    <p class="text-body-sm text-on-surface-variant px-3">ChatLOL is moderated in real time by SafeShield 🛡️ • <RouterLink to="/settings" class="underline" @click="$emit('navigate')">Settings</RouterLink></p>
   </aside>
 </template>

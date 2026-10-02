@@ -6,7 +6,8 @@ import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { compact } from '@chatlol/shared';
-import { useSession } from '../lib/store';
+import { session, useSession } from '../lib/store';
+import { api } from '../lib/api';
 import { haptic } from '../lib/native';
 import { gradients, shadow, useColors, useIsDark } from '../lib/theme';
 import { Avatar } from './people';
@@ -44,6 +45,7 @@ export function TopBar() {
           <BrandMark compact={width < 380} />
         </Tap>
         <View style={{ flex: 1 }} />
+        <ThemeSwitch />
         {user ? (
           <>
             <Tap onPress={() => router.push('/vault')} style={[{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: c.surfaceContainer, borderRadius: 99, paddingHorizontal: 12, height: 36 }, shadow.warm]}>
@@ -60,10 +62,10 @@ export function TopBar() {
 }
 
 const TAB_ICONS: Record<string, { icon: IconName; label: string }> = {
-  index: { icon: 'whatshot', label: 'Stream' },
-  roulette: { icon: 'casino', label: 'Vibe' },
-  drops: { icon: 'wb-twilight', label: 'Drops' },
-  arena: { icon: 'sports-kabaddi', label: 'Arena' },
+  index: { icon: 'home', label: 'Home' },
+  feed: { icon: 'dynamic-feed', label: 'Feed' },
+  shouts: { icon: 'campaign', label: 'Shouts' },
+  roulette: { icon: 'casino', label: 'Rate' },
   lounges: { icon: 'forum', label: 'Lounges' },
 };
 
@@ -89,7 +91,7 @@ export function GlassTabBar({ state, navigation }: TabBarProps) {
               const e = navigation.emit({ type: 'tabPress', target: r.key, canPreventDefault: true });
               if (!focused && !e.defaultPrevented) navigation.navigate(r.name);
             };
-            if (r.name === 'drops') {
+            if (r.name === 'shouts') {
               return (
                 <Pressable key={r.key} onPress={onPress} accessibilityRole="tab" accessibilityLabel={meta.label} style={{ flex: 1, alignItems: 'center' }}>
                   <Gradient colors={gradients.sunset} style={[{ width: 58, height: 58, borderRadius: 29, marginTop: -28, alignItems: 'center', justifyContent: 'center', borderWidth: 4, borderColor: c.surface }, shadow.float]}>
@@ -110,6 +112,27 @@ export function GlassTabBar({ state, navigation }: TabBarProps) {
         </Row>
       </Frost>
     </View>
+  );
+}
+
+/** Cycles Light → Dark → System and saves it to the account. */
+export function ThemeSwitch() {
+  const user = useSession((s) => s.user);
+  const local = useSession((s) => s.themeOverride);
+  const mode = user?.settings.darkMode ?? local ?? 'system';
+  const next = mode === 'light' ? 'dark' : mode === 'dark' ? 'system' : 'light';
+  const icon: IconName = mode === 'light' ? 'light-mode' : mode === 'dark' ? 'dark-mode' : 'contrast';
+  return (
+    <IconButton
+      name={icon}
+      label={`Theme: ${mode}. Switch theme`}
+      onPress={async () => {
+        haptic.tap();
+        if (!user) return session.set({ themeOverride: next });
+        session.set({ user: { ...user, settings: { ...user.settings, darkMode: next } } });
+        try { session.set({ user: (await api.updateSettings({ darkMode: next })).user }); } catch { /* keep local */ }
+      }}
+    />
   );
 }
 

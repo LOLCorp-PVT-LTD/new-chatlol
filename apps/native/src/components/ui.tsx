@@ -98,7 +98,7 @@ export function Input(props: TextInputProps & { style?: StyleProp<TextStyle> }) 
       onFocus={(e) => { setFocus(true); props.onFocus?.(e); }}
       onBlur={(e) => { setFocus(false); props.onBlur?.(e); }}
       style={[{
-        minHeight: 52, borderRadius: props.multiline ? 24 : 999, paddingHorizontal: 22, paddingVertical: props.multiline ? 14 : 0,
+        minHeight: 52, minWidth: 0, borderRadius: props.multiline ? 24 : 999, paddingHorizontal: 22, paddingVertical: props.multiline ? 14 : 0,
         backgroundColor: c.surfaceContainerLowest, borderWidth: focus ? 2 : 1, borderColor: focus ? c.flame : c.sandstone,
         color: c.onSurface, fontFamily: fonts.medium, fontSize: 16, textAlignVertical: props.multiline ? 'top' : 'center',
       }, props.style]}
