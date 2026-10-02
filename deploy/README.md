@@ -19,6 +19,7 @@ The files:
 | `pm2/ecosystem.config.cjs` | stays in the repo; `pm2 start` uses it |
 | `systemd/chatlol-api@.service` | only if you use systemd instead of PM2 |
 | `api.env.example` | `/etc/chatlol/api.env` (fill it in) |
+| `coturn/turnserver.conf` | `/etc/turnserver.conf` (live video relay, optional) |
 
 ## 1. DNS
 
@@ -171,6 +172,78 @@ Cloudflare's network, and free egress.
 If `S3_BUCKET` is set without a proper `S3_PUBLIC_URL`, the API refuses to start and says why, rather than saving
 photos nobody can see. Photos uploaded before the switch keep their old `https://chatlol.net/uploads/…` addresses
 and keep loading from the server, so leave the `/uploads/` part of the nginx config in place.
+
+## Live video relay (TURN)
+
+Live video connects people directly. On strict networks (some mobile carriers, offices, hotels) that fails, and a
+TURN server relays the video instead. coturn can run on this same server.
+
+1. **DNS.** Add an A record `turn.chatlol.net` → this server's IP. If the domain is on Cloudflare, set it to
+   **DNS only** (grey cloud): Cloudflare can't proxy TURN.
+
+2. **Install coturn and the config.**
+
+   ```sh
+   sudo apt install coturn
+   sudo cp deploy/coturn/turnserver.conf /etc/turnserver.conf
+   openssl rand -hex 32                 # the shared secret
+   sudo nano /etc/turnserver.conf       # put it in static-auth-secret=…
+   ```
+
+   If the server is behind NAT (its network card has a private 10.x / 172.16–31.x / 192.168.x address, as on AWS
+   or GCP), also set `external-ip=<public IP>`. A VPS whose card has the public IP doesn't need it.
+
+3. **Certificate for `turns:`** (TLS on port 5349, which gets through firewalls that block everything but HTTPS).
+   The nginx config already answers certbot for `turn.chatlol.net`:
+
+   ```sh
+   sudo mkdir -p /etc/coturn/certs /var/log/turnserver
+   sudo chown turnserver:turnserver /var/log/turnserver
+   sudo certbot certonly --webroot -w /var/www/letsencrypt -d turn.chatlol.net \
+     --deploy-hook 'cp -L /etc/letsencrypt/live/turn.chatlol.net/{fullchain,privkey}.pem /etc/coturn/certs/ && chown turnserver:turnserver /etc/coturn/certs/*.pem && systemctl restart coturn'
+   ```
+
+   The hook copies the certificate where coturn can read it, on every renewal.
+
+4. **Firewall.**
+
+   ```sh
+   sudo ufw allow 3478/udp && sudo ufw allow 3478/tcp && sudo ufw allow 5349/tcp
+   sudo ufw allow 49160:49200/udp       # relayed video (min-port…max-port in turnserver.conf)
+   ```
+
+   If your VPS provider also has a firewall in its control panel, open the same ports there.
+
+5. **Start coturn.**
+
+   ```sh
+   echo 'TURNSERVER_ENABLED=1' | sudo tee /etc/default/coturn   # older Debian/Ubuntu packages need this
+   sudo systemctl enable --now coturn
+   sudo systemctl status coturn
+   ```
+
+6. **Tell ChatLOL.** In `/etc/chatlol/api.env`, the same secret:
+
+   ```sh
+   TURN_URLS=turn:turn.chatlol.net:3478?transport=udp,turn:turn.chatlol.net:3478?transport=tcp,turns:turn.chatlol.net:5349?transport=tcp
+   TURN_SECRET=<the same value as static-auth-secret>
+   ```
+
+   Then `pm2 restart chatlol-api`.
+
+7. **Check it.** Signed in on chatlol.net, open the browser console (F12) and run:
+
+   ```js
+   fetch('/api/rtc/ice', { headers: { Authorization: 'Bearer ' + localStorage.getItem('chatlol.token') } }).then((r) => r.json()).then(console.log)
+   ```
+
+   It lists the TURN addresses with a `username` and `credential`. Paste those into
+   [Trickle ICE](https://webrtc.github.io/samples/src/content/peerconnection/trickle-ice/) (one server at a time,
+   e.g. `turn:turn.chatlol.net:3478?transport=udp`) and press *Gather candidates*: a line of type **relay** means
+   TURN works. A `401` in `/var/log/turnserver/turnserver.log` means the two secrets don't match.
+
+`RTC_RELAY_ONLY=1` sends all live video through TURN, which hides viewers' and streamers' IP addresses from each
+other, at the cost of your server's bandwidth.
 
 ## Updating
 
