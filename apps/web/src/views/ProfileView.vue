@@ -62,8 +62,16 @@ async function load() {
     loaded.showcase.clear();
     showcase.value = {};
     await loadForSections();
+    openEditorFromLink();
   } catch (e) { notFound.value = (e as Error).message; }
 }
+/** /page-builder and the account menu's "Edit my page" open your profile with ?edit=1. */
+function openEditorFromLink() {
+  if (!route.query.edit || !user.value || !isMe.value) return;
+  if (!editing.value) startEditing();
+  void router.replace({ query: { ...route.query, edit: undefined } });
+}
+watch(() => route.query.edit, openEditorFromLink);
 async function loadForSections() {
   if (!user.value) return;
   const types = new Set(layout.value.sections.map((x) => x.type));

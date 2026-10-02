@@ -54,8 +54,10 @@ export function useMasonry(el: Ref<HTMLElement | undefined>, gap: Ref<number> | 
   }
   onMounted(() => {
     resize = new ResizeObserver(schedule);
-    mutate = new MutationObserver(observe); // cards added, removed or reordered
-    if (el.value) mutate.observe(el.value, { childList: true });
+    // Cards added, removed or reordered, or a card's width (data-cols) changed. A width change alone never
+    // fires the ResizeObserver, because the card is still pinned to its old span until we place it again.
+    mutate = new MutationObserver(observe);
+    if (el.value) mutate.observe(el.value, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-cols'] });
     observe();
   });
   watch(gapPx, schedule);

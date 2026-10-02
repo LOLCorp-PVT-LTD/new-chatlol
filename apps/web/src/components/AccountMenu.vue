@@ -21,8 +21,8 @@ watch(open, (v) => {
 watch(() => route.fullPath, close);
 onBeforeUnmount(() => (open.value = false));
 const items = [
-  ['/locker', 'person', 'My profile'],
-  ['/page-builder', 'dashboard_customize', 'Edit my page'],
+  ['/me', 'person', 'My profile'],
+  ['/me?edit=1', 'dashboard_customize', 'Edit my page'],
   ['/friends', 'diversity_3', 'Friends'],
   ['/insights', 'visibility', 'Who viewed me'],
   ['/vault', 'local_fire_department', 'Sparks Vault'],
@@ -39,7 +39,7 @@ const items = [
     </button>
     <Transition enter-from-class="opacity-0 -translate-y-1" leave-to-class="opacity-0 -translate-y-1" enter-active-class="transition duration-150" leave-active-class="transition duration-100">
       <div v-if="open" role="menu" class="absolute right-0 top-full mt-2 w-64 card p-2 shadow-float z-50">
-        <RouterLink to="/locker" class="flex items-center gap-3 rounded-md p-2 hover:bg-surface-container-low">
+        <RouterLink to="/me" class="flex items-center gap-3 rounded-md p-2 hover:bg-surface-container-low">
           <Avatar :user="s.user" :size="40" :show-online="false" />
           <div class="min-w-0"><p class="text-label-lg truncate">{{ s.user.displayName }}</p><p class="text-body-sm text-on-surface-variant truncate">@{{ s.user.handle }}</p></div>
         </RouterLink>

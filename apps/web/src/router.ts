@@ -33,6 +33,9 @@ const routes: RouteRecordRaw[] = [
   { path: '/members', component: () => import('./views/MembersView.vue'), meta: { title: 'Members' } },
   { path: '/leaderboard', component: () => import('./views/LeaderboardView.vue'), meta: { title: 'Hall of Fame' } },
   { path: '/vault', component: () => import('./views/VaultView.vue'), meta: { title: 'Sparks Vault' } },
+  // The phone app's builder URL; on the web the builder is your profile in edit mode.
+  { path: '/page-builder', redirect: { path: '/me', query: { edit: '1' } } },
+  { path: '/me', component: () => import('./views/ProfileView.vue'), meta: { auth: true, title: 'My profile' } },
   { path: '/locker', component: () => import('./views/ProfileView.vue'), meta: { auth: true, title: 'My Locker' } },
   { path: '/u/:handle', component: () => import('./views/ProfileView.vue'), meta: { remount: true, title: 'Profile' } },
   { path: '/p/:id', component: () => import('./views/PostView.vue'), meta: { remount: true, title: 'Post' } },

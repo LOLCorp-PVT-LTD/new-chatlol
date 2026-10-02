@@ -21,7 +21,7 @@ onMounted(async () => { tags.value = (await api.trending()).tags.slice(0, 6); })
     <div v-if="s.user" class="rounded-lg bg-sunset-v text-white p-5 shadow-float relative overflow-hidden">
       <div class="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-white/10" />
       <span class="absolute top-4 right-4 bg-black/20 rounded-full px-2.5 py-1 text-label-sm">⭐ {{ tierByKey(s.user.vibeTier).label.toUpperCase() }}</span>
-      <RouterLink to="/locker" class="flex flex-col items-center text-center" @click="$emit('navigate')">
+      <RouterLink to="/me" class="flex flex-col items-center text-center" @click="$emit('navigate')">
         <Avatar :user="s.user" :size="76" />
         <p class="text-headline-md mt-3">{{ s.user.displayName }}</p>
         <p class="text-body-sm opacity-90">@{{ s.user.handle }}<template v-if="s.user.pronouns"> • {{ s.user.pronouns }}</template></p>
