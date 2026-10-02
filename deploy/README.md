@@ -1,7 +1,7 @@
 # Deploying ChatLOL to https://chatlol.net
 
 One server running nginx, which serves the web app and passes `/api`, `/socket.io` and `/uploads` to the API
-(two Node processes). MongoDB can be on the same server or on MongoDB Atlas.
+(a Node process on port 4510, run by PM2). MongoDB can be on the same server or on MongoDB Atlas.
 
 ```
 browser ──https──▶ nginx ─┬─ /            → /var/www/chatlol/apps/web/dist (built web app)
@@ -16,7 +16,8 @@ The files:
 | `nginx/chatlol.net.conf` | `/etc/nginx/sites-available/chatlol.net` |
 | `nginx/snippets/chatlol-headers.conf` | `/etc/nginx/snippets/chatlol-headers.conf` |
 | `nginx/chatlol.net.bootstrap.conf` | only while getting the first certificate |
-| `systemd/chatlol-api@.service` | `/etc/systemd/system/chatlol-api@.service` |
+| `pm2/ecosystem.config.cjs` | stays in the repo; `pm2 start` uses it |
+| `systemd/chatlol-api@.service` | only if you use systemd instead of PM2 |
 | `api.env.example` | `/etc/chatlol/api.env` (fill it in) |
 
 ## 1. DNS
@@ -75,21 +76,44 @@ sudo nano /etc/chatlol/api.env      # JWT_SECRET, MONGODB_URL, SMTP, keys…
 
 `UPLOAD_DIR` must stay `/var/lib/chatlol/uploads` unless you also change `alias` in the nginx config.
 
-## 6. Start the API
+## 6. Start the API (PM2)
+
+```sh
+sudo npm install -g pm2
+cd /var/www/chatlol
+pm2 start deploy/pm2/ecosystem.config.cjs
+curl http://127.0.0.1:4510/api/health      # → {"ok":true,…}
+
+pm2 save                                   # remember what's running…
+pm2 startup                                # …and start it after a reboot (run the command it prints)
+pm2 install pm2-logrotate                  # keep log files from growing forever
+```
+
+The API listens on `127.0.0.1:4510`, which is what the nginx upstream points at. Its settings come from
+`/etc/chatlol/api.env`. The port, `HOST=127.0.0.1` and `NODE_ENV=production` are set in the PM2 config and win
+over that file, so don't put `PORT` there.
+
+| | |
+|---|---|
+| Status | `pm2 status` |
+| Logs | `pm2 logs chatlol-api` |
+| Restart | `pm2 restart chatlol-api` |
+| After editing `/etc/chatlol/api.env` | `pm2 restart chatlol-api` |
+
+Don't use PM2's cluster mode (`-i max`): realtime (Socket.IO) needs each visitor to stay on one process. For more
+capacity, uncomment the second app (port 4511) in `ecosystem.config.cjs` and the `4511` line in the nginx
+upstream; nginx keeps visitors on one process, and the processes share everything through MongoDB.
+
+<details><summary>Using systemd instead of PM2</summary>
 
 ```sh
 sudo cp deploy/systemd/chatlol-api@.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now chatlol-api@4510
-curl http://127.0.0.1:4510/api/health      # → {"ok":true,…}
-journalctl -u chatlol-api@4510 -f          # logs
+journalctl -u chatlol-api@4510 -f
 ```
 
-The API listens on `127.0.0.1:4510` (the port is the part after `@`), which is what the nginx upstream points at.
-
-Need more capacity later? Start a second process with `sudo systemctl enable --now chatlol-api@4511` and
-uncomment the `4511` line in the nginx upstream. The processes share everything through MongoDB (realtime
-messages, rate limits, which one runs the AI personas).
+</details>
 
 ## 7. HTTPS certificate and nginx
 
@@ -126,11 +150,12 @@ cd /var/www/chatlol
 sudo -u chatlol git pull
 sudo -u chatlol npm ci
 sudo -u chatlol npm run build -w @chatlol/web
-sudo systemctl restart chatlol-api@4510
+pm2 restart chatlol-api
 ```
 
-A restart takes a few seconds. With a second process on 4511, restart them one at a time and the site stays up:
-nginx sends everyone to the other one in the meantime.
+A restart takes a few seconds. With a second process on 4511, restart them one at a time
+(`pm2 restart chatlol-api && sleep 5 && pm2 restart chatlol-api-2`) and the site stays up: nginx sends everyone
+to the other one in the meantime.
 
 ## Behind Cloudflare
 
