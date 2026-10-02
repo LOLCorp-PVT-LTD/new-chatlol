@@ -56,7 +56,9 @@ async function spotifyAccessToken() {
     body: 'grant_type=client_credentials',
   });
   if (!r.ok) {
-    console.warn(`[spotify] login failed (${r.status}): check SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET`);
+    console.warn(
+      `[spotify] login failed (${r.status}): ${(await r.text().catch(() => '')).slice(0, 300)} — check SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET`,
+    );
     throw new HttpError(502, 'Spotify is unavailable right now');
   }
   const j = await r.json();
@@ -83,11 +85,29 @@ export async function songSearchStatus() {
 export async function searchSongs(q) {
   if (!config.spotify.clientId || !config.spotify.clientSecret)
     throw new HttpError(503, 'Song search isn’t set up yet. Paste a Spotify link to a song instead', 'spotify_not_configured');
-  const r = await fetch(`https://api.spotify.com/v1/search?type=track&limit=12&q=${encodeURIComponent(q)}`, {
-    headers: { Authorization: `Bearer ${await spotifyAccessToken()}` },
-    signal: AbortSignal.timeout(8000),
-  });
-  if (!r.ok) throw new HttpError(502, 'Spotify search failed');
+  const call = async (limit) =>
+    fetch(`https://api.spotify.com/v1/search?type=track${limit ? `&limit=${limit}` : ''}&q=${encodeURIComponent(q)}`, {
+      headers: { Authorization: `Bearer ${await spotifyAccessToken()}` },
+      signal: AbortSignal.timeout(8000),
+    });
+  let r = await call(10);
+  if (r.status === 401) {
+    // The cached login was revoked or expired early: log in again once.
+    spotifyToken = { value: '', exp: 0 };
+    r = await call(10);
+  }
+  if (r.status === 400) r = await call(0); // Spotify's own default count, in case it rejects ours
+  if (!r.ok) {
+    const body = await r.text().catch(() => '');
+    let reason = '';
+    try {
+      reason = JSON.parse(body)?.error?.message ?? '';
+    } catch {
+      /* not JSON */
+    }
+    console.warn(`[spotify] search failed (${r.status}) for "${q}": ${body.slice(0, 300)}`);
+    throw new HttpError(502, `Spotify search failed${reason ? `: ${reason}` : ''} (${r.status})`, 'spotify_error');
+  }
   const j = await r.json();
   return {
     source: 'spotify',
@@ -186,7 +206,14 @@ profileRouter.patch('/me/profile', requireAuth, async (req, res) => {
     } else {
       const ref = typeof b.song === 'string' ? await resolveSpotify(b.song) : parseSpotify(`spotify:${b.song.type}:${b.song.id}`) && b.song;
       if (!ref) throw new HttpError(400, 'That isn’t a Spotify link');
-      set['profile.song'] = { source: 'spotify', type: ref.type, id: ref.id, title: ref.title ?? '', artist: ref.artist ?? '', artUrl: ref.artUrl ?? null };
+      set['profile.song'] = {
+        source: 'spotify',
+        type: ref.type,
+        id: ref.id,
+        title: ref.title ?? '',
+        artist: ref.artist ?? '',
+        artUrl: ref.artUrl ?? null,
+      };
     }
   }
   if (Object.keys(set).length) await db.users.updateOne({ _id: id }, { $set: set });
@@ -198,14 +225,16 @@ profileRouter.patch('/me/profile', requireAuth, async (req, res) => {
 profileRouter.put('/me/profile/layout', requireAuth, async (req, res) => {
   const id = uid(req);
   await rateLimit(`layout:${id}`, 30);
-  if (!req.body || typeof req.body !== 'object' || !Array.isArray(req.body.sections)) throw new HttpError(400, 'Send a layout with sections');
+  if (!req.body || typeof req.body !== 'object' || !Array.isArray(req.body.sections))
+    throw new HttpError(400, 'Send a layout with sections');
   const layout = normalizeLayout(req.body);
   // Text boxes, quotes and links are public, so they get the full check (threats, scams, NemoGuard), not just the word list.
   const text = layoutText(layout);
   if (text) {
     assertClean(text);
     const verdict = await classify(text);
-    if (!verdict.safe || verdict.severe) throw new HttpError(422, 'SafeShield caught something on your page — keep it kind 🧡', 'moderation_layout');
+    if (!verdict.safe || verdict.severe)
+      throw new HttpError(422, 'SafeShield caught something on your page — keep it kind 🧡', 'moderation_layout');
   }
   await db.users.updateOne({ _id: id }, { $set: { 'profile.layout': layout } });
   res.json({ user: await userPrivate(await db.users.findOne({ _id: id })), layout });
@@ -270,7 +299,9 @@ profileRouter.get('/users/:id/showcase', optionalAuth, async (req, res) => {
           {
             $addFields: {
               _n: { $add: ['$r1', '$r2', '$r3', '$r4', '$r5'] },
-              _sum: { $add: ['$r1', { $multiply: ['$r2', 2] }, { $multiply: ['$r3', 3] }, { $multiply: ['$r4', 4] }, { $multiply: ['$r5', 5] }] },
+              _sum: {
+                $add: ['$r1', { $multiply: ['$r2', 2] }, { $multiply: ['$r3', 3] }, { $multiply: ['$r4', 4] }, { $multiply: ['$r5', 5] }],
+              },
             },
           },
           { $addFields: { _avg: { $divide: ['$_sum', '$_n'] } } },
@@ -289,14 +320,14 @@ profileRouter.get('/users/:id/showcase', optionalAuth, async (req, res) => {
         .then(async (rows) => {
           const boards = new Map((await db.boards.find({ _id: { $in: rows.map((t) => t.boardId) } }).toArray()).map((b) => [b._id, b]));
           out.threads = rows.map((t) => ({
-              id: t._id,
-              boardId: t.boardId,
-              boardName: boards.get(t.boardId)?.name ?? '',
-              title: t.title,
-              replyCount: t.replyCount ?? 0,
-              upvotes: t.upvotes ?? 0,
-              createdAt: t.createdAt,
-            }));
+            id: t._id,
+            boardId: t.boardId,
+            boardName: boards.get(t.boardId)?.name ?? '',
+            title: t.title,
+            replyCount: t.replyCount ?? 0,
+            upvotes: t.upvotes ?? 0,
+            createdAt: t.createdAt,
+          }));
         }),
   ]);
   res.json(out);
