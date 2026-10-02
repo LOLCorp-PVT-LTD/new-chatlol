@@ -43,6 +43,9 @@ async function main() {
       `   AI personas: ${config.ai.enabled ? (config.nim.apiKey ? `on (NVIDIA NIM: ${config.nim.models.length} models)` : '⚠️  NO NVIDIA_API_KEY — personas will not reply to DMs and only post canned filler. Get a free key at https://build.nvidia.com and put it in apps/server/.env') : 'off'}`,
     );
     console.log(
+      `   Links in emails: ${config.appUrl}${/localhost|127\.0\.0\.1/.test(config.appUrl) && process.env.NODE_ENV === 'production' ? '  ⚠️  APP_URL isn’t set — verification and password-reset emails will point to localhost. Set APP_URL=https://your-domain' : ''}`,
+    );
+    console.log(
       `   Live video: ${config.rtc.turnUrls.length ? `TURN ${config.rtc.turnUrls.join(', ')}` : 'STUN only (set TURN_URLS + TURN_SECRET for your TURN server)'} • mesh cap ${config.rtc.maxViewers} viewers`,
     );
   });
