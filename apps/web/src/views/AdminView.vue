@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmDialog } from '../lib/dialog';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { AdminUser } from '@chatlol/shared';
@@ -50,7 +51,7 @@ watch(userQuery, () => { clearTimeout(t); t = setTimeout(load, 250); }, { deep: 
 async function openUser(id: string) { try { detail.value = await api.admin.user(id); action.value = { action: 'mute', minutes: 60, reason: '' }; } catch (e) { err(e); } }
 async function act() {
   if (!detail.value) return;
-  if (action.value.action === 'ban' && !confirm(`Terminate @${detail.value.user.handle}? They won’t be able to sign in.`)) return;
+  if (action.value.action === 'ban' && !(await confirmDialog({ title: `Terminate @${detail.value.user.handle}?`, body: 'They won’t be able to sign in again.', icon: 'gavel', danger: true, confirmText: 'Terminate' }))) return;
   try {
     const needsTime = ['mute', 'suspend'].includes(action.value.action);
     await api.admin.action(detail.value.user.id, { action: action.value.action, reason: action.value.reason, minutes: needsTime ? action.value.minutes : undefined });

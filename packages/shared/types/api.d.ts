@@ -55,6 +55,8 @@ export declare function createApi(opts: ApiClientOptions): {
     /** A phone's native push token: APNs on iOS, FCM on Android. */
     registerPushToken: (b: { token: string; platform: 'ios' | 'android' }) => Promise<{ ok: true }>;
     webPushKey: () => Promise<{ publicKey: string }>;
+    stickers: () => Promise<import('./stickers').StickerCatalog>;
+    giphySearch: (q: string, offset?: number) => Promise<{ enabled: boolean; results: import('./stickers').GiphySticker[]; next?: number | null }>;
     saveWebPush: (subscription: { endpoint: string; expirationTime?: number | null; keys: { p256dh: string; auth: string } }) => Promise<{ ok: true }>;
     removeWebPush: (endpoint: string) => Promise<{ ok: true }>;
     deleteAccount: () => Promise<{
@@ -128,7 +130,7 @@ export declare function createApi(opts: ApiClientOptions): {
     voteBattle: (id: ID, optionId: ID) => Promise<{
         post: Post;
     }>;
-    comment: (id: ID, body: string) => Promise<WithReward<{
+    comment: (id: ID, body: string, sticker?: import('./stickers').StickerInput | null) => Promise<WithReward<{
         comment: Comment;
     }>>;
     trending: () => Promise<{
@@ -215,6 +217,7 @@ export declare function createApi(opts: ApiClientOptions): {
     }>;
     sendMessage: (id: ID, b: {
         body: string;
+        sticker?: import('./stickers').StickerInput | null;
         mediaUrl?: string | null;
         kind?: ChatMessage["kind"];
     }) => Promise<{
@@ -292,7 +295,7 @@ export declare function createApi(opts: ApiClientOptions): {
         entries: LeaderboardEntry[];
     }>;
     shouts: (p?: { before?: string; mood?: string; replyTo?: ID }) => Promise<{ items: Shout[]; nextCursor: string | null; nextShoutAt: string | null }>;
-    shout: (b: { body: string; mood?: string | null; replyToId?: ID | null }) => Promise<WithReward<{ shout: Shout; nextShoutAt: string }>>;
+    shout: (b: { body: string; mood?: string | null; replyToId?: ID | null; sticker?: import('./stickers').StickerInput | null }) => Promise<WithReward<{ shout: Shout; nextShoutAt: string }>>;
     reactShout: (id: ID, kind: ReactionKind | null) => Promise<{ shout: Shout }>;
     deleteShout: (id: ID) => Promise<{ ok: true }>;
     shoutTrends: () => Promise<{ tags: { tag: string; count: number }[]; top: { rank: number; user: UserPublic; shouts: number; reps: number }[] }>;
@@ -309,7 +312,7 @@ export declare function createApi(opts: ApiClientOptions): {
     gallery: (userId: ID, album?: string) => Promise<{ albums: string[]; photos: Post[] }>;
     rateProfile: (userId: ID, score: VibeScore) => Promise<{ ratings: ProfileRatings }>;
     wall: (userId: ID) => Promise<{ notes: WallNote[] }>;
-    postWall: (userId: ID, b: { body: string; mood?: string | null }) => Promise<{ note: WallNote }>;
+    postWall: (userId: ID, b: { body: string; mood?: string | null; sticker?: import('./stickers').StickerInput | null }) => Promise<{ note: WallNote }>;
     deleteWallNote: (id: ID) => Promise<{ ok: true }>;
     insights: () => Promise<Insights>;
     spotifySearch: (q: string) => Promise<{ enabled: boolean; source?: 'spotify' | 'apple'; tracks: ProfileSong[] }>;

@@ -287,7 +287,7 @@ export const serializePosts = (rows, viewerId) => {
 
 export async function serializeComment(c, author = authorCache()) {
   const rating = (await db.ratings.findOne({ postId: c.postId, userId: c.authorId }))?.score ?? null;
-  return { id: c._id, postId: c.postId, author: await author(c.authorId), body: c.body, rating, createdAt: c.createdAt };
+  return { id: c._id, postId: c.postId, author: await author(c.authorId), body: c.body, sticker: c.sticker ?? null, rating, createdAt: c.createdAt };
 }
 
 export async function serializeMessage(m, author = authorCache()) {
@@ -298,6 +298,7 @@ export async function serializeMessage(m, author = authorCache()) {
     body: m.body,
     mediaUrl: m.mediaUrl ?? null,
     kind: m.kind ?? 'text',
+    sticker: m.sticker ?? null,
     replyToId: m.replyToId ?? null,
     reactions: {},
     createdAt: m.createdAt,

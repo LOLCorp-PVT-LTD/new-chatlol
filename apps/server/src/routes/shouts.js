@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { REACTIONS, SHOUT_COOLDOWN_SEC, SHOUT_MAX, SHOUT_MOODS } from '@chatlol/shared';
 import { db, newId, now } from '../db.js';
+import { assertEmojiOwned, resolveSticker, stickerInput } from '../lib/stickers.js';
 import { optionalAuth, requireAuth, uid } from '../lib/auth.js';
 import { HttpError, parse } from '../lib/http.js';
 import { authorCache } from '../lib/serialize.js';
@@ -32,6 +33,7 @@ export async function serializeShout(s, viewerId, author = authorCache(viewerId)
     id: s._id,
     author: await author(s.authorId),
     body: s.body,
+    sticker: s.sticker ?? null,
     mood: s.mood ?? null,
     mentions: s.mentionHandles ?? [],
     replyTo: replyTo
@@ -85,7 +87,7 @@ async function resolveMentions(body, authorId) {
   );
 }
 
-export async function insertShout(authorId, { body, mood = null, replyToId = null }) {
+export async function insertShout(authorId, { body, mood = null, replyToId = null, sticker = null }) {
   const replyTo = replyToId ? await db.shouts.findOne({ _id: replyToId, hidden: { $ne: true } }) : null;
   if (replyToId && !replyTo) throw new HttpError(404, 'That shout is gone');
   const mentioned = await resolveMentions(body, authorId);
@@ -93,6 +95,7 @@ export async function insertShout(authorId, { body, mood = null, replyToId = nul
     _id: newId(),
     authorId,
     body,
+    sticker,
     mood,
     replyToId: replyTo?._id ?? null,
     mentions: mentioned.map((u) => u._id),
@@ -135,7 +138,8 @@ shoutsRouter.post('/shouts', requireAuth, async (req, res) => {
   const me = uid(req);
   const b = parse(
     z.object({
-      body: z.string().trim().min(1).max(SHOUT_MAX),
+      body: z.string().trim().max(SHOUT_MAX).default(''),
+      sticker: stickerInput,
       mood: z
         .enum(SHOUT_MOODS.map((m) => m.key))
         .nullable()
@@ -144,15 +148,18 @@ shoutsRouter.post('/shouts', requireAuth, async (req, res) => {
     }),
     req.body,
   );
+  if (!b.body && !b.sticker) throw new HttpError(400, 'Write something or pick a sticker');
   await assertCanPost(me);
   assertClean(b.body);
+  await assertEmojiOwned(me, b.body);
+  const sticker = await resolveSticker(me, b.sticker);
   // One shout every 45 seconds, enforced cluster-wide.
   if (!(await shared().setNx(`shout:cd:${me}`, '1', SHOUT_COOLDOWN_SEC * 1000))) {
     const wait = Math.max(1, await shoutCooldown(me));
     throw new HttpError(429, `Next shout in ${wait}s ⏳`, 'shout_cooldown');
   }
-  const shout = await insertShout(me, { body: b.body, mood: b.mood ?? null, replyToId: b.replyToId ?? null });
-  screen({ userId: me, text: b.body, ref: { type: 'shout', id: shout._id }, targetId: shout.mentions[0] ?? null });
+  const shout = await insertShout(me, { body: b.body, mood: b.mood ?? null, replyToId: b.replyToId ?? null, sticker });
+  if (b.body) screen({ userId: me, text: b.body, ref: { type: 'shout', id: shout._id }, targetId: shout.mentions[0] ?? null });
   const reward = await grant(me, 2, 5, 'Shouted 📣');
   res.status(201).json({
     shout: await serializeShout(shout, me),

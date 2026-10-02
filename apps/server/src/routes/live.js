@@ -54,7 +54,7 @@ export async function serializeStream(s, author) {
 }
 
 /** Stores a stream chat line and returns it serialized (callers emit it to the room). */
-export async function insertStreamMessage(streamId, authorId, body, kind = 'text') {
+export async function insertStreamMessage(streamId, authorId, body, kind = 'text', sticker = null) {
   const doc = {
     _id: newId(),
     roomType: 'stream',
@@ -62,7 +62,8 @@ export async function insertStreamMessage(streamId, authorId, body, kind = 'text
     authorId,
     body,
     mediaUrl: null,
-    kind,
+    kind: sticker ? 'sticker' : kind,
+    sticker,
     replyToId: null,
     createdAt: now(),
   };

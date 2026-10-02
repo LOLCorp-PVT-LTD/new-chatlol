@@ -1,4 +1,10 @@
 <script setup lang="ts">
+import { emojiOnly } from '../lib/richText';
+import type { StickerInput } from '@chatlol/shared';
+import EmojiButton from '../components/EmojiButton.vue';
+import RichText from '../components/RichText.vue';
+import StickerView from '../components/StickerView.vue';
+import { insertAtCaret } from '../lib/insertAtCaret';
 import { nextTick, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import type { ChatMessage, Lounge } from '@chatlol/shared';
@@ -38,10 +44,12 @@ onUnmounted(() => {
   sock.off('lounge:message', onMsg);
   sock.off('lounge:presence', onPresence);
 });
-function send(text = draft.value) {
-  if (!text.trim() || !s.user) return;
-  s.socket().emit('lounge:send', { loungeId: id, body: text.trim() });
-  draft.value = '';
+const box = ref<HTMLInputElement>();
+const addEmoji = (t: string) => (draft.value = insertAtCaret(box.value, draft.value, t));
+function send(text = draft.value, sticker: StickerInput | null = null) {
+  if ((!text.trim() && !sticker) || !s.user) return;
+  s.socket().emit('lounge:send', { loungeId: id, body: sticker ? '' : text.trim(), sticker });
+  if (!sticker) draft.value = '';
 }
 </script>
 
@@ -59,15 +67,18 @@ function send(text = draft.value) {
         <div class="max-w-[75%]">
           <div class="flex items-center gap-1.5 text-label-sm text-on-surface-variant mb-0.5" :class="{ 'justify-end': m.author.id === s.user?.id }">
             <UserName :user="m.author" :link="false" /><span>{{ timeAgo(m.createdAt) }}</span></div>
-          <p class="px-4 py-2 rounded-[20px] text-body-md break-words"
-            :class="m.author.id === s.user?.id ? 'bg-sunset text-white rounded-tr-md' : 'bg-surface-container-low rounded-tl-md'">{{ m.body }}</p>
+          <StickerView v-if="m.sticker" :sticker="m.sticker" :size="128" class="block" :class="{ 'ml-auto': m.author.id === s.user?.id }" />
+          <p v-if="m.body && emojiOnly(m.body)" :class="{ 'text-right': m.author.id === s.user?.id }"><RichText :text="m.body" /></p>
+          <p v-else-if="m.body" class="px-4 py-2 rounded-[20px] text-body-md break-words"
+            :class="m.author.id === s.user?.id ? 'bg-sunset text-white rounded-tr-md' : 'bg-surface-container-low rounded-tl-md'"><RichText :text="m.body" /></p>
         </div>
       </div>
     </div>
     <form v-if="s.user" class="border-t border-sandstone p-3 space-y-2" @submit.prevent="send()">
       <div class="flex gap-1.5"><button v-for="e in EMOJI" :key="e" type="button" class="w-9 h-9 rounded-full bg-surface-container-low hover:scale-110 transition" @click="send(e)">{{ e }}</button></div>
-      <div class="flex gap-2">
-        <input v-model="draft" class="input h-12 text-body-md" placeholder="Say something to the lounge… (@mention people)" maxlength="500" />
+      <div class="flex gap-2 items-center">
+        <EmojiButton stickers align="left" @insert="addEmoji" @sticker="(st) => send('', st)" />
+        <input ref="box" v-model="draft" class="input h-12 text-body-md" placeholder="Say something to the lounge… (@mention people)" maxlength="500" />
         <button class="btn-primary h-12 w-12 px-0 shrink-0" aria-label="Send" :disabled="!draft.trim()"><Icon name="send" /></button>
       </div>
     </form>

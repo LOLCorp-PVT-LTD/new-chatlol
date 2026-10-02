@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmDialog, formDialog, reportDialog } from '../lib/dialog';
 import { computed, onBeforeUnmount, onMounted, provide, ref, watch, watchEffect } from 'vue';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import type { Post, ProfileLayout, ProfileRatings, SectionType, Showcase, UserPublic, VibeScore, WallNote } from '@chatlol/shared';
@@ -107,10 +108,10 @@ const ctx: ProfileCtx = {
     if (needAuth()) return;
     try { ratings.value = (await api.rateProfile(user.value!.id, score)).ratings; s.toast({ kind: 'info', title: 'Vibe locked in ⭐' }); } catch (e) { toastError(e); }
   },
-  async postNote(body, mood) {
+  async postNote(body, mood, sticker = null) {
     if (needAuth()) return false;
     try {
-      const r = await api.postWall(user.value!.id, { body, mood });
+      const r = await api.postWall(user.value!.id, { body, mood, sticker });
       wall.value.unshift(r.note);
       counts.value.wall++;
       return true;
@@ -126,8 +127,18 @@ const ctx: ProfileCtx = {
     await loadGallery();
   },
   async addPhoto(f) {
-    const albumName = prompt('Album (optional) — e.g. Golden Hour, Fits, Travel', album.value ?? '') ?? '';
-    const toFeed = confirm('Also share this photo to the News Feed?');
+    const answer = await formDialog({
+      title: 'Add to your gallery',
+      icon: 'add_a_photo',
+      confirmText: 'Upload',
+      fields: [
+        { key: 'album', type: 'text', label: 'Album (optional)', placeholder: 'e.g. Golden Hour, Fits, Travel', value: album.value ?? '', maxLength: 40, suggestions: albums.value },
+        { key: 'toFeed', type: 'toggle', label: 'Also share to the News Feed', hint: 'Off = it only shows in your gallery', value: false },
+      ],
+    });
+    if (!answer) return;
+    const albumName = String(answer.album ?? '');
+    const toFeed = !!answer.toFeed;
     uploading.value = true;
     try {
       const mediaUrl = await uploadImage(f);
@@ -151,12 +162,12 @@ async function message() {
   try { router.push(`/messages/${(await api.openConversation(user.value!.id)).conversation.id}`); } catch (e) { toastError(e); }
 }
 async function block() {
-  if (!confirm(`Block @${user.value!.handle}? They won’t be able to message you or see you in feeds.`)) return;
+  if (!(await confirmDialog({ title: `Block @${user.value!.handle}?`, body: 'They won’t be able to message you or see you in feeds. You can unblock them in Settings.', icon: 'block', danger: true, confirmText: 'Block' }))) return;
   await api.block(user.value!.id);
   router.push('/');
 }
 async function report() {
-  const reason = prompt(`Why are you reporting @${user.value!.handle}?`);
+  const reason = await reportDialog(`@${user.value!.handle}`);
   if (!reason) return;
   await api.report({ targetType: 'user', targetId: user.value!.id, reason });
   s.toast({ kind: 'info', title: 'Thanks — SafeShield is reviewing it 🛡️' });
@@ -223,8 +234,8 @@ function removeSection(id: string) {
   selectedId.value = null;
   changed();
 }
-function cancelEditing() {
-  if (dirty.value && !confirm('Discard your changes to the page?')) return;
+async function cancelEditing() {
+  if (dirty.value && !(await confirmDialog({ title: 'Discard your changes?', body: 'Your page goes back to how it was.', icon: 'undo', danger: true, confirmText: 'Discard' }))) return;
   layout.value = saved.value;
   editing.value = false;
   selectedId.value = null;
@@ -254,7 +265,7 @@ function onKey(e: KeyboardEvent) {
 const beforeUnload = (e: BeforeUnloadEvent) => { if (dirty.value) e.preventDefault(); };
 onMounted(() => { window.addEventListener('keydown', onKey); window.addEventListener('beforeunload', beforeUnload); });
 onBeforeUnmount(() => { window.removeEventListener('keydown', onKey); window.removeEventListener('beforeunload', beforeUnload); });
-onBeforeRouteLeave(() => !dirty.value || confirm('Leave without saving your page?'));
+onBeforeRouteLeave(async () => !dirty.value || (await confirmDialog({ title: 'Leave without saving?', body: 'Your page changes will be lost.', icon: 'logout', danger: true, confirmText: 'Leave', cancelText: 'Keep editing' })));
 
 /** After changing look/song/about: refresh the member's details, keeping any page edits in progress. */
 async function lookSaved() {

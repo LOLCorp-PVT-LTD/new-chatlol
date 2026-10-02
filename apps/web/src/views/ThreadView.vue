@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import EmojiButton from '../components/EmojiButton.vue';
+import RichText from '../components/RichText.vue';
+import { insertAtCaret } from '../lib/insertAtCaret';
 import { ref, watchEffect } from 'vue';
 import { useRoute } from 'vue-router';
 import type { ShoutThread, ShoutReply } from '@chatlol/shared';
@@ -21,6 +24,8 @@ async function load() {
   replies.value = r.replies;
 }
 watchEffect(() => { void load(); clearInterval(poll); poll = setInterval(load, 20_000); });
+const box = ref<HTMLInputElement>();
+const addEmoji = (t: string) => (draft.value = insertAtCaret(box.value, draft.value, t));
 async function send() {
   if (!draft.value.trim()) return;
   try {
@@ -43,11 +48,12 @@ async function send() {
       <Avatar :user="r.author" :size="36" :show-online="false" />
       <div class="card px-4 py-3 flex-1 min-w-0 rounded-md">
         <div class="flex items-center gap-2 text-body-sm"><UserName :user="r.author" /><span class="text-on-surface-variant">{{ timeAgo(r.createdAt) }}</span></div>
-        <p class="text-body-md mt-0.5 whitespace-pre-line break-words">{{ r.body }}</p>
+        <p class="text-body-md mt-0.5 whitespace-pre-line break-words"><RichText :text="r.body" /></p>
       </div>
     </div>
     <form v-if="s.user" class="sticky bottom-24 lg:bottom-4 flex gap-2 card p-2 shadow-float" @submit.prevent="send">
-      <input v-model="draft" class="input h-12 border-transparent" placeholder="Add to the shout…" maxlength="2000" />
+      <EmojiButton class="self-center" @insert="addEmoji" />
+      <input ref="box" v-model="draft" class="input h-12 border-transparent" placeholder="Add to the shout…" maxlength="2000" />
       <button class="btn-primary h-12 w-12 px-0 shrink-0" aria-label="Reply" :disabled="!draft.trim()"><Icon name="send" /></button>
     </form>
   </div>

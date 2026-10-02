@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import type { StickerInput } from '@chatlol/shared';
+import EmojiButton from './EmojiButton.vue';
+import RichText from './RichText.vue';
+import StickerView from './StickerView.vue';
+import { insertAtCaret } from '../lib/insertAtCaret';
 import { computed, ref } from 'vue';
 import type { Post, VibeScore, Comment, ReactionKind } from '@chatlol/shared';
 import { REACTIONS, TIERS, tierByKey, timeAgo, compact, toTen, levelTitle } from '@chatlol/shared';
@@ -67,11 +72,13 @@ async function toggleComments() {
 }
 if (props.expanded) void api.post(props.post.id).then((r) => (comments.value = r.comments));
 
-async function sendComment() {
-  if (!requireAuth() || !draft.value.trim() || busy.value) return;
+const commentBox = ref<HTMLInputElement>();
+const addEmoji = (t: string) => (draft.value = insertAtCaret(commentBox.value, draft.value, t));
+async function sendComment(sticker: StickerInput | null = null) {
+  if (!requireAuth() || (!draft.value.trim() && !sticker) || busy.value) return;
   busy.value = true;
   try {
-    const r = await api.comment(post.value.id, draft.value.trim());
+    const r = await api.comment(post.value.id, draft.value.trim(), sticker);
     comments.value = [...(comments.value ?? []), r.comment];
     post.value = { ...post.value, commentCount: post.value.commentCount + 1 };
     draft.value = '';
@@ -134,10 +141,7 @@ async function remove() {
       <button v-if="!mine" class="btn bg-white text-flame h-10 mt-4 relative" @click="!showComments && toggleComments()">🎉 Send a birthday wish</button>
     </div>
     <p v-else-if="post.body" class="px-5 pb-3 text-body-lg whitespace-pre-line break-words">
-      <template v-for="(part, i) in post.body.split(/(#[\p{L}\p{N}_]+)/u)" :key="i">
-        <RouterLink v-if="part.startsWith('#')" :to="`/feed?tag=${part.slice(1).toLowerCase()}`" class="text-primary font-bold hover:underline">{{ part }}</RouterLink>
-        <template v-else>{{ part }}</template>
-      </template>
+<RichText :text="post.body" tags />
     </p>
 
     <!-- Media -->
@@ -207,11 +211,13 @@ async function remove() {
             <span v-if="c.rating" class="text-label-sm text-primary">{{ TIERS[c.rating - 1].emoji }} {{ TIERS[c.rating - 1].label }}</span>
             <span class="text-on-surface-variant">{{ timeAgo(c.createdAt) }}</span>
           </div>
-          <p class="text-body-md break-words">{{ c.body }}</p>
+          <p v-if="c.body" class="text-body-md break-words"><RichText :text="c.body" /></p>
+          <StickerView v-if="c.sticker" :sticker="c.sticker" :size="96" />
         </div>
       </div>
-      <form class="flex gap-2 pt-1" @submit.prevent="sendComment">
-        <input v-model="draft" class="input h-11 text-body-md" placeholder="Add your take or a sweet compliment…" maxlength="500" />
+      <form class="flex gap-2 pt-1 items-center" @submit.prevent="sendComment()">
+        <EmojiButton stickers align="left" @insert="addEmoji" @sticker="sendComment" />
+        <input ref="commentBox" v-model="draft" class="input h-11 text-body-md" placeholder="Add your take or a sweet compliment…" maxlength="500" />
         <button class="btn-primary h-11 w-11 px-0 shrink-0" :disabled="!draft.trim() || busy" aria-label="Send"><Icon name="arrow_upward" /></button>
       </form>
       <p class="text-[11px] text-on-surface-variant text-center">SafeShield auto-checks words for kindness 🛡️</p>

@@ -21,7 +21,7 @@ export interface ProfileCtx {
   wall: Ref<WallNote[]>;
   showcase: Ref<Showcase>;
   rateProfile: (score: VibeScore) => Promise<void>;
-  postNote: (body: string, mood: string | null) => Promise<boolean>;
+  postNote: (body: string, mood: string | null, sticker?: import('@chatlol/shared').StickerInput | null) => Promise<boolean>;
   deleteNote: (id: string) => Promise<void>;
   setAlbum: (album: string | null) => Promise<void>;
   addPhoto: (file: File) => Promise<void>;

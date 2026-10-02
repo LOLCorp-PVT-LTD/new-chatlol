@@ -58,6 +58,8 @@ export const config = {
    *  - Android: Firebase Cloud Messaging (HTTP v1) with a Firebase service-account JSON.
    *  - Web: standard Web Push with VAPID keys (generated and stored automatically if you leave them blank).
    */
+  /** Optional, free (developers.giphy.com): enables GIPHY sticker search for people who unlock it. */
+  giphyApiKey: env.GIPHY_API_KEY ?? '',
   push: {
     apns: {
       teamId: env.APNS_TEAM_ID ?? '',

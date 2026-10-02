@@ -34,6 +34,7 @@ function wireSocket() {
   const sock = resetSocket();
   sock.on('wallet', (w) => session.patchUser({ sparks: w.sparks, gems: w.gems, xp: w.xp, level: w.level }));
   sock.on('reward', (r) => { if (r.reason !== 'rate') toast({ kind: 'reward', title: r.reason, sparks: r.sparks, xp: r.xp }); });
+  sock.on('toast', (t) => toast(t));
   sock.on('notification', (n) => {
     session.set((s) => ({ notifications: [n, ...s.notifications].slice(0, 80), unread: n.kind === 'dm' ? s.unread : s.unread + 1 }));
     if (AppState.currentState !== 'active' || Platform.OS === 'web') localNotify(n.title, n.body, n.link);

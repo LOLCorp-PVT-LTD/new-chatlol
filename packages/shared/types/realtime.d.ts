@@ -32,6 +32,8 @@ export interface ServerEvents {
     'shout:reactions': (p: { id: ID; reactions: Record<import('./types').ReactionKind, number> }) => void;
     'content:removed': (p: { type: string; id: ID }) => void;
     moderation: (p: { action: string; until: string | null; reason: string | null }) => void;
+    /** A message for the sender only (e.g. a locked sticker). */
+    toast: (t: { kind: 'error' | 'info'; title: string }) => void;
     'ticker': (t: {
         id: ID;
         text: string;
@@ -81,6 +83,7 @@ export interface ClientEvents {
         loungeId: ID;
         body: string;
         replyToId?: ID | null;
+        sticker?: import('./stickers').StickerInput | null;
     }) => void;
     'dm:typing': (p: {
         conversationId: ID;
@@ -94,6 +97,7 @@ export interface ClientEvents {
     'stream:chat': (p: {
         streamId: ID;
         body: string;
+        sticker?: import('./stickers').StickerInput | null;
     }) => void;
     /** Host announces it is broadcasting from this socket. */
     'rtc:host': (streamId: ID, ack?: (r: {

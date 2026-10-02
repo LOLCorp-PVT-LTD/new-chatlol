@@ -252,12 +252,13 @@ function Body({ section, ctx, fg, tile, font }: { section: ProfileSection; ctx: 
 function Photos({ photos, cols, fg, empty }: { photos: Post[]; cols: number; fg: string; empty: string }) {
   const [w, setW] = useState(0);
   if (!photos.length) return <Muted fg={fg} center>{empty}</Muted>;
-  const cell = w ? (w - 6 * (cols - 1)) / cols : 0;
+  // Square thumbnails, never bigger than 250×250.
+  const cell = w ? Math.min(250, (w - 6 * (cols - 1)) / cols) : 0;
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }} onLayout={(e) => setW(e.nativeEvent.layout.width)}>
       {cell ? photos.map((p) => (
         <Tap key={p.id} onPress={() => router.push(`/p/${p.id}`)}>
-          <Image source={p.mediaUrl} style={{ width: cell, height: cell * 1.25, borderRadius: 10 }} contentFit="cover" recyclingKey={p.id} />
+          <Image source={p.mediaUrl} style={{ width: cell, height: cell, borderRadius: 10 }} contentFit="cover" recyclingKey={p.id} />
           {p.ratings.count ? <View style={{ position: 'absolute', left: 5, bottom: 5, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 99, paddingHorizontal: 6 }}><Text variant="labelSm" color="#fff">{tierByKey(p.ratings.tier).emoji} {p.ratings.count}</Text></View> : null}
         </Tap>
       )) : null}

@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import type { StickerInput } from '@chatlol/shared';
+import EmojiButton from './EmojiButton.vue';
+import { insertAtCaret } from '../lib/insertAtCaret';
 import { computed, onUnmounted, ref, watch } from 'vue';
 import type { Shout, UserPublic } from '@chatlol/shared';
 import { SHOUT_MAX, SHOUT_MOODS } from '@chatlol/shared';
@@ -38,11 +41,13 @@ function pickMention(u: UserPublic) {
   suggestions.value = [];
 }
 
-async function send() {
-  if (!body.value.trim() || busy.value || wait.value) return;
+const box = ref<HTMLTextAreaElement>();
+const addEmoji = (t: string) => (body.value = insertAtCaret(box.value, body.value, t));
+async function send(sticker: StickerInput | null = null) {
+  if ((!body.value.trim() && !sticker) || busy.value || wait.value) return;
   busy.value = true;
   try {
-    const r = await api.shout({ body: body.value.trim(), mood: mood.value, replyToId: props.replyTo?.id ?? null });
+    const r = await api.shout({ body: body.value.trim(), mood: mood.value, replyToId: props.replyTo?.id ?? null, sticker });
     nextAt.value = r.nextShoutAt;
     body.value = '';
     mood.value = null;
@@ -57,7 +62,7 @@ async function send() {
 </script>
 
 <template>
-  <form v-if="s.user" class="card p-4 space-y-3 relative" @submit.prevent="send">
+  <form v-if="s.user" class="card p-4 space-y-3 relative" @submit.prevent="send()">
     <div class="flex gap-3">
       <Avatar :user="s.user" :size="40" :show-online="false" />
       <div class="flex-1 min-w-0">
@@ -65,7 +70,7 @@ async function send() {
           <Icon name="reply" :size="16" /> Replying to <b>@{{ replyTo.author.handle }}</b>
           <button type="button" class="text-primary font-bold" @click="emit('cancelReply')">cancel</button>
         </div>
-        <textarea v-model="body" :maxlength="SHOUT_MAX" rows="2" class="textarea py-3" :placeholder="compact ? 'Shout something to everyone…' : 'Shout to the whole of ChatLOL… tag people with @handle'" @keydown.enter.exact.prevent="send" />
+        <textarea ref="box" v-model="body" :maxlength="SHOUT_MAX" rows="2" class="textarea py-3" :placeholder="compact ? 'Shout something to everyone…' : 'Shout to the whole of ChatLOL… tag people with @handle'" @keydown.enter.exact.prevent="send()" />
         <div v-if="suggestions.length" class="absolute z-20 mt-1 card shadow-float w-64 py-1">
           <button v-for="u in suggestions" :key="u.id" type="button" class="w-full flex items-center gap-2 px-3 py-2 hover:bg-surface-container-low text-left" @click="pickMention(u)">
             <Avatar :user="u" :size="28" :show-online="false" /><span class="text-label-md truncate">{{ u.displayName }}</span><span class="text-body-sm text-on-surface-variant truncate">@{{ u.handle }}</span>
@@ -76,6 +81,7 @@ async function send() {
     <div class="flex items-center gap-2 flex-wrap">
       <button v-for="m in compact ? [] : SHOUT_MOODS" :key="m.key" type="button" class="chip h-8 text-label-sm" :class="{ 'chip-active': mood === m.key }" @click="mood = mood === m.key ? null : m.key">{{ m.emoji }} {{ m.label }}</button>
       <span class="flex-1" />
+      <EmojiButton stickers @insert="addEmoji" @sticker="send" />
       <span class="text-label-md tabular-nums" :class="left < 15 ? 'text-error' : 'text-on-surface-variant'">{{ left }}</span>
       <button class="btn-primary h-10" :disabled="!body.trim() || busy || wait > 0">
         <template v-if="wait"><Icon name="hourglass_top" :size="18" /> {{ wait }}s</template>

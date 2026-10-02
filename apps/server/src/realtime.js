@@ -10,6 +10,7 @@ import { screen } from './lib/aiModeration.js';
 import { insertLoungeMessage, loungeKey, markRead, recentMessages } from './routes/social.js';
 import { streamKeys, endStream, insertStreamMessage } from './routes/live.js';
 import { bus } from './lib/events.js';
+import { assertEmojiOwned, resolveSticker, stickerInput } from './lib/stickers.js';
 import { shared, redisClient, duplicateRedis, sharedBackend } from './lib/shared.js';
 import { config } from './config.js';
 
@@ -61,6 +62,27 @@ export async function attachRealtime(server) {
       return ++signals.n <= 400; // ICE candidates arrive in bursts
     };
     const typingAt = new Map();
+    /** Stickers and custom emoji in socket chat: invalid or locked ones tell the sender why and send nothing. */
+    const chatSticker = async (input) => {
+      if (!input) return null;
+      const parsed = stickerInput.safeParse(input);
+      if (!parsed.success) return null;
+      try {
+        return await resolveSticker(userId, parsed.data);
+      } catch (e) {
+        socket.emit('toast', { kind: 'error', title: e.message });
+        return null;
+      }
+    };
+    const emojiOk = async (text) => {
+      try {
+        await assertEmojiOwned(userId, text);
+        return true;
+      } catch (e) {
+        socket.emit('toast', { kind: 'error', title: e.message });
+        return false;
+      }
+    };
     const safe =
       (fn) =>
       (...a) => {
@@ -101,14 +123,16 @@ export async function attachRealtime(server) {
 
     socket.on(
       'lounge:send',
-      safe(async ({ loungeId, body, replyToId }) => {
+      safe(async ({ loungeId, body, replyToId, sticker }) => {
         if (!userId || !joinedLounges.has(loungeId) || !allowChat()) return;
         const text = String(body ?? '')
           .trim()
           .slice(0, 500);
-        if (!text || !localCheck(text).ok || !(await canPost(userId))) return;
-        const msg = await insertLoungeMessage(loungeId, userId, text, replyToId ?? null);
-        screen({ userId, text, ref: { type: 'message', id: msg.id } });
+        const st = await chatSticker(sticker);
+        if ((!text && !st) || !localCheck(text).ok || !(await canPost(userId))) return;
+        if (!(await emojiOk(text))) return;
+        const msg = await insertLoungeMessage(loungeId, userId, text, replyToId ?? null, st);
+        if (text) screen({ userId, text, ref: { type: 'message', id: msg.id } });
       }),
     );
 
@@ -166,14 +190,16 @@ export async function attachRealtime(server) {
 
     socket.on(
       'stream:chat',
-      safe(async ({ streamId, body }) => {
+      safe(async ({ streamId, body, sticker }) => {
         if (!userId || !joinedStreams.has(streamId) || !allowChat()) return;
         const text = String(body ?? '')
           .trim()
           .slice(0, 300);
-        if (!text || !localCheck(text).ok || !(await canPost(userId))) return;
-        const msg = await insertStreamMessage(streamId, userId, text);
-        screen({ userId, text, ref: { type: 'message', id: msg.id } });
+        const st = await chatSticker(sticker);
+        if ((!text && !st) || !localCheck(text).ok || !(await canPost(userId))) return;
+        if (!(await emojiOk(text))) return;
+        const msg = await insertStreamMessage(streamId, userId, text, 'text', st);
+        if (text) screen({ userId, text, ref: { type: 'message', id: msg.id } });
         io.to(room.stream(streamId)).emit('stream:chat', msg);
         bus.emitEvent('stream:chat', { streamId, messageId: msg.id, authorId: userId });
       }),

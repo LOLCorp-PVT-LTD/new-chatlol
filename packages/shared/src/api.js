@@ -49,6 +49,8 @@ export function createApi(opts) {
     equip: (b) => req('POST', '/me/equip', b),
     registerPushToken: (b) => req('POST', '/me/push-token', b),
     webPushKey: () => req('GET', '/push/web-key'),
+    stickers: () => req('GET', '/stickers'),
+    giphySearch: (query, offset = 0) => req('GET', `/stickers/giphy${q({ q: query, offset })}`),
     saveWebPush: (subscription) => req('POST', '/me/web-push', subscription),
     removeWebPush: (endpoint) => req('DELETE', '/me/web-push', { endpoint }),
     deleteAccount: () => req('DELETE', '/me'),
@@ -71,7 +73,7 @@ export function createApi(opts) {
     rate: (id, score) => req('POST', `/posts/${id}/rate`, { score }),
     react: (id, kind) => req('POST', `/posts/${id}/react`, { kind }),
     voteBattle: (id, optionId) => req('POST', `/posts/${id}/battle`, { optionId }),
-    comment: (id, body) => req('POST', `/posts/${id}/comments`, { body }),
+    comment: (id, body, sticker = null) => req('POST', `/posts/${id}/comments`, { body, sticker }),
     trending: () => req('GET', '/trending'),
 
     // drops

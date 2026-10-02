@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import DialogHost from './components/DialogHost.vue';
 import { computed, ref, watch, onUnmounted } from 'vue';
 import { useRoute } from 'vue-router';
 import type { Post } from '@chatlol/shared';
@@ -47,6 +48,7 @@ function onPosted(p: Post) { posted.value = p; }
 
 <template>
   <Toasts />
+  <DialogHost />
   <LevelUp />
   <RouterView v-if="bare" />
   <template v-else>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmDialog } from '../lib/dialog';
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { PremiumPlan } from '@chatlol/shared';
@@ -30,7 +31,7 @@ async function card(p: PremiumPlan) {
 }
 async function sparks(p: PremiumPlan) {
   if (!s.user) return router.push('/join');
-  if (!confirm(`Spend ${p.sparks.toLocaleString()} Sparks on Premium ${p.label}?`)) return;
+  if (!(await confirmDialog({ title: `Premium ${p.label}`, body: `Spend ${p.sparks.toLocaleString()} Sparks on ${p.label} of Premium?`, icon: 'workspace_premium', confirmText: `Spend ${p.sparks.toLocaleString()} ✦` }))) return;
   busy.value = p.id;
   try {
     const r = await api.buyPremium(p.id);

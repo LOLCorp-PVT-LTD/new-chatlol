@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import type { StickerInput } from '@chatlol/shared';
+import EmojiButton from '../components/EmojiButton.vue';
+import RichText from '../components/RichText.vue';
+import StickerView from '../components/StickerView.vue';
+import { insertAtCaret } from '../lib/insertAtCaret';
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { ChatMessage, LiveStream, ViewerState } from '@chatlol/shared';
@@ -105,10 +110,12 @@ function toggle(kind: 'video' | 'audio') {
   media?.getTracks().filter((t) => t.kind === kind).forEach((t) => (t.enabled = !t.enabled));
   if (kind === 'video') camOn.value = !camOn.value; else micOn.value = !micOn.value;
 }
-function send() {
-  if (!draft.value.trim()) return;
-  s.socket().emit('stream:chat', { streamId: id, body: draft.value.trim() });
-  draft.value = '';
+const box = ref<HTMLInputElement>();
+const addEmoji = (t: string) => (draft.value = insertAtCaret(box.value, draft.value, t));
+function send(sticker: StickerInput | null = null) {
+  if (!draft.value.trim() && !sticker) return;
+  s.socket().emit('stream:chat', { streamId: id, body: sticker ? '' : draft.value.trim(), sticker });
+  if (!sticker) draft.value = '';
 }
 async function gift(giftId: string) {
   if (!s.user) return s.toast({ kind: 'info', title: 'Join to send gifts 🎁' });
@@ -166,7 +173,7 @@ const stateText: Record<string, string> = {
       <div ref="list" class="flex-1 overflow-y-auto p-4 space-y-2 min-h-0">
         <div v-for="m in chat" :key="m.id" class="text-body-md flex gap-2 items-start" :class="{ 'bg-sunlit rounded-md px-2 py-1': m.kind === 'gift' }">
           <Avatar :user="m.author" :size="24" :show-online="false" />
-          <p class="min-w-0 break-words"><UserName :user="m.author" :link="false" class="text-primary mr-1" /> {{ m.body }}</p>
+          <div class="min-w-0 break-words"><UserName :user="m.author" :link="false" class="text-primary mr-1" /> <RichText :text="m.body" /><StickerView v-if="m.sticker" :sticker="m.sticker" :size="80" class="block mt-1" /></div>
         </div>
       </div>
       <div class="p-3 border-t border-sandstone space-y-2">
@@ -175,8 +182,9 @@ const stateText: Record<string, string> = {
             <span class="text-2xl">{{ g.emoji }}</span><span class="text-[10px] font-bold text-primary">{{ g.price }} ✦</span>
           </button>
         </div>
-        <form class="flex gap-2" @submit.prevent="send">
-          <input v-model="draft" class="input h-11 text-body-md" placeholder="Say something nice…" maxlength="300" :disabled="!s.user" />
+        <form class="flex gap-2 items-center" @submit.prevent="send()">
+          <EmojiButton v-if="s.user" stickers align="left" @insert="addEmoji" @sticker="send" />
+          <input ref="box" v-model="draft" class="input h-11 text-body-md" placeholder="Say something nice…" maxlength="300" :disabled="!s.user" />
           <button class="btn-primary h-11 w-11 px-0 shrink-0" aria-label="Send" :disabled="!draft.trim()"><Icon name="send" /></button>
         </form>
       </div>

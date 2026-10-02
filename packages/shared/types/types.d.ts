@@ -150,6 +150,7 @@ export interface Comment {
     postId: ID;
     author: UserPublic;
     body: string;
+    sticker: import('./stickers').Sticker | null;
     rating: VibeScore | null;
     createdAt: ISODate;
 }
@@ -218,7 +219,8 @@ export interface ChatMessage {
     author: UserPublic;
     body: string;
     mediaUrl: string | null;
-    kind: 'text' | 'image' | 'gift' | 'system' | 'voice';
+    kind: 'text' | 'image' | 'gift' | 'system' | 'voice' | 'sticker';
+    sticker?: import('./stickers').Sticker | null;
     replyToId: ID | null;
     reactions: Record<string, number>;
     createdAt: ISODate;
@@ -244,7 +246,7 @@ export interface NotificationItem {
     read: boolean;
     createdAt: ISODate;
 }
-export type StoreItemKind = 'frame' | 'flair' | 'theme' | 'banner' | 'gift' | 'crate' | 'boost' | 'streak_freeze';
+export type StoreItemKind = 'frame' | 'flair' | 'theme' | 'banner' | 'gift' | 'crate' | 'boost' | 'streak_freeze' | 'stickers' | 'emojis' | 'unlock';
 export type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
 export interface StoreItem {
     id: ID;
@@ -354,6 +356,7 @@ export interface Shout {
     id: ID;
     author: UserPublic;
     body: string;
+    sticker: import('./stickers').Sticker | null;
     mood: import('./profile').ShoutMood | null;
     mentions: string[];
     replyTo: { id: ID; author: UserPublic; body: string } | null;
@@ -367,6 +370,7 @@ export interface WallNote {
     profileId: ID;
     author: UserPublic;
     body: string;
+    sticker: import('./stickers').Sticker | null;
     mood: import('./profile').WallMood | null;
     createdAt: ISODate;
 }

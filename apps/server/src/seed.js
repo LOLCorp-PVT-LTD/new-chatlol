@@ -1,6 +1,6 @@
 import { db, newId, now, today, initDb } from './db.js';
 import { PERSONAS } from './ai/personas.js';
-import { PROFILE_ACCENTS, PROFILE_BACKGROUNDS } from '@chatlol/shared';
+import { PROFILE_ACCENTS, PROFILE_BACKGROUNDS, stickerStoreItems } from '@chatlol/shared';
 import { newUser, DEFAULT_SETTINGS, DEFAULT_PROFILE } from './lib/serialize.js';
 import { hashPassword } from './lib/auth.js';
 import { ensureDrop } from './lib/drops.js';
@@ -187,22 +187,8 @@ export async function seed(reset = false) {
       position: i,
     })),
   );
-  await upsertAll(
-    db.storeItems,
-    STORE.map(([key, kind, name, description, price, rarity, emoji, preview, limited], i) => ({
-      _id: itemIdFor(key),
-      key,
-      kind,
-      name,
-      description,
-      price,
-      rarity,
-      emoji,
-      preview,
-      limited: !!limited,
-      position: i,
-    })),
-  );
+  await ensureStoreCatalog();
+
 
   // AI personas as users — always flagged isAi (shown as an AI badge in every client).
   const personaIds = [];
@@ -504,8 +490,27 @@ export async function seed(reset = false) {
   );
 }
 
+/** Vault rows for the store: the cosmetics plus the sticker / custom emoji packs and unlocks. */
+const CATALOG = () => [...STORE, ...stickerStoreItems()];
+
+/**
+ * Keeps the Vault catalog current on every boot (new packs appear, prices and descriptions update) without
+ * touching anyone's inventory.
+ */
+export async function ensureStoreCatalog() {
+  await db.storeItems.bulkWrite(
+    CATALOG().map(([key, kind, name, description, price, rarity, emoji, preview, limited], i) => ({
+      updateOne: {
+        filter: { _id: itemIdFor(key) },
+        update: { $set: { key, kind, name, description, price, rarity, emoji, preview, limited: !!limited, position: i } },
+        upsert: true,
+      },
+    })),
+  );
+}
+
 export async function seedIfEmpty() {
-  if (process.env.SEED === '0') return;
+  if (process.env.SEED === '0') return ensureStoreCatalog();
   // Several API replicas may boot at once; one seeds, the others wait and then see the data.
   await db.exclusive('seed', async () => {
     if (await db.boards.findOne({})) return;
@@ -513,6 +518,7 @@ export async function seedIfEmpty() {
     await seed(false);
     console.log('🌱 Seed complete — demo login: demo@chatlol.app / sunset123');
   });
+  await ensureStoreCatalog();
 }
 
 if (process.argv[1]?.endsWith('seed.js') && process.argv.includes('--reset')) {

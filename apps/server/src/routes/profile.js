@@ -23,6 +23,7 @@ import { emitWallet, notify } from '../lib/rewards.js';
 import { assertClean, classify } from '../lib/moderation.js';
 import { assertCanPost } from '../lib/enforcement.js';
 import { screen } from '../lib/aiModeration.js';
+import { assertEmojiOwned, resolveSticker, stickerInput } from '../lib/stickers.js';
 
 export const profileRouter = Router();
 
@@ -393,6 +394,7 @@ const serializeNote = async (n, author) => ({
   profileId: n.profileId,
   author: await author(n.authorId),
   body: n.body,
+  sticker: n.sticker ?? null,
   mood: n.mood ?? null,
   createdAt: n.createdAt,
 });
@@ -413,14 +415,16 @@ profileRouter.post('/users/:id/wall', requireAuth, async (req, res) => {
   await rateLimit(`wall:${me}`, 6);
   const b = parse(
     z.object({
-      body: z.string().trim().min(1).max(280),
+      body: z.string().trim().max(280).default(''),
       mood: z
         .enum(WALL_MOODS.map((m) => m.key))
         .nullable()
         .optional(),
+      sticker: stickerInput,
     }),
     req.body,
   );
+  if (!b.body && !b.sticker) throw new HttpError(400, 'Write something or pick a sticker');
   const owner = await db.users.findOne({ _id: profileId, deletedAt: null });
   if (!owner) throw new HttpError(404, 'User not found');
   if (
@@ -440,9 +444,11 @@ profileRouter.post('/users/:id/wall', requireAuth, async (req, res) => {
   }
   await assertCanPost(me);
   assertClean(b.body);
-  const note = { _id: newId(), profileId, authorId: me, body: b.body, mood: b.mood ?? null, createdAt: now() };
+  await assertEmojiOwned(me, b.body);
+  const sticker = await resolveSticker(me, b.sticker);
+  const note = { _id: newId(), profileId, authorId: me, body: b.body, sticker, mood: b.mood ?? null, createdAt: now() };
   await db.wallNotes.insertOne(note);
-  screen({ userId: me, text: b.body, ref: { type: 'wall', id: note._id }, targetId: profileId });
+  if (b.body) screen({ userId: me, text: b.body, ref: { type: 'wall', id: note._id }, targetId: profileId });
   if (profileId !== me) {
     const a = await db.users.findOne({ _id: me }, { projection: { displayName: 1, handle: 1 } });
     await notify(profileId, {

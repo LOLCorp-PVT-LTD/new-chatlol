@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { timeAgo } from '@chatlol/shared';
 import { useSession } from '../stores/session';
@@ -12,6 +12,22 @@ const emit = defineEmits<{ (e: 'close'): void }>();
 const s = useSession();
 const router = useRouter();
 const icons: Record<string, string> = { rating: 'star', gift: 'redeem', invite: 'live_tv', consensus: 'verified', drop: 'wb_twilight', follow: 'person_add', comment: 'chat_bubble', dm: 'mail', arena: 'swords', level: 'military_tech', system: 'campaign', mention: 'alternate_email', profile_view: 'visibility', profile_rating: 'star', wall: 'sticky_note_2', birthday: 'cake' };
+// Drop down right under the bell, with a little pointer at it; it stays on screen at any window size.
+const WIDTH = 400;
+const pos = ref({ top: 72, left: 8, arrow: 24, width: WIDTH });
+function place() {
+  const bell = document.querySelector<HTMLElement>('[data-notifications-bell]')?.getBoundingClientRect();
+  const width = Math.min(WIDTH, window.innerWidth - 16);
+  if (!bell) return (pos.value = { top: 72, left: window.innerWidth - width - 8, arrow: width - 30, width });
+  const centre = bell.left + bell.width / 2;
+  const left = Math.min(Math.max(8, centre - width / 2), window.innerWidth - width - 8);
+  pos.value = { top: bell.bottom + 10, left, arrow: centre - left, width };
+}
+onMounted(() => {
+  place();
+  window.addEventListener('resize', place);
+});
+onBeforeUnmount(() => window.removeEventListener('resize', place));
 onMounted(async () => {
   await s.loadNotifications();
   if (s.unread) { await api.markNotificationsRead(); s.unread = 0; }
@@ -23,7 +39,8 @@ const askPermission = async () => { await Notification.requestPermission(); canA
 <template>
   <Teleport to="body">
     <div class="fixed inset-0 z-[70]" @click.self="emit('close')">
-      <div class="absolute right-2 sm:right-6 top-[calc(env(safe-area-inset-top)+72px)] w-[min(96vw,400px)] max-h-[75dvh] overflow-y-auto card shadow-float animate-pop">
+      <div class="absolute card shadow-float animate-pop notif-pop" :style="{ top: `${pos.top}px`, left: `${pos.left}px`, width: `${pos.width}px`, '--arrow': `${pos.arrow}px` }">
+      <div class="max-h-[min(75dvh,620px)] overflow-y-auto rounded-[inherit]">
         <div class="sticky top-0 bg-surface-container-lowest px-5 py-4 flex items-center justify-between border-b border-sandstone">
           <h2 class="text-headline-md">Notifications</h2>
           <button class="btn-icon -mr-2" aria-label="Close" @click="emit('close')"><Icon name="close" /></button>
@@ -41,6 +58,13 @@ const askPermission = async () => { await Notification.requestPermission(); canA
           <div class="min-w-0 flex-1"><p class="text-label-lg">{{ n.title }}</p><p v-if="n.anonymous" class="text-label-sm text-flame">👑 See who with Premium</p><p class="text-body-sm text-on-surface-variant line-clamp-2">{{ n.body }}</p><p class="text-[11px] text-outline mt-0.5">{{ timeAgo(n.createdAt) }} ago</p></div>
         </button>
       </div>
+      </div>
     </div>
   </Teleport>
 </template>
+
+<style scoped>
+/* The pointer at the bell. */
+.notif-pop { transform-origin: var(--arrow) top; }
+.notif-pop::before { content: ''; position: absolute; top: -7px; left: calc(var(--arrow) - 8px); width: 16px; height: 16px; transform: rotate(45deg); background: rgb(var(--c-surface-container-lowest)); border-radius: 3px; box-shadow: -2px -2px 4px rgb(0 0 0 / 0.05); }
+</style>

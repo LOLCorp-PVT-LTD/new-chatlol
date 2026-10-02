@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import EmojiButton from './EmojiButton.vue';
+import { insertAtCaret } from '../lib/insertAtCaret';
 import { ref, computed } from 'vue';
 import type { Post } from '@chatlol/shared';
 import { api, uploadImage } from '../lib/api';
@@ -12,6 +14,7 @@ const emit = defineEmits<{ (e: 'close'): void; (e: 'posted', p: Post): void }>()
 const s = useSession();
 const tab = ref<'photo' | 'text' | 'battle'>(props.mode === 'drop' ? 'photo' : 'photo');
 const body = ref('');
+const bodyBox = ref<HTMLTextAreaElement>();
 const file = ref<File | null>(null);
 const preview = ref<string | null>(null);
 const soundtrack = ref('');
@@ -71,8 +74,9 @@ async function submit() {
       </div>
       <div class="flex gap-3">
         <Avatar v-if="s.user" :user="s.user" :size="40" :show-online="false" />
-        <textarea v-model="body" rows="3" maxlength="1000" class="textarea flex-1"
+        <textarea ref="bodyBox" v-model="body" rows="3" maxlength="1000" class="textarea flex-1"
           :placeholder="tab === 'battle' ? 'Ask the crowd… (e.g. Setup A or Setup B?)' : mode === 'drop' ? 'Caption your drop…' : 'What’s the vibe? Add #tags'" />
+        <EmojiButton :up="false" class="self-start" @insert="(t) => (body = insertAtCaret(bodyBox, body, t))" />
       </div>
       <template v-if="tab === 'photo'">
         <button v-if="!preview" class="w-full aspect-[4/3] rounded-md border-2 border-dashed border-outline-variant flex flex-col items-center justify-center gap-2 hover:border-flame hover:bg-sunlit transition" @click="input?.click()">

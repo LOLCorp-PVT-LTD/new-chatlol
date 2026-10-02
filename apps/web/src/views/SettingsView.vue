@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { promptDialog } from '../lib/dialog';
 import { disableWebPush, enableWebPush, webPushState, type WebPushState } from '../lib/webPush';
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
@@ -104,7 +105,8 @@ const standing = computed(() => u.value.moderation);
 
 async function logout() { s.logout(); router.replace('/welcome'); }
 async function remove() {
-  if (!confirm('Delete your account permanently? Your posts, streak and Sparks will be gone.')) return;
+  const typed = await promptDialog({ title: 'Delete your account?', body: 'This is permanent: your posts, photos, streak, Sparks and Gems are gone for good. Type DELETE to confirm.', icon: 'delete_forever', danger: true, confirmText: 'Delete forever', placeholder: 'DELETE', required: true });
+  if (typed?.trim().toUpperCase() !== 'DELETE') return;
   await api.deleteAccount();
   s.logout();
   router.replace('/welcome');

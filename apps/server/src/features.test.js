@@ -490,3 +490,47 @@ test('every _id and every reference is a real ObjectId in MongoDB', async () => 
     assert.equal(bad, 0, `${name} has string _ids`);
   }
 });
+
+test('custom emoji and stickers: free starter packs, paid packs locked until bought with Sparks', async () => {
+  const u = await signUp('stick');
+  const c = as('stick');
+  await db.users.updateOne({ _id: u.id }, { $set: { sparks: 5000 } });
+  const cat = await c.stickers();
+  assert.ok(cat.owned.includes('emoji_basics') && cat.owned.includes('stickers_feels'), 'starter packs are free');
+  assert.ok(!cat.owned.includes('emoji_slang'));
+  // Free custom emoji and stickers work everywhere straight away.
+  const { shout } = await c.shout({ body: 'gg everyone :gg: :w:' });
+  assert.equal(shout.body, 'gg everyone :gg: :w:');
+  const { post } = await c.createPost({ body: 'sticker me', mediaUrl: 'https://picsum.photos/seed/st/600/800' });
+  const { comment } = await c.comment(post.id, '', { kind: 'noto', id: 'stickers_feels/fire' });
+  assert.equal(comment.sticker.kind, 'noto');
+  assert.match(comment.sticker.url, /^https:\/\/fonts\.gstatic\.com\/s\/e\/notoemoji\/latest\/1f525\/512\.webp$/);
+  // Paid ones are refused until unlocked.
+  await assertLocked(c.comment(post.id, 'so :rizz:'), 'emoji_locked');
+  await assertLocked(c.comment(post.id, '', { kind: 'noto', id: 'stickers_party/confetti' }), 'sticker_locked');
+  await assertLocked(c.postWall(u.id, { body: '', sticker: { kind: 'giphy', id: 'abc123', url: 'https://media1.giphy.com/media/abc123/200.webp' } }), 'giphy_locked');
+  // Sparks only — packs can't be bought with Gems.
+  await assert.rejects(c.buy('emoji_slang', 'gems'), (e) => e.status === 400);
+  const before = (await db.users.findOne({ _id: u.id })).sparks;
+  await c.buy('emoji_slang');
+  await c.buy('stickers_party');
+  const spent = before - (await db.users.findOne({ _id: u.id })).sparks;
+  assert.ok(spent > 550 && spent <= 650, `paid 250 + 400 Sparks (less any level-up bonus the purchases earned), paid ${spent}`);
+  const after = await c.stickers();
+  assert.ok(after.owned.includes('emoji_slang') && after.owned.includes('stickers_party'));
+  await c.comment(post.id, 'so :rizz:');
+  const { conversation } = await c.openConversation((await signUp('stickfriend')).id);
+  const { message } = await c.sendMessage(conversation.id, { body: '', sticker: { kind: 'noto', id: 'stickers_party/confetti' } });
+  assert.equal(message.kind, 'sticker');
+  assert.equal(message.sticker.label, 'Confetti');
+  // Made-up stickers and non-GIPHY urls are refused.
+  await assert.rejects(c.comment(post.id, '', { kind: 'noto', id: 'stickers_party/nope' }), (e) => e.status === 400);
+  // The Vault lists the packs.
+  const vault = await c.store();
+  assert.ok(vault.items.some((i) => i.id === 'stickers_spooky' && i.kind === 'stickers' && i.gemPrice === null));
+  assert.ok(vault.items.some((i) => i.id === 'giphy_stickers' && i.kind === 'unlock'));
+});
+
+async function assertLocked(p, code) {
+  await assert.rejects(p, (e) => e.status === 402 && e.code === code);
+}

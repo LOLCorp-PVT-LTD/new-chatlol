@@ -8,7 +8,9 @@ import { HttpError, parse, rateLimit } from '../lib/http.js';
 import { serializeStoreItem } from '../lib/serialize.js';
 import { grant, emitWallet, ticker } from '../lib/rewards.js';
 import { putImage } from '../lib/storage.js';
-import { rollRarity } from '@chatlol/shared';
+import { rollRarity, EMOJI_PACKS, GIPHY_UNLOCK, STICKER_PACKS } from '@chatlol/shared';
+import { config } from '../config.js';
+import { giphySearch, ownedPackKeys } from '../lib/stickers.js';
 
 export const storeRouter = Router();
 
@@ -105,6 +107,24 @@ storeRouter.post('/store/daily', requireAuth, async (req, res) => {
   const amount = 25 + Math.floor(Math.random() * 51);
   const reward = await grant(me, amount, 20, `Daily Sunset Chest: +${amount} Sparks`);
   res.json({ claimed: true, nextAt, reward });
+});
+
+// ——— Stickers & custom emoji ———
+storeRouter.get('/stickers', optionalAuth, async (req, res) => {
+  const owned = await ownedPackKeys(req.userId);
+  res.json({
+    owned: [...owned],
+    emojiPacks: EMOJI_PACKS,
+    stickerPacks: STICKER_PACKS,
+    giphy: { available: !!config.giphyApiKey, owned: owned.has(GIPHY_UNLOCK.key), key: GIPHY_UNLOCK.key, price: GIPHY_UNLOCK.price },
+  });
+});
+storeRouter.get('/stickers/giphy', requireAuth, async (req, res) => {
+  const me = uid(req);
+  await rateLimit(`giphy:${me}`, 60);
+  if (!(await ownedPackKeys(me)).has(GIPHY_UNLOCK.key)) throw new HttpError(402, 'Unlock GIPHY Sticker Search in the Sparks Vault', 'giphy_locked');
+  const q = String(req.query.q ?? '').trim().slice(0, 50);
+  res.json(await giphySearch(q, Math.max(0, Math.min(4999, Number(req.query.offset) || 0))));
 });
 
 // ——— Uploads (local disk or S3/R2) ———

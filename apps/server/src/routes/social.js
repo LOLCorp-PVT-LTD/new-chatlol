@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { REWARDS } from '@chatlol/shared';
 import { db, newId, now, isDuplicateKey, isObjectIdHex } from '../db.js';
+import { assertEmojiOwned, resolveSticker, stickerInput, stickerPreview } from '../lib/stickers.js';
 import { optionalAuth, requireAuth, uid } from '../lib/auth.js';
 import { HttpError, parse, rateLimit } from '../lib/http.js';
 import {
@@ -134,6 +135,7 @@ socialRouter.post('/forums', requireAuth, async (req, res) => {
   );
   await assertCanPost(me);
   assertClean(`${b.title} ${b.body}`);
+  await assertEmojiOwned(me, b.title, b.body);
   const row = await insertThread(me, b.board, b.title, b.body);
   screen({ userId: me, text: `${b.title}\n${b.body}`, ref: { type: 'thread', id: row._id } });
   const reward = await grant(me, REWARDS.post.sparks, REWARDS.post.xp, 'Started a forum thread 📣');
@@ -146,6 +148,7 @@ socialRouter.post('/forums/:id/replies', requireAuth, async (req, res) => {
   const { body } = parse(z.object({ body: z.string().trim().min(1).max(2000) }), req.body);
   await assertCanPost(me);
   assertClean(body);
+  await assertEmojiOwned(me, body);
   const row = await insertReply(String(req.params.id), me, body);
   screen({ userId: me, text: body, ref: { type: 'reply', id: row._id } });
   await grant(me, REWARDS.comment.sparks, REWARDS.comment.xp, 'Replied in the forums');
@@ -226,7 +229,7 @@ socialRouter.get('/lounges/:id', optionalAuth, async (req, res) => {
 
 export { recentMessages };
 
-export async function insertLoungeMessage(loungeId, authorId, body, replyToId = null) {
+export async function insertLoungeMessage(loungeId, authorId, body, replyToId = null, sticker = null) {
   const doc = {
     _id: newId(),
     roomType: 'lounge',
@@ -234,7 +237,8 @@ export async function insertLoungeMessage(loungeId, authorId, body, replyToId = 
     authorId,
     body,
     mediaUrl: null,
-    kind: 'text',
+    kind: sticker ? 'sticker' : 'text',
+    sticker,
     replyToId,
     createdAt: now(),
   };
@@ -343,9 +347,9 @@ socialRouter.get('/conversations/:id/messages', requireAuth, async (req, res) =>
   });
 });
 
-export async function insertDm(convId, authorId, body, kind = 'text', mediaUrl = null) {
+export async function insertDm(convId, authorId, body, kind = 'text', mediaUrl = null, sticker = null) {
   const t = now();
-  const doc = { _id: newId(), roomType: 'dm', roomId: convId, authorId, body, mediaUrl, kind, replyToId: null, createdAt: t };
+  const doc = { _id: newId(), roomType: 'dm', roomId: convId, authorId, body, mediaUrl, kind: sticker ? 'sticker' : kind, sticker, replyToId: null, createdAt: t };
   await db.messages.insertOne(doc);
   const c = await db.conversations.findOneAndUpdate(
     { _id: convId, 'members.userId': authorId },
@@ -361,7 +365,7 @@ export async function insertDm(convId, authorId, body, kind = 'text', mediaUrl =
       actorId: authorId,
       link: `/messages/${convId}`,
       title: msg.author.displayName,
-      body: kind === 'image' ? '📷 Photo' : body.slice(0, 140),
+      body: sticker && !body ? stickerPreview(sticker) : kind === 'image' ? '📷 Photo' : body.slice(0, 140),
     });
   }
   io()?.to(room.user(authorId)).emit('dm:message', msg);
@@ -379,12 +383,15 @@ socialRouter.post('/conversations/:id/messages', requireAuth, async (req, res) =
       body: z.string().max(2000).default(''),
       mediaUrl: z.string().url().max(600).nullable().optional(),
       kind: z.enum(['text', 'image', 'voice']).default('text'),
+      sticker: stickerInput,
     }),
     req.body,
   );
-  if (!b.body.trim() && !b.mediaUrl) throw new HttpError(400, 'Empty message');
+  if (!b.body.trim() && !b.mediaUrl && !b.sticker) throw new HttpError(400, 'Empty message');
   await assertCanPost(me);
   assertClean(b.body);
+  await assertEmojiOwned(me, b.body);
+  const sticker = await resolveSticker(me, b.sticker);
   const otherId = conv.members.find((m) => m.userId !== me)?.userId ?? null;
   if (
     otherId &&
@@ -396,7 +403,7 @@ socialRouter.post('/conversations/:id/messages', requireAuth, async (req, res) =
     }))
   )
     throw new HttpError(403, "You can't message this person");
-  const message = await insertDm(convId, me, b.body, b.mediaUrl ? (b.kind === 'text' ? 'image' : b.kind) : 'text', b.mediaUrl ?? null);
+  const message = await insertDm(convId, me, b.body, b.mediaUrl ? (b.kind === 'text' ? 'image' : b.kind) : 'text', b.mediaUrl ?? null, sticker);
   screen({ userId: me, text: b.body, ref: { type: 'message', id: message.id }, targetId: otherId });
   res.status(201).json({ message });
 });

@@ -1,4 +1,10 @@
 <script setup lang="ts">
+import { emojiOnly } from '../lib/richText';
+import type { StickerInput } from '@chatlol/shared';
+import EmojiButton from '../components/EmojiButton.vue';
+import RichText from '../components/RichText.vue';
+import StickerView from '../components/StickerView.vue';
+import { insertAtCaret } from '../lib/insertAtCaret';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { ChatMessage, Conversation } from '@chatlol/shared';
@@ -66,13 +72,15 @@ function onInput() {
   s.socket().emit('dm:typing', { conversationId: active.value.id, typing: true });
 }
 
-async function send() {
-  if (!active.value || !draft.value.trim() || sending.value) return;
+const box = ref<HTMLInputElement>();
+const addEmoji = (t: string) => (draft.value = insertAtCaret(box.value, draft.value, t));
+async function send(sticker: StickerInput | null = null) {
+  if (!active.value || (!draft.value.trim() && !sticker) || sending.value) return;
   sending.value = true;
-  const body = draft.value.trim();
-  draft.value = '';
+  const body = sticker ? '' : draft.value.trim();
+  if (!sticker) draft.value = '';
   try {
-    const r = await api.sendMessage(active.value.id, { body });
+    const r = await api.sendMessage(active.value.id, { body, sticker });
     if (!messages.value.some((x) => x.id === r.message.id)) messages.value.push(r.message);
     void scroll();
   } catch (e) { draft.value = body; s.toast({ kind: 'error', title: (e as Error).message }); } finally { sending.value = false; }
@@ -123,8 +131,10 @@ const seen = computed(() => !!readAt.value || (!!lastMine.value && messages.valu
           <div v-for="(m, i) in messages" :key="m.id" class="flex" :class="m.author.id === s.user?.id ? 'justify-end' : 'justify-start'">
             <div class="max-w-[75%]" :class="{ 'mt-3': i > 0 && messages[i - 1].author.id !== m.author.id }">
               <img v-if="m.mediaUrl" :src="m.mediaUrl" class="rounded-md max-h-72 mb-1" alt="Photo" />
-              <p v-if="m.body" class="px-4 py-2.5 rounded-[22px] text-body-md break-words"
-                :class="m.author.id === s.user?.id ? 'bg-sunset text-white rounded-br-md' : 'bg-surface-container-low rounded-bl-md'">{{ m.body }}</p>
+              <StickerView v-if="m.sticker" :sticker="m.sticker" :size="140" class="block" :class="{ 'ml-auto': m.author.id === s.user?.id }" />
+              <p v-if="m.body && emojiOnly(m.body)" :class="{ 'text-right': m.author.id === s.user?.id }"><RichText :text="m.body" /></p>
+              <p v-else-if="m.body" class="px-4 py-2.5 rounded-[22px] text-body-md break-words"
+                :class="m.author.id === s.user?.id ? 'bg-sunset text-white rounded-br-md' : 'bg-surface-container-low rounded-bl-md'"><RichText :text="m.body" /></p>
               <p v-if="m.id === lastMine?.id" class="text-[11px] text-on-surface-variant text-right mt-0.5">{{ seen ? 'Seen' : 'Sent' }}</p>
             </div>
           </div>
@@ -132,10 +142,11 @@ const seen = computed(() => !!readAt.value || (!!lastMine.value && messages.valu
             <span v-for="d in 3" :key="d" class="w-2 h-2 rounded-full bg-outline animate-bounce" :style="{ animationDelay: d * 120 + 'ms' }" />
           </div>
         </div>
-        <form class="p-3 flex gap-2 border-t border-sandstone" @submit.prevent="send">
+        <form class="p-3 flex gap-2 items-center border-t border-sandstone" @submit.prevent="send()">
           <button type="button" class="btn-icon bg-sunlit text-flame shrink-0" aria-label="Send photo" @click="fileInput?.click()"><Icon name="image" /></button>
           <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="sendPhoto" />
-          <input v-model="draft" class="input h-11 text-body-md" placeholder="Message…" maxlength="2000" @input="onInput" />
+          <EmojiButton stickers align="left" @insert="addEmoji" @sticker="send" />
+          <input ref="box" v-model="draft" class="input h-11 text-body-md" placeholder="Message…" maxlength="2000" @input="onInput" />
           <button class="btn-primary h-11 w-11 px-0 shrink-0" aria-label="Send" :disabled="!draft.trim()"><Icon name="send" /></button>
         </form>
       </template>

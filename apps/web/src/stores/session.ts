@@ -72,6 +72,7 @@ export const useSession = defineStore('session', () => {
       if (w.level > before && !levelUp.value) levelUp.value = { from: before, to: w.level };
     });
     socket.on('reward', (r) => { if (r.reason !== 'rate') toast({ kind: 'reward', title: r.reason, sparks: r.sparks, xp: r.xp }, 2600); });
+    socket.on('toast', (t) => toast(t));
     socket.on('notification', (n) => {
       notifications.value.unshift(n);
       if (n.kind !== 'dm') unread.value++;

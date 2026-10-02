@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { confirmDialog, reportDialog } from '../lib/dialog';
+import RichText from './RichText.vue';
+import StickerView from './StickerView.vue';
 import { computed } from 'vue';
 import type { Shout, ReactionKind } from '@chatlol/shared';
 import { REACTIONS, SHOUT_MOODS, timeAgo } from '@chatlol/shared';
@@ -15,7 +18,6 @@ const mood = computed(() => SHOUT_MOODS.find((m) => m.key === props.shout.mood))
 const mine = computed(() => s.user?.id === props.shout.author.id);
 const canDelete = computed(() => mine.value || s.user?.role === 'admin' || s.user?.role === 'mod');
 /** Splits text so @mentions and #tags render as links. */
-const parts = computed(() => props.shout.body.split(/([@#][\w.]{2,30})/g).filter(Boolean));
 
 async function react(kind: ReactionKind) {
   if (!s.user) return s.toast({ kind: 'info', title: 'Sign in to react' });
@@ -24,12 +26,12 @@ async function react(kind: ReactionKind) {
   } catch (e) { s.toast({ kind: 'error', title: (e as Error).message }); }
 }
 async function remove() {
-  if (!confirm('Delete this shout?')) return;
+  if (!(await confirmDialog({ title: 'Delete this shout?', body: 'It disappears from the Shoutbox for everyone.', icon: 'delete', danger: true, confirmText: 'Delete' }))) return;
   await api.deleteShout(props.shout.id);
   emit('removed', props.shout.id);
 }
 async function report() {
-  const reason = prompt('What’s wrong with this shout?');
+  const reason = await reportDialog('this shout');
   if (!reason) return;
   await api.report({ targetType: 'shout', targetId: props.shout.id, reason });
   s.toast({ kind: 'info', title: 'Thanks — SafeShield is reviewing it 🛡️' });
@@ -49,13 +51,8 @@ async function report() {
       <RouterLink v-if="shout.replyTo" :to="`/shouts?focus=${shout.replyTo.id}`" class="mt-1.5 block border-l-4 border-flame/40 bg-surface-container-low rounded-r-md px-3 py-1.5 text-body-sm text-on-surface-variant truncate">
         ↪ <b>@{{ shout.replyTo.author.handle }}</b> {{ shout.replyTo.body }}
       </RouterLink>
-      <p class="mt-1 break-words" :class="compact ? 'text-body-md' : 'text-body-lg'">
-        <template v-for="(p, i) in parts" :key="i">
-          <RouterLink v-if="p.startsWith('@')" :to="`/u/${p.slice(1).replace(/\.$/, '')}`" class="text-primary font-bold hover:underline">{{ p }}</RouterLink>
-          <span v-else-if="p.startsWith('#')" class="text-primary font-bold">{{ p }}</span>
-          <template v-else>{{ p }}</template>
-        </template>
-      </p>
+      <p v-if="shout.body" class="mt-1 break-words" :class="compact ? 'text-body-md' : 'text-body-lg'"><RichText :text="shout.body" tags /></p>
+      <StickerView v-if="shout.sticker" :sticker="shout.sticker" :size="compact ? 96 : 128" class="mt-1" />
       <div class="flex items-center gap-1 mt-2 flex-wrap">
         <button v-for="r in REACTIONS" :key="r.key" class="rounded-full px-2 h-8 text-body-sm flex items-center gap-1 transition active:scale-90"
           :class="shout.myReaction === r.key ? 'bg-sunset text-white' : 'bg-surface-container-low hover:bg-surface-container'"

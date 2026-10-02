@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { REWARDS, summarizeRatings, tierByScore, comboMultiplier, ROULETTE_BASE_SPARKS, ROULETTE_BASE_XP } from '@chatlol/shared';
 import { db, newId, now, isDuplicateKey } from '../db.js';
+import { assertEmojiOwned, resolveSticker, stickerInput, stickerPreview } from '../lib/stickers.js';
 import { optionalAuth, requireAuth, uid } from '../lib/auth.js';
 import { HttpError, parse, rateLimit } from '../lib/http.js';
 import { serializePost, serializePosts, serializeComment, authorCache, invalidateStats, userPublic } from '../lib/serialize.js';
@@ -184,6 +185,7 @@ postsRouter.post('/posts', requireAuth, async (req, res) => {
   await assertCanPost(me);
   const text = b.body + ' ' + (b.battle?.map((o) => o.label).join(' ') ?? '');
   assertClean(text);
+  await assertEmojiOwned(me, text);
   const row = await insertPost(me, b);
   screen({ userId: me, text, ref: { type: 'post', id: row._id } });
   const reward = await grant(me, REWARDS.post.sparks, REWARDS.post.xp, 'Posted a vibe ✨');
@@ -302,7 +304,7 @@ postsRouter.post('/posts/:id/battle', requireAuth, async (req, res) => {
   res.json({ post: await serializePost(await db.posts.findOne({ _id: postId }), me) });
 });
 
-export async function insertComment(postId, authorId, body) {
+export async function insertComment(postId, authorId, body, sticker = null) {
   const post = await db.posts.findOne({ _id: postId, hidden: false });
   if (!post) throw new HttpError(404, 'That post vanished');
   if (post.authorId !== authorId) {
@@ -319,7 +321,7 @@ export async function insertComment(postId, authorId, body) {
     )
       throw new HttpError(403, "You can't comment here");
   }
-  const comment = { _id: newId(), postId, authorId, body, createdAt: now() };
+  const comment = { _id: newId(), postId, authorId, body, sticker, createdAt: now() };
   await db.comments.insertOne(comment);
   await db.posts.updateOne({ _id: postId }, { $inc: { commentCount: 1 } });
   if (post.authorId !== authorId) {
@@ -329,7 +331,7 @@ export async function insertComment(postId, authorId, body) {
       actorId: authorId,
       link: `/p/${postId}`,
       title: post.kind === 'birthday' ? `${a.displayName} left you a birthday wish 🎂` : `${a.displayName} commented`,
-      body: body.slice(0, 120),
+      body: body ? body.slice(0, 120) : stickerPreview(sticker),
     });
   }
   bus.emitEvent('comment:created', { postId, commentId: comment._id, authorId });
@@ -339,11 +341,14 @@ export async function insertComment(postId, authorId, body) {
 postsRouter.post('/posts/:id/comments', requireAuth, async (req, res) => {
   const me = uid(req);
   await rateLimit(`comment:${me}`, 20);
-  const { body } = parse(z.object({ body: z.string().trim().min(1).max(500) }), req.body);
+  const { body, sticker: stickerIn } = parse(z.object({ body: z.string().trim().max(500).default(''), sticker: stickerInput }), req.body);
+  if (!body && !stickerIn) throw new HttpError(400, 'Write something or pick a sticker');
   await assertCanPost(me);
   assertClean(body);
-  const row = await insertComment(String(req.params.id), me, body);
-  screen({ userId: me, text: body, ref: { type: 'comment', id: row._id } });
+  await assertEmojiOwned(me, body);
+  const sticker = await resolveSticker(me, stickerIn);
+  const row = await insertComment(String(req.params.id), me, body, sticker);
+  if (body) screen({ userId: me, text: body, ref: { type: 'comment', id: row._id } });
   const reward = await grant(me, REWARDS.comment.sparks, REWARDS.comment.xp, 'Dropped a comment');
   res.status(201).json({ comment: await serializeComment(row), reward });
 });
