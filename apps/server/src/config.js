@@ -99,6 +99,10 @@ export const config = {
     region: env.S3_REGION ?? 'auto',
     endpoint: env.S3_ENDPOINT ?? '', // e.g. https://<account>.r2.cloudflarestorage.com
     publicUrl: (env.S3_PUBLIC_URL ?? '').replace(/\/$/, ''), // CDN / public bucket base URL
+    // Bucket API keys (R2: an API token with Object Read & Write). Empty = the AWS SDK's usual lookup
+    // (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY, or an instance role on AWS).
+    accessKeyId: env.S3_ACCESS_KEY_ID ?? '',
+    secretAccessKey: env.S3_SECRET_ACCESS_KEY ?? '',
   },
   /** WebRTC: your own TURN server (coturn). TURN_SECRET = coturn static-auth-secret (REST API credentials). */
   rtc: {
@@ -147,3 +151,7 @@ export const config = {
     from: env.MAIL_FROM ?? 'ChatLOL <hello@chatlol.app>',
   },
 };
+// Uploads to a bucket need a public address for the files, or every photo link would be broken.
+if (config.s3.bucket && !/^https?:\/\//.test(config.s3.publicUrl))
+  throw new Error('S3_BUCKET is set, so S3_PUBLIC_URL must be the public address of the bucket (e.g. https://media.chatlol.net)');
+

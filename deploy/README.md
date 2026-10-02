@@ -143,6 +143,35 @@ Open https://chatlol.net. Sign up with an address from `ADMIN_EMAILS` to get the
 - **Stripe**: webhook URL `https://chatlol.net/api/payments/stripe/webhook`, events `checkout.session.completed` and `charge.refunded`.
 - **RevenueCat**: webhook URL `https://chatlol.net/api/payments/revenuecat/webhook`, with the same authorization value as `REVENUECAT_WEBHOOK_AUTH`.
 
+## Uploads on Cloudflare R2
+
+Photos can live in a Cloudflare R2 bucket instead of on this server's disk: no disk to fill up, served from
+Cloudflare's network, and free egress.
+
+1. **Create the bucket.** Cloudflare dashboard → R2 → *Create bucket*, e.g. `chatlol-uploads`.
+2. **Give it a public address.** The bucket → *Settings* → *Custom Domains* → *Connect domain* → `media.chatlol.net`
+   (chatlol.net must be on Cloudflare DNS). Use this, not the `r2.dev` address, which Cloudflare rate-limits and
+   doesn't cache.
+3. **Create a key.** R2 → *Manage R2 API Tokens* → *Create API token* → permission *Object Read & Write*, limited to
+   that bucket. Copy the *Access Key ID*, *Secret Access Key*, and the S3 endpoint
+   (`https://<account id>.r2.cloudflarestorage.com`).
+4. **Tell ChatLOL.** In `/etc/chatlol/api.env`:
+
+   ```sh
+   S3_BUCKET=chatlol-uploads
+   S3_REGION=auto
+   S3_ENDPOINT=https://<account id>.r2.cloudflarestorage.com
+   S3_PUBLIC_URL=https://media.chatlol.net
+   S3_ACCESS_KEY_ID=<access key id>
+   S3_SECRET_ACCESS_KEY=<secret access key>
+   ```
+
+5. `pm2 restart chatlol-api`, upload a photo, and check its address starts with `https://media.chatlol.net/uploads/`.
+
+If `S3_BUCKET` is set without a proper `S3_PUBLIC_URL`, the API refuses to start and says why, rather than saving
+photos nobody can see. Photos uploaded before the switch keep their old `https://chatlol.net/uploads/…` addresses
+and keep loading from the server, so leave the `/uploads/` part of the nginx config in place.
+
 ## Updating
 
 ```sh

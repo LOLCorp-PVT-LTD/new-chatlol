@@ -23,7 +23,12 @@ let s3 = null;
 async function s3Client() {
   if (!s3) {
     const { S3Client } = await import('@aws-sdk/client-s3');
-    s3 = new S3Client({ region: config.s3.region, ...(config.s3.endpoint ? { endpoint: config.s3.endpoint, forcePathStyle: true } : {}) });
+    const { region, endpoint, accessKeyId, secretAccessKey } = config.s3;
+    s3 = new S3Client({
+      region,
+      ...(endpoint ? { endpoint, forcePathStyle: true } : {}),
+      ...(accessKeyId && secretAccessKey ? { credentials: { accessKeyId, secretAccessKey } } : {}),
+    });
   }
   return s3;
 }
