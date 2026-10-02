@@ -37,7 +37,7 @@ async function main() {
 
   const server = createServer(createApp());
   await attachRealtime(server);
-  server.listen(config.port, () => {
+  server.listen(config.port, config.host, () => {
     console.log(`🌅 ChatLOL API on http://localhost:${config.port} (db: ${db.kind}, shared state: ${sharedBackend()})`);
     console.log(
       `   AI personas: ${config.ai.enabled ? (config.nim.apiKey ? `on (NVIDIA NIM: ${config.nim.models.length} models)` : '⚠️  NO NVIDIA_API_KEY — personas will not reply to DMs and only post canned filler. Get a free key at https://build.nvidia.com and put it in apps/server/.env') : 'off'}`,

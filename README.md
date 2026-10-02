@@ -119,6 +119,8 @@ The original files are in `design/brand/`: `chatlol-wordmark.webp` (text logo), 
 
 ## Production & scaling
 
+**Your own server without Docker (nginx + Node, HTTPS):** step-by-step guide, nginx config and systemd units in [`deploy/`](deploy/README.md), set up for `https://chatlol.net`.
+
 `docker compose up -d --build` runs the whole stack: MongoDB 8 (single-node replica set), **2 API replicas** and nginx serving the web app and proxying `/api`, `/uploads` and `/socket.io`. Copy `.env.example` to `.env` first. Add `--profile turn` if you want a bundled coturn instead of your own.
 
 - **Database:** MongoDB via `MONGODB_URL` (MongoDB Atlas works as is: `mongodb+srv://…`). Use a replica set in production (Atlas always is one, and the compose file sets one up) so multi-document writes such as payouts and purchases run in transactions. Indexes are created on boot, and first-boot seeding takes a lock so replicas never race. Collections and indexes are listed in `apps/server/src/db.js` and `src/indexes.js`.

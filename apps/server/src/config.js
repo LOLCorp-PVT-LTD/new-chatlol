@@ -7,6 +7,8 @@ if (isProd && !env.JWT_SECRET) throw new Error('JWT_SECRET must be set in produc
 
 export const config = {
   port: Number(env.PORT ?? 4000),
+  // Interface to listen on. Behind nginx on the same machine, set HOST=127.0.0.1 so the API isn't reachable directly.
+  host: env.HOST || undefined,
   isProd,
   corsOrigins: (env.CORS_ORIGINS ?? 'http://localhost:5173,http://localhost:8081,app://chatlol').split(',').map((s) => s.trim()),
   jwtSecret: env.JWT_SECRET ?? randomBytes(32).toString('hex'),

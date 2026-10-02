@@ -1,0 +1,35 @@
+# One ChatLOL API process per port: chatlol-api@4000, chatlol-api@4001 (matching the nginx upstream).
+#   sudo cp deploy/systemd/chatlol-api@.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now chatlol-api@4000 chatlol-api@4001
+[Unit]
+Description=ChatLOL API (port %i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=chatlol
+Group=chatlol
+WorkingDirectory=/opt/chatlol/apps/server
+EnvironmentFile=/etc/chatlol/api.env
+Environment=PORT=%i
+Environment=HOST=127.0.0.1
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node src/index.js
+Restart=always
+RestartSec=3
+# Give open connections a moment to finish on restart.
+KillSignal=SIGTERM
+TimeoutStopSec=15
+
+# Hardening: the API only needs to write its uploads folder.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/chatlol
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
