@@ -4,12 +4,13 @@ import { io, room } from './io.js';
 import { sendPush } from './push.js';
 import { serializeNotification, DEFAULT_SETTINGS, userPublic, isPremium } from './serialize.js';
 import { presence } from './presence.js';
+import { itemIdFor } from './ids.js';
 
 export async function bumpCounter(userId, key, by = 1) {
   const day = today();
   const r = await db.dailyCounters.findOneAndUpdate(
-    { _id: `${userId}:${day}:${key}` },
-    { $inc: { n: by }, $setOnInsert: { userId, day, key, at: new Date() } },
+    { userId, day, key },
+    { $inc: { n: by }, $setOnInsert: { at: new Date() } },
     { upsert: true, returnDocument: 'after' },
   );
   return r.n;
@@ -68,7 +69,7 @@ export async function recordDropStreak(userId) {
   // Streak freeze: consumes one if you missed exactly one day.
   const dby = today(new Date(Date.now() - 2 * 86_400_000));
   if (u.lastDropDay === dby) {
-    const used = await db.inventory.updateOne({ userId, itemId: 'streak_freeze', qty: { $gt: 0 } }, { $inc: { qty: -1 } });
+    const used = await db.inventory.updateOne({ userId, itemId: itemIdFor('streak_freeze'), qty: { $gt: 0 } }, { $inc: { qty: -1 } });
     if (used.modifiedCount) streak = u.streakDays + 1;
   }
   const milestone = STREAK_MILESTONES.includes(streak) ? streak : null;
@@ -107,7 +108,7 @@ export async function notify(userId, n) {
   if (n.actorId && (await db.blocks.findOne({ blockerId: userId, blockedId: n.actorId }))) return;
   const actorIsAi = n.actorId ? !!(await db.users.findOne({ _id: n.actorId }, { projection: { isAi: 1 } }))?.isAi : false;
   const doc = {
-    _id: newId('ntf'),
+    _id: newId(),
     userId,
     kind: n.kind,
     title: n.title,
@@ -133,5 +134,5 @@ export async function ticker(text, actorId) {
   const actor = actorId ? await db.users.findOne({ _id: actorId }) : null;
   io()
     ?.to(room.global)
-    .emit('ticker', { id: newId('tk'), text, actor: actor ? await userPublic(actor) : null, at: now() });
+    .emit('ticker', { id: newId(), text, actor: actor ? await userPublic(actor) : null, at: now() });
 }

@@ -7,7 +7,7 @@ import { ensureDrop } from '../lib/drops.js';
 import { serializeStream } from './live.js';
 import { serializeLounge } from './social.js';
 import { serializeShout } from './shouts.js';
-import { birthdaysToday } from '../lib/birthdays.js';
+import { birthdayKey, birthdaysToday } from '../lib/birthdays.js';
 
 /** The home dashboard: one request with a slice of every section (each links to its full page in the clients). */
 export const homeRouter = Router();
@@ -102,6 +102,10 @@ homeRouter.get('/home', optionalAuth, async (req, res) => {
   const hot = (t) => (t.upvotes + t.replyCount * 2 + 1) / ((Date.now() - Date.parse(t.lastActivityAt)) / 3_600_000 + 2);
   const dropEntries = await db.posts.find({ dropId: drop._id, hidden: false }).sort({ r5: -1, createdAt: -1 }).limit(6).toArray();
   const loungeCards = await Promise.all(lounges.map((l) => serializeLounge(l, author)));
+  const year = new Date().getUTCFullYear();
+  const birthdayPosts = new Map(
+    (await db.posts.find({ systemKey: { $in: birthdays.map((u) => birthdayKey(u._id, year)) } }, { projection: { systemKey: 1 } }).toArray()).map((p) => [p.systemKey, p._id]),
+  );
 
   res.json({
     stats: { members, online: await presence.count() },
@@ -125,7 +129,7 @@ homeRouter.get('/home', optionalAuth, async (req, res) => {
     birthdays: await Promise.all(
       birthdays
         .filter((u) => !blocked.includes(u._id))
-        .map(async (u) => ({ user: await author(u._id), postId: `bday_${u._id}_${new Date().toISOString().slice(0, 4)}` })),
+        .map(async (u) => ({ user: await author(u._id), postId: birthdayPosts.get(birthdayKey(u._id, new Date().getUTCFullYear())) ?? null })),
     ),
   });
 });

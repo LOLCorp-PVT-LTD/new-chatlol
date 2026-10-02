@@ -87,7 +87,7 @@ arenaRouter.post('/arena', requireAuth, async (req, res) => {
   await rateLimit(`propose:${me}`, 2);
   const b = parse(z.object({ category: z.string().min(2).max(20), statement: z.string().min(10).max(160) }), req.body);
   assertClean(b.statement);
-  const take = newTake({ _id: newId('ht'), authorId: me, category: b.category.toUpperCase(), statement: b.statement, hours: 12 });
+  const take = newTake({ _id: newId(), authorId: me, category: b.category.toUpperCase(), statement: b.statement, hours: 12 });
   await db.hotTakes.insertOne(take);
   res.status(201).json({ take: await serializeTake(take, me) });
 });

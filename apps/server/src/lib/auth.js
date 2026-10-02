@@ -2,7 +2,7 @@ import { createHmac, randomBytes, scrypt as _scrypt, timingSafeEqual } from 'nod
 import { promisify } from 'node:util';
 
 import { config } from '../config.js';
-import { db, now } from '../db.js';
+import { db, now, isObjectIdHex } from '../db.js';
 import { HttpError } from './http.js';
 import { assertNotBanned, standing } from './enforcement.js';
 
@@ -58,7 +58,9 @@ export const passwordVersion = (hash) => (hash ? createHmac('sha256', config.jwt
 async function tokenUser(token) {
   const t = verifyToken(token);
   if (!t) return null;
-  const u = await db.users.findOne({ _id: t.sub, deletedAt: null }, { projection: { passwordHash: 1, isAi: 1, moderation: 1, role: 1 } });
+  // Tokens issued before the ObjectId migration carry the old string id; the migration kept it as legacyId.
+  const who = isObjectIdHex(t.sub) ? { _id: t.sub } : { legacyId: t.sub };
+  const u = await db.users.findOne({ ...who, deletedAt: null }, { projection: { passwordHash: 1, isAi: 1, moderation: 1, role: 1 } });
   if (!u || u.isAi) return null;
   if (t.pv && t.pv !== passwordVersion(u.passwordHash)) return null;
   return u;

@@ -22,13 +22,13 @@ export function dayIndex(day) {
 }
 
 export async function ensureDrop(day = today()) {
-  let d = await db.drops.findOne({ _id: day });
+  let d = await db.drops.findOne({ day });
   if (!d) {
     const [prompt, emoji] = DROP_PROMPTS[dayIndex(day) % DROP_PROMPTS.length];
     const startsAt = `${day}T00:00:00.000Z`;
     const endsAt = new Date(Date.parse(startsAt) + 86_400_000 - 1).toISOString();
-    await db.drops.insertIfMissing({ _id: day }, { prompt, emoji, startsAt, endsAt });
-    d = await db.drops.findOne({ _id: day });
+    await db.drops.insertIfMissing({ day }, { prompt, emoji, startsAt, endsAt });
+    d = await db.drops.findOne({ day });
   }
   return d;
 }

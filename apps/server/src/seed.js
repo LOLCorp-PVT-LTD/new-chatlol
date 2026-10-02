@@ -4,6 +4,7 @@ import { PROFILE_ACCENTS, PROFILE_BACKGROUNDS } from '@chatlol/shared';
 import { newUser, DEFAULT_SETTINGS, DEFAULT_PROFILE } from './lib/serialize.js';
 import { hashPassword } from './lib/auth.js';
 import { ensureDrop } from './lib/drops.js';
+import { DEMO_USER_ID, boardIdFor, itemIdFor, loungeIdFor, personaUserId } from './lib/ids.js';
 
 const ago = (h) => new Date(Date.now() - h * 3_600_000).toISOString();
 const ahead = (h) => new Date(Date.now() + h * 3_600_000).toISOString();
@@ -171,12 +172,13 @@ export async function seed(reset = false) {
 
   await upsertAll(
     db.boards,
-    BOARDS.map(([id, name, emoji], i) => ({ _id: id, name, emoji, position: i })),
+    BOARDS.map(([slug, name, emoji], i) => ({ _id: boardIdFor(slug), slug, name, emoji, position: i })),
   );
   await upsertAll(
     db.lounges,
-    LOUNGES.map(([id, name, emoji, topic, nowPlaying, coverUrl], i) => ({
-      _id: id,
+    LOUNGES.map(([slug, name, emoji, topic, nowPlaying, coverUrl], i) => ({
+      _id: loungeIdFor(slug),
+      slug,
       name,
       emoji,
       topic,
@@ -187,8 +189,9 @@ export async function seed(reset = false) {
   );
   await upsertAll(
     db.storeItems,
-    STORE.map(([id, kind, name, description, price, rarity, emoji, preview, limited], i) => ({
-      _id: id,
+    STORE.map(([key, kind, name, description, price, rarity, emoji, preview, limited], i) => ({
+      _id: itemIdFor(key),
+      key,
       kind,
       name,
       description,
@@ -207,7 +210,7 @@ export async function seed(reset = false) {
   // from people they follow, a couple don't take DMs at all (admins can change this in the admin panel).
   const PERSONA_GENDER = { sora: 'female', rio: 'male' };
   const personas = PERSONAS.map((p, i) => {
-    const id = `ai_${p.id}`;
+    const id = personaUserId(p.id);
     personaIds.push(id);
     return newUser({
       _id: id,
@@ -243,7 +246,7 @@ export async function seed(reset = false) {
   // Demo human account so you can log straight in.
   await upsertAll(db.users, [
     newUser({
-      _id: 'u_demo',
+      _id: DEMO_USER_ID,
       email: 'demo@chatlol.app',
       passwordHash: await hashPassword('sunset123'),
       handle: 'jordan_vibe',
@@ -271,7 +274,7 @@ export async function seed(reset = false) {
       createdAt: ago(24 * 90),
     }),
   ]);
-  const everyone = [...personaIds, 'u_demo'];
+  const everyone = [...personaIds, DEMO_USER_ID];
   const follows = [];
   for (const a of everyone)
     for (const b of everyone) if (a !== b && Math.random() < 0.45) follows.push({ followerId: a, followeeId: b, createdAt: t });
@@ -291,7 +294,7 @@ export async function seed(reset = false) {
     const body = pick(SEED_CAPTIONS);
     const post = {
       ...emptyPost,
-      _id: newId('p'),
+      _id: newId(),
       authorId: pick(personaIds),
       kind: isDrop ? 'drop' : 'photo',
       body,
@@ -318,14 +321,14 @@ export async function seed(reset = false) {
   ]) {
     posts.push({
       ...emptyPost,
-      _id: newId('p'),
+      _id: newId(),
       authorId: pick(personaIds),
       kind: 'battle',
       body: q,
       tags: ['setupwars'],
       battle: [
-        { id: newId('bo'), label: a, mediaUrl: null, votes: 400 + Math.floor(Math.random() * 600) },
-        { id: newId('bo'), label: b, mediaUrl: null, votes: 200 + Math.floor(Math.random() * 400) },
+        { id: newId(), label: a, mediaUrl: null, votes: 400 + Math.floor(Math.random() * 600) },
+        { id: newId(), label: b, mediaUrl: null, votes: 200 + Math.floor(Math.random() * 400) },
       ],
       r1: 0,
       r2: 0,
@@ -348,7 +351,7 @@ export async function seed(reset = false) {
   for (const post of posts.slice(0, 30)) {
     const n = 1 + Math.floor(Math.random() * 3);
     for (let k = 0; k < n; k++)
-      comments.push({ _id: newId('c'), postId: post._id, authorId: pick(everyone), body: pick(COMMENTS), createdAt: t });
+      comments.push({ _id: newId(), postId: post._id, authorId: pick(everyone), body: pick(COMMENTS), createdAt: t });
     post.commentCount = n;
   }
   await db.posts.insertMany(posts);
@@ -358,7 +361,7 @@ export async function seed(reset = false) {
   // Hot takes
   await db.hotTakes.insertMany(
     TAKES.map(([category, statement, a, d]) => ({
-      _id: newId('ht'),
+      _id: newId(),
       authorId: pick(personaIds),
       category,
       statement,
@@ -389,8 +392,9 @@ export async function seed(reset = false) {
   ];
   const threads = [];
   const replies = [];
-  for (const [i, [boardId, title, body]] of THREADS.entries()) {
-    const id = newId('t');
+  for (const [i, [boardSlug, title, body]] of THREADS.entries()) {
+    const boardId = boardIdFor(boardSlug);
+    const id = newId();
     threads.push({
       _id: id,
       boardId,
@@ -405,7 +409,7 @@ export async function seed(reset = false) {
     });
     for (let k = 0; k < 3; k++)
       replies.push({
-        _id: newId('r'),
+        _id: newId(),
         threadId: id,
         authorId: pick(personaIds),
         body: pick(['this is so real', 'hard agree', 'respectfully... no 😂', 'adding this to my list', 'ok this thread is gold']),
@@ -426,7 +430,7 @@ export async function seed(reset = false) {
     'ok what are we rating today',
   ];
   const message = (roomType, roomId, authorId, body, createdAt) => ({
-    _id: newId('m'),
+    _id: newId(),
     roomType,
     roomId,
     authorId,
@@ -438,24 +442,25 @@ export async function seed(reset = false) {
   });
   const messages = [];
   for (const [lid] of LOUNGES)
-    for (let k = 0; k < 6; k++) messages.push(message('lounge', lid, pick(personaIds), pick(LINES), ago((6 - k) * 0.2)));
+    for (let k = 0; k < 6; k++) messages.push(message('lounge', loungeIdFor(lid), pick(personaIds), pick(LINES), ago((6 - k) * 0.2)));
 
   // Welcome DM from a persona to the demo account
-  const pairKey = ['ai_mia', 'u_demo'].sort().join('|');
-  const conv = newId('dm');
+  const mia = personaUserId('mia');
+  const pairKey = [mia, DEMO_USER_ID].sort().join('|');
+  const conv = newId();
   const dm = await db.conversations.insertIfMissing(
     { pairKey },
     {
       _id: conv,
       members: [
-        { userId: 'u_demo', lastReadAt: ago(1) },
-        { userId: 'ai_mia', lastReadAt: t },
+        { userId: DEMO_USER_ID, lastReadAt: ago(1) },
+        { userId: mia, lastReadAt: t },
       ],
       updatedAt: t,
     },
   );
   if (dm)
-    messages.push(message('dm', conv, 'ai_mia', 'your golden hour drop yesterday was so good 🧡 what film stock was that?', ago(0.5)));
+    messages.push(message('dm', conv, mia, 'your golden hour drop yesterday was so good 🧡 what film stock was that?', ago(0.5)));
   await db.messages.insertMany(messages);
 
   // Shoutbox
@@ -471,7 +476,7 @@ export async function seed(reset = false) {
   ];
   await db.shouts.insertMany(
     SHOUTS.map(([mood, body], i) => ({
-      _id: newId('sh'),
+      _id: newId(),
       authorId: pick(personaIds),
       body,
       mood,
@@ -493,8 +498,8 @@ export async function seed(reset = false) {
 
   // Starter inventory for demo
   await db.inventory.bulkWrite(
-    ['frame_sunset', 'flair_fire', 'streak_freeze'].map((itemId) => ({
-      updateOne: { filter: { userId: 'u_demo', itemId }, update: { $setOnInsert: { qty: 1, acquiredAt: t } }, upsert: true },
+    ['frame_sunset', 'flair_fire', 'streak_freeze'].map((key) => ({
+      updateOne: { filter: { userId: DEMO_USER_ID, itemId: itemIdFor(key) }, update: { $setOnInsert: { qty: 1, acquiredAt: t } }, upsert: true },
     })),
   );
 }

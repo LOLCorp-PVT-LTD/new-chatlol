@@ -300,17 +300,18 @@ profileRouter.get('/users/:id/showcase', optionalAuth, async (req, res) => {
         .sort({ createdAt: -1 })
         .limit(limit)
         .toArray()
-        .then(
-          (rows) =>
-            (out.threads = rows.map((t) => ({
+        .then(async (rows) => {
+          const boards = new Map((await db.boards.find({ _id: { $in: rows.map((t) => t.boardId) } }).toArray()).map((b) => [b._id, b]));
+          out.threads = rows.map((t) => ({
               id: t._id,
               boardId: t.boardId,
+              boardName: boards.get(t.boardId)?.name ?? '',
               title: t.title,
               replyCount: t.replyCount ?? 0,
               upvotes: t.upvotes ?? 0,
               createdAt: t.createdAt,
-            }))),
-        ),
+            }));
+        }),
   ]);
   res.json(out);
 });
@@ -439,7 +440,7 @@ profileRouter.post('/users/:id/wall', requireAuth, async (req, res) => {
   }
   await assertCanPost(me);
   assertClean(b.body);
-  const note = { _id: newId('wall'), profileId, authorId: me, body: b.body, mood: b.mood ?? null, createdAt: now() };
+  const note = { _id: newId(), profileId, authorId: me, body: b.body, mood: b.mood ?? null, createdAt: now() };
   await db.wallNotes.insertOne(note);
   screen({ userId: me, text: b.body, ref: { type: 'wall', id: note._id }, targetId: profileId });
   if (profileId !== me) {

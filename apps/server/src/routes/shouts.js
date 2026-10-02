@@ -90,7 +90,7 @@ export async function insertShout(authorId, { body, mood = null, replyToId = nul
   if (replyToId && !replyTo) throw new HttpError(404, 'That shout is gone');
   const mentioned = await resolveMentions(body, authorId);
   const shout = {
-    _id: newId('sh'),
+    _id: newId(),
     authorId,
     body,
     mood,

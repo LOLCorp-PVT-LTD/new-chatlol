@@ -145,7 +145,7 @@ adminRouter.get('/admin/users/:id', async (req, res) => {
         reason: e.reason,
         category: e.category,
         until: e.until,
-        by: await byName(e.by),
+        by: await byName(e.byUserId ?? e.by),
         severe: !!e.severe,
         cleared: !!e.cleared,
         ref: e.ref,
@@ -320,6 +320,7 @@ adminRouter.post('/admin/content/remove', async (req, res) => {
 adminRouter.get('/admin/modlog', async (_req, res) => {
   const rows = await db.modEvents.find({}).sort({ createdAt: -1 }).limit(100).toArray();
   const author = authorCache();
+  const byName = async (id) => (id === 'ai' ? 'SafeShield AI' : `@${(await author(id)).handle}`);
   res.json({
     items: await Promise.all(
       rows.map(async (e) => ({
@@ -328,7 +329,7 @@ adminRouter.get('/admin/modlog', async (_req, res) => {
         kind: e.kind,
         reason: e.reason,
         until: e.until,
-        by: e.by === 'ai' ? 'SafeShield AI' : `@${(await author(e.by)).handle}`,
+        by: await byName(e.byUserId ?? e.by),
         createdAt: e.createdAt,
       })),
     ),

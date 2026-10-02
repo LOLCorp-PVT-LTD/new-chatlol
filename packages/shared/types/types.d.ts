@@ -422,5 +422,5 @@ export interface Showcase {
     shouts?: Shout[];
     photos?: Post[];
     topPhotos?: Post[];
-    threads?: { id: ID; boardId: string; title: string; replyCount: number; upvotes: number; createdAt: ISODate }[];
+    threads?: { id: ID; boardId: string; boardName: string; title: string; replyCount: number; upvotes: number; createdAt: ISODate }[];
 }

@@ -132,7 +132,7 @@ usersRouter.post('/reports', requireAuth, async (req, res) => {
   );
   await rateLimit(`report:${uid(req)}`, 20);
   const report = {
-    _id: newId('rep'),
+    _id: newId(),
     reporterId: uid(req),
     targetType: b.targetType,
     targetId: b.targetId,

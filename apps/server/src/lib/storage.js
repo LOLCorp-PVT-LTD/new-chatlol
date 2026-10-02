@@ -34,7 +34,7 @@ const localUrl = (key) => `${config.publicUrl}/uploads/${key}`;
 export async function putImage(buf, prefix = 'u') {
   const type = sniffImage(buf);
   if (!type) throw new HttpError(415, 'Only real images (jpg, png, webp, gif, heic) can be uploaded');
-  const key = `${newId(prefix)}.${type.ext}`;
+  const key = `${prefix}_${newId()}.${type.ext}`;
   if (config.s3.bucket) {
     const { PutObjectCommand } = await import('@aws-sdk/client-s3');
     await (

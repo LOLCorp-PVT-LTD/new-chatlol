@@ -180,7 +180,7 @@ export function withLayout(pub, u) {
 }
 
 export async function userPrivate(u) {
-  const done = (await db.dailyCounters.findOne({ _id: `${u._id}:${today()}:rate` }))?.n ?? 0;
+  const done = (await db.dailyCounters.findOne({ userId: u._id, day: today(), key: 'rate' }))?.n ?? 0;
   return {
     ...withLayout(await userPublic(u), u),
     online: true,
@@ -375,7 +375,8 @@ export async function serializeNotification(n, author = authorCache(), viewerPre
 
 export function serializeStoreItem(i, owned, equipped) {
   return {
-    id: i._id,
+    // Store items are addressed by their key (frame_sunset…), which is also what cosmetics store.
+    id: i.key,
     kind: i.kind,
     name: i.name,
     description: i.description,

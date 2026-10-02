@@ -35,9 +35,9 @@ export async function creditPurchase(p) {
   let premiumUntil = null;
   const credited = await db.tx(async () => {
     if (!(await db.users.findOne({ _id: p.userId }, { projection: { _id: 1 } }))) return false;
-    // The provider's transaction id is the purchase _id, so a retried webhook can't credit twice.
+    // The provider's transaction id is unique (providerTxId), so a retried webhook can't credit twice.
     const fresh = await db.purchases.insertIfMissing(
-      { _id: p.id },
+      { providerTxId: p.id },
       {
         userId: p.userId,
         provider: p.provider,
@@ -73,7 +73,7 @@ export async function creditPurchase(p) {
 export async function refundPurchase(id) {
   const done = await db.tx(async () => {
     // Flipping the status is the claim: only one refund event can win it.
-    const p = await db.purchases.findOneAndUpdate({ _id: id, status: 'completed' }, { $set: { status: 'refunded' } });
+    const p = await db.purchases.findOneAndUpdate({ providerTxId: id, status: 'completed' }, { $set: { status: 'refunded' } });
     if (!p) return null;
     if (p.gems) await db.users.updateOne({ _id: p.userId }, [{ $set: { gems: { $max: [0, { $subtract: ['$gems', p.gems] }] } } }]);
     if (p.premiumDays) {

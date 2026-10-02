@@ -112,7 +112,7 @@ const own = (yours: string, theirs: string) => (ctx.isMe.value ? yours : theirs)
   <!-- Forum threads -->
   <div v-else-if="section.type === 'threads'" class="space-y-1.5">
     <RouterLink v-for="t in (sc.threads ?? []).slice(0, limit)" :key="t.id" :to="`/forums/${t.id}`" class="block tile rounded-md px-3 py-2 hover:scale-[1.01] transition">
-      <p class="text-label-lg truncate">{{ t.title }}</p><p class="text-body-sm muted">{{ t.boardId }} · {{ t.replyCount }} replies · {{ timeAgo(t.createdAt) }}</p>
+      <p class="text-label-lg truncate">{{ t.title }}</p><p class="text-body-sm muted">{{ t.boardName }} · {{ t.replyCount }} replies · {{ timeAgo(t.createdAt) }}</p>
     </RouterLink>
     <p v-if="!(sc.threads ?? []).length" class="text-body-md muted py-4 text-center">No threads yet 🧵</p>
   </div>

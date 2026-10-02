@@ -7,6 +7,7 @@ import { HttpError, parse, rateLimit } from '../lib/http.js';
 import { userPrivate, invalidateStats, newUser } from '../lib/serialize.js';
 import { grant, notify } from '../lib/rewards.js';
 import { assertClean } from '../lib/moderation.js';
+import { itemIdFor } from '../lib/ids.js';
 import { consumeToken, sendPasswordReset, sendVerification, sendEmailChangedNotice } from '../lib/emailTokens.js';
 import { config } from '../config.js';
 import { assertNotBanned } from '../lib/enforcement.js';
@@ -36,7 +37,7 @@ authRouter.post('/auth/register', async (req, res) => {
   const email = b.email.toLowerCase();
   if (await db.users.findOne({ email })) throw new HttpError(409, 'That email already has an account', 'email_taken');
   if (await db.users.findOne({ handleLower: b.handle.toLowerCase() })) throw new HttpError(409, 'That handle is taken', 'handle_taken');
-  const id = newId('u');
+  const id = newId();
   const t = now();
   const user = newUser({
     _id: id,
@@ -242,9 +243,9 @@ authRouter.post('/me/equip', requireAuth, async (req, res) => {
   );
   for (const [slot, v] of Object.entries(b)) {
     if (!v) continue;
-    const owned = await db.inventory.findOne({ userId: id, itemId: v, qty: { $gt: 0 } });
+    const owned = await db.inventory.findOne({ userId: id, itemId: itemIdFor(v), qty: { $gt: 0 } });
     if (!owned) throw new HttpError(403, "You don't own that yet — grab it in the Sparks Vault");
-    if ((await db.storeItems.findOne({ _id: v }))?.kind !== slot) throw new HttpError(400, `That isn't a ${slot}`);
+    if ((await db.storeItems.findOne({ key: v }))?.kind !== slot) throw new HttpError(400, `That isn't a ${slot}`);
   }
   const set = Object.fromEntries(Object.entries(b).map(([slot, v]) => [`cosmetics.${slot}`, v ?? null]));
   if (Object.keys(set).length) await db.users.updateOne({ _id: id }, { $set: set });
@@ -253,7 +254,7 @@ authRouter.post('/me/equip', requireAuth, async (req, res) => {
 
 authRouter.post('/me/push-token', requireAuth, async (req, res) => {
   const b = parse(z.object({ token: z.string().min(10).max(300), platform: z.enum(['ios', 'android', 'web', 'desktop']) }), req.body);
-  await db.pushTokens.updateOne({ _id: b.token }, { $set: { userId: uid(req), platform: b.platform, createdAt: now() } }, { upsert: true });
+  await db.pushTokens.updateOne({ token: b.token }, { $set: { userId: uid(req), platform: b.platform, createdAt: now() } }, { upsert: true });
   res.json({ ok: true });
 });
 

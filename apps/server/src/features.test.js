@@ -43,12 +43,14 @@ process.env.ADMIN_EMAILS = 'boss@example.com';
 process.env.RATE_LIMIT_SCALE = '50';
 
 const { createApp } = await import('./app.js');
-const { initDb, db } = await import('./db.js');
+const { initDb, db, COLLECTIONS } = await import('./db.js');
 const { initShared, closeShared } = await import('./lib/shared.js');
 const { seed } = await import('./seed.js');
 const { attachRealtime } = await import('./realtime.js');
 const { startPersonaEngine } = await import('./ai/engine.js');
 const { createApi } = await import('@chatlol/shared');
+const { personaUserId } = await import('./lib/ids.js');
+const MIA = personaUserId('mia');
 
 let server;
 let ioServer;
@@ -273,7 +275,7 @@ test('admin panel: admins only; mute, unmute, ban and persona DM controls', asyn
     items.some((p) => p.dmFrom !== 'everyone'),
     'some personas don’t take DMs from everyone',
   );
-  await as('boss').admin.updatePersona('ai_mia', { dmFrom: 'everyone' });
+  await as('boss').admin.updatePersona(MIA, { dmFrom: 'everyone' });
 });
 
 test('home dashboard has every section', async () => {
@@ -285,11 +287,11 @@ test('home dashboard has every section', async () => {
 
 test('personas text back like people: wait for the burst, answer what was said, multiple bubbles', async () => {
   const me = await signUp('texter');
-  const { conversation } = await as('texter').openConversation('ai_mia');
+  const { conversation } = await as('texter').openConversation(MIA);
   await as('texter').sendMessage(conversation.id, { body: 'heyy' });
   await as('texter').sendMessage(conversation.id, { body: 'i went to the beach today' });
   const msgs = await until(async () => {
-    const m = (await as('texter').messages(conversation.id)).messages.filter((x) => x.author.id === 'ai_mia' && x.createdAt > me.createdAt);
+    const m = (await as('texter').messages(conversation.id)).messages.filter((x) => x.author.id === MIA && x.createdAt > me.createdAt);
     return m.length >= 2 ? m : null;
   }, 15000);
   assert.deepEqual(
@@ -318,13 +320,13 @@ test('birthdays: one system post per year, a gift, follower alerts, wishes not r
   const fan = await signUp('bdayfan');
   await as('bdayfan').follow(r.user.id);
   const sparksBefore = (await db.users.findOne({ _id: r.user.id })).sparks;
-  await db.users.updateOne({ _id: 'ai_mia' }, { $set: { 'settings.celebrateBirthday': false } }); // opt-outs are skipped
+  await db.users.updateOne({ _id: MIA }, { $set: { 'settings.celebrateBirthday': false } }); // opt-outs are skipped
   await runBirthdays(day);
   await runBirthdays(day); // a second run the same day does nothing
-  const postId = `bday_${r.user.id}_${day.slice(0, 4)}`;
   const posts = await db.posts.find({ kind: 'birthday', authorId: r.user.id }).toArray();
   assert.equal(posts.length, 1);
-  assert.equal(posts[0]._id, postId);
+  const postId = posts[0]._id;
+  assert.equal(posts[0].systemKey, `birthday:${r.user.id}:${day.slice(0, 4)}`);
   assert.equal((await db.users.findOne({ _id: r.user.id })).sparks, sparksBefore + 100);
   assert.ok((await as('bdayfan').notifications()).items.some((n) => n.kind === 'birthday' && n.link === `/p/${postId}`));
   const { post } = await as('bdayfan').post(postId);
@@ -333,7 +335,7 @@ test('birthdays: one system post per year, a gift, follower alerts, wishes not r
   await as('bdayfan').comment(postId, 'happy birthday!!');
   assert.ok((await as('bday').notifications()).items.some((n) => /birthday wish/.test(n.title)));
   const home = await as('bdayfan').home();
-  assert.ok(home.birthdays.some((b) => b.user.id === r.user.id));
+  assert.equal(home.birthdays.find((b) => b.user.id === r.user.id)?.postId, postId);
   assert.ok(fan.id);
 });
 
@@ -450,5 +452,41 @@ test('song search works without Spotify keys (Apple Music previews) and only App
     await assert.rejects(c.updateProfile({ song: { ...t, previewUrl: 'https://evil.example/x.mp3' } }), (e) => e.status === 400);
   } finally {
     globalThis.fetch = realFetch;
+  }
+});
+
+test('every _id and every reference is a real ObjectId in MongoDB', async () => {
+  const { ObjectId } = await import('mongodb');
+  const a = await signUp('oid');
+  const b = await signUp('oidb');
+  await as('oid').follow(b.id);
+  const { post } = await as('oid').createPost({ body: 'object ids!', mediaUrl: 'https://picsum.photos/seed/oid/600/800' });
+  await as('oidb').comment(post.id, 'nice');
+  await as('oid').shout({ body: `hey @${b.handle}` });
+  const { conversation } = await as('oid').openConversation(b.id);
+  await as('oid').sendMessage(conversation.id, { body: 'hi' });
+  await as('oid').claimDaily();
+  assert.match(a.id, /^[0-9a-f]{24}$/, 'the API sends ids as hex strings');
+  const raw = (name) => db[name].raw;
+  const isOid = (v) => v instanceof ObjectId;
+  assert.ok(isOid((await raw('users').findOne({ handleLower: a.handle.toLowerCase() }))._id));
+  const p = await raw('posts').findOne({ _id: new ObjectId(post.id) });
+  assert.ok(isOid(p._id) && isOid(p.authorId));
+  const c = await raw('comments').findOne({ postId: new ObjectId(post.id) });
+  assert.ok(isOid(c._id) && isOid(c.postId) && isOid(c.authorId));
+  const f = await raw('follows').findOne({ followerId: new ObjectId(a.id) });
+  assert.ok(isOid(f.followeeId));
+  const sh = await raw('shouts').findOne({ authorId: new ObjectId(a.id) });
+  assert.ok(isOid(sh._id) && sh.mentions.every(isOid) && sh.mentions.length === 1);
+  const conv = await raw('conversations').findOne({ _id: new ObjectId(conversation.id) });
+  assert.ok(conv.members.every((m) => isOid(m.userId)));
+  const msg = await raw('messages').findOne({ roomId: new ObjectId(conversation.id) });
+  assert.ok(isOid(msg._id) && isOid(msg.authorId));
+  const counter = await raw('dailyCounters').findOne({ userId: new ObjectId(a.id), key: 'daily_chest' });
+  assert.ok(isOid(counter._id));
+  // Nothing anywhere still has a string _id (shared-state keys and locks are cache entries, not records).
+  for (const name of COLLECTIONS.filter((n) => !['kv', 'locks'].includes(n))) {
+    const bad = await raw(name).countDocuments({ _id: { $type: 'string' } });
+    assert.equal(bad, 0, `${name} has string _ids`);
   }
 });

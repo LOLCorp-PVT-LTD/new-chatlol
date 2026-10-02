@@ -147,7 +147,7 @@ export async function insertPost(authorId, b) {
   const tags = [...new Set([...(b.tags ?? []).map((t) => t.replace(/^#/, '').toLowerCase()), ...extractTags(b.body)])].slice(0, 8);
   // Battle options live inside the post document.
   const post = {
-    _id: newId('p'),
+    _id: newId(),
     authorId,
     kind,
     body: b.body,
@@ -157,7 +157,7 @@ export async function insertPost(authorId, b) {
     soundtrack: b.soundtrack ?? null,
     album: b.mediaUrl ? (b.album ?? null) : null,
     inFeed: b.mediaUrl ? b.inFeed !== false : true,
-    battle: b.battle ? b.battle.map((o) => ({ id: newId('bo'), label: o.label, mediaUrl: o.mediaUrl ?? null, votes: 0 })) : null,
+    battle: b.battle ? b.battle.map((o) => ({ id: newId(), label: o.label, mediaUrl: o.mediaUrl ?? null, votes: 0 })) : null,
     r1: 0,
     r2: 0,
     r3: 0,
@@ -319,7 +319,7 @@ export async function insertComment(postId, authorId, body) {
     )
       throw new HttpError(403, "You can't comment here");
   }
-  const comment = { _id: newId('c'), postId, authorId, body, createdAt: now() };
+  const comment = { _id: newId(), postId, authorId, body, createdAt: now() };
   await db.comments.insertOne(comment);
   await db.posts.updateOne({ _id: postId }, { $inc: { commentCount: 1 } });
   if (post.authorId !== authorId) {

@@ -21,7 +21,7 @@ storeRouter.get('/store', optionalAuth, async (req, res) => {
   const owned = new Set(req.userId ? await db.inventory.distinct('itemId', { userId: req.userId, qty: { $gt: 0 } }) : []);
   const eq = req.userId ? await equippedSet(req.userId) : new Set();
   const items = (await db.storeItems.find({}).sort({ position: 1 }).toArray()).map((r) =>
-    serializeStoreItem(r, owned.has(r._id), eq.has(r._id)),
+    serializeStoreItem(r, owned.has(r._id), eq.has(r.key)),
   );
   const wallet = req.userId ? await db.users.findOne({ _id: req.userId }, { projection: { sparks: 1, gems: 1 } }) : null;
   res.json({ items, sparks: wallet?.sparks ?? 0, gems: wallet?.gems ?? 0, crateOdds: CRATE_ODDS });
@@ -36,7 +36,7 @@ storeRouter.get('/store/inventory', requireAuth, async (req, res) => {
     .toArray();
   const byId = new Map((await db.storeItems.find({ _id: { $in: inv.map((i) => i.itemId) } }).toArray()).map((s) => [s._id, s]));
   const rows = inv.map((i) => byId.get(i.itemId)).filter(Boolean);
-  res.json({ items: rows.map((r) => serializeStoreItem(r, true, eq.has(r._id))) });
+  res.json({ items: rows.map((r) => serializeStoreItem(r, true, eq.has(r.key))) });
 });
 
 const STACKABLE = new Set(['streak_freeze', 'boost', 'gift']);
@@ -45,7 +45,7 @@ storeRouter.post('/store/:id/buy', requireAuth, async (req, res) => {
   const me = uid(req);
   await rateLimit(`buy:${me}`, 20);
   const { currency } = parse(z.object({ currency: z.enum(['sparks', 'gems']).default('sparks') }), req.body ?? {});
-  const item = await db.storeItems.findOne({ _id: String(req.params.id) });
+  const item = await db.storeItems.findOne({ key: String(req.params.id) });
   if (!item) throw new HttpError(404, 'Item not found');
   const gemPrice = gemPriceFor(item.kind, item.price);
   if (currency === 'gems' && gemPrice === null) throw new HttpError(400, 'This can only be unlocked with earned Sparks', 'sparks_only');
@@ -98,8 +98,8 @@ storeRouter.post('/store/daily', requireAuth, async (req, res) => {
   const nextAt = new Date(Date.parse(`${today()}T00:00:00Z`) + 86_400_000).toISOString();
   const day = today();
   const claimed = await db.dailyCounters.insertIfMissing(
-    { _id: `${me}:${day}:daily_chest` },
-    { userId: me, day, key: 'daily_chest', n: 1, at: new Date() },
+    { userId: me, day, key: 'daily_chest' },
+    { n: 1, at: new Date() },
   );
   if (!claimed) return res.json({ claimed: false, nextAt, reward: null });
   const amount = 25 + Math.floor(Math.random() * 51);

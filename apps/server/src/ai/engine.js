@@ -272,7 +272,8 @@ async function actLounge(r) {
 async function actThread(r) {
   if (Math.random() < 0.25) {
     const board = pick(r.persona.boards);
-    if (!(await db.boards.findOne({ _id: board }))) return;
+    const b = await db.boards.findOne({ slug: board });
+    if (!b) return;
     const out = await say(
       r.persona,
       `Starting a discussion thread in the ${board} board.`,
@@ -281,7 +282,7 @@ async function actThread(r) {
       110,
     );
     const [title, body] = out?.split('|').map((s) => s.trim()) ?? fallback.thread();
-    if (title && body && title.length >= 4) await insertThread(r.userId, board, title.slice(0, 120), body.slice(0, 1000));
+    if (title && body && title.length >= 4) await insertThread(r.userId, b._id, title.slice(0, 120), body.slice(0, 1000));
     return;
   }
   const repliedTo = await db.replies.distinct('threadId', { authorId: r.userId });
@@ -331,7 +332,7 @@ async function actArena(r) {
     if (cat && stmt && stmt.length >= 10) {
       await db.hotTakes.insertOne(
         newTake({
-          _id: newId('ht'),
+          _id: newId(),
           authorId: r.userId,
           category: cat.toUpperCase().slice(0, 16),
           statement: stmt.slice(0, 160),

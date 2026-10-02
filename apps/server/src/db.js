@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { mkdirSync } from 'node:fs';
-import { randomBytes } from 'node:crypto';
-import { MongoClient } from 'mongodb';
+import { createHash } from 'node:crypto';
+import { MongoClient, ObjectId } from 'mongodb';
 import { config } from './config.js';
 import { ensureIndexes } from './indexes.js';
 
@@ -72,7 +72,65 @@ function sessionOpt() {
   return s && !s.hasEnded && s.inTransaction() ? { session: s } : {};
 }
 
-/** Wraps a collection so every call picks up the current transaction's session. */
+// ——— ObjectIds ———
+// Every document's _id, and every field that points at one (authorId, userId, members.userId, mentions…), is a
+// real ObjectId in MongoDB. The app passes ids around as 24-character hex strings (that's also what the API and
+// the apps see); the collection wrappers below convert on the way in and out, so route code never has to.
+const HEX24 = /^[0-9a-f]{24}$/;
+/** Field names that hold ids: _id, id (sub-documents), anything ending in Id / Ids, and mention lists. */
+export const isIdField = (key) => {
+  const last = String(key).split('.').filter((p) => !/^\d+$/.test(p) && !p.startsWith('$'))
+    .pop();
+  return last === '_id' || last === 'id' || last === 'mentions' || /[a-z]Ids?$/.test(last ?? '');
+};
+const isPlain = (v) => v !== null && typeof v === 'object' && (Object.getPrototypeOf(v) === Object.prototype || Object.getPrototypeOf(v) === null);
+
+/** App → MongoDB: hex id strings in id fields (including inside $in, $ne, $set, pipelines…) become ObjectIds. */
+export function toDb(v, idField = false) {
+  if (typeof v === 'string') return idField && HEX24.test(v) ? new ObjectId(v) : v;
+  if (Array.isArray(v)) return v.map((x) => toDb(x, idField));
+  if (!isPlain(v)) return v;
+  const out = {};
+  for (const [k, x] of Object.entries(v)) out[k] = toDb(x, k.startsWith('$') ? idField : isIdField(k));
+  return out;
+}
+/** MongoDB → app: every ObjectId becomes its hex string. */
+export function fromDb(v) {
+  if (v instanceof ObjectId) return v.toHexString();
+  if (Array.isArray(v)) return v.map(fromDb);
+  if (!isPlain(v)) return v;
+  const out = {};
+  for (const [k, x] of Object.entries(v)) out[k] = fromDb(x);
+  return out;
+}
+/** Gives a new document a fresh id the app can see (the caller's object gets it too, like the driver does). */
+function withId(doc) {
+  if (doc && doc._id == null) doc._id = new ObjectId().toHexString();
+  return toDb(doc);
+}
+/** A cursor whose documents come out with string ids; chaining (.sort().limit()…) keeps working. */
+function wrapCursor(cur) {
+  const proxy = new Proxy(cur, {
+    get(t, k) {
+      if (k === 'toArray') return async () => (await t.toArray()).map(fromDb);
+      if (k === 'next' || k === 'tryNext') return async () => fromDb(await t[k]());
+      if (k === Symbol.asyncIterator)
+        return async function* () {
+          for await (const d of t) yield fromDb(d);
+        };
+      const v = Reflect.get(t, k, t);
+      if (typeof v !== 'function') return v;
+      return (...args) => {
+        const r = v.apply(t, args);
+        return r === t ? proxy : r;
+      };
+    },
+  });
+  return proxy;
+}
+const updateIn = (u) => (Array.isArray(u) ? u.map((stage) => toDb(stage)) : toDb(u));
+
+/** Wraps a collection so every call picks up the current transaction's session and stores real ObjectIds. */
 function wrap(name) {
   const c = () => {
     if (!database) throw new Error('Database not initialised — await initDb() first');
@@ -80,28 +138,32 @@ function wrap(name) {
   };
   const o = (opts) => ({ ...opts, ...sessionOpt() });
   return {
+    /** The driver's collection, without id conversion (indexes, change streams, shared state). */
     get raw() {
       return c();
     },
-    findOne: (filter, opts) => c().findOne(filter, o(opts)),
-    find: (filter, opts) => c().find(filter, o(opts)),
-    countDocuments: (filter, opts) => c().countDocuments(filter, o(opts)),
-    distinct: (key, filter = {}, opts) => c().distinct(key, filter, o(opts)),
-    aggregate: (pipeline, opts) => c().aggregate(pipeline, o(opts)),
-    insertOne: (doc, opts) => c().insertOne(doc, o(opts)),
-    insertMany: (docs, opts) => c().insertMany(docs, o(opts)),
-    updateOne: (filter, update, opts) => c().updateOne(filter, update, o(opts)),
-    updateMany: (filter, update, opts) => c().updateMany(filter, update, o(opts)),
-    replaceOne: (filter, doc, opts) => c().replaceOne(filter, doc, o(opts)),
-    deleteOne: (filter, opts) => c().deleteOne(filter, o(opts)),
-    deleteMany: (filter, opts) => c().deleteMany(filter, o(opts)),
-    findOneAndUpdate: (filter, update, opts) => c().findOneAndUpdate(filter, update, o(opts)),
-    findOneAndDelete: (filter, opts) => c().findOneAndDelete(filter, o(opts)),
-    bulkWrite: (ops, opts) => c().bulkWrite(ops, o(opts)),
+    findOne: async (filter, opts) => fromDb(await c().findOne(toDb(filter ?? {}), o(opts))),
+    find: (filter, opts) => wrapCursor(c().find(toDb(filter ?? {}), o(opts))),
+    countDocuments: (filter, opts) => c().countDocuments(toDb(filter ?? {}), o(opts)),
+    distinct: async (key, filter = {}, opts) => fromDb(await c().distinct(key, toDb(filter), o(opts))),
+    aggregate: (pipeline, opts) => wrapCursor(c().aggregate(pipeline.map((stage) => toDb(stage)), o(opts))),
+    insertOne: async (doc, opts) => {
+      const r = await c().insertOne(withId(doc), o(opts));
+      return { ...r, insertedId: fromDb(r.insertedId) };
+    },
+    insertMany: (docs, opts) => c().insertMany(docs.map(withId), o(opts)),
+    updateOne: (filter, update, opts) => c().updateOne(toDb(filter), updateIn(update), o(toDb(opts))),
+    updateMany: (filter, update, opts) => c().updateMany(toDb(filter), updateIn(update), o(toDb(opts))),
+    replaceOne: (filter, doc, opts) => c().replaceOne(toDb(filter), toDb(doc), o(opts)),
+    deleteOne: (filter, opts) => c().deleteOne(toDb(filter), o(opts)),
+    deleteMany: (filter, opts) => c().deleteMany(toDb(filter), o(opts)),
+    findOneAndUpdate: async (filter, update, opts) => fromDb(await c().findOneAndUpdate(toDb(filter), updateIn(update), o(toDb(opts)))),
+    findOneAndDelete: async (filter, opts) => fromDb(await c().findOneAndDelete(toDb(filter), o(opts))),
+    bulkWrite: (ops, opts) => c().bulkWrite(toDb(ops), o(opts)),
     /** Inserts unless a document matching `filter` exists. Returns true if it inserted. */
     async insertIfMissing(filter, doc) {
       try {
-        const r = await c().updateOne(filter, { $setOnInsert: doc }, o({ upsert: true }));
+        const r = await c().updateOne(toDb(filter), { $setOnInsert: toDb(doc) }, o({ upsert: true }));
         return r.upsertedCount === 1;
       } catch (e) {
         if (isDuplicateKey(e)) return false; // two upserts raced; the other one won
@@ -223,13 +285,14 @@ export const db = {
 };
 for (const name of COLLECTIONS) db[name] = wrap(name);
 
-const ALPHA = '0123456789abcdefghijklmnopqrstuvwxyz';
-export function newId(prefix = '') {
-  const bytes = randomBytes(12);
-  let s = '';
-  for (const b of bytes) s += ALPHA[b % 36];
-  return prefix ? `${prefix}_${s}` : s;
-}
+/** A new ObjectId, as the 24-character hex string the app uses (stored as a real ObjectId). */
+export const newId = () => new ObjectId().toHexString();
+export const isObjectIdHex = (s) => typeof s === 'string' && HEX24.test(s);
+/**
+ * A fixed ObjectId derived from a name — for records that must have the same id on every install and every
+ * seed run (the AI personas, the demo account), so references to them stay stable.
+ */
+export const stableId = (name) => createHash('sha256').update(`chatlol:${name}`).digest('hex').slice(0, 24);
 
 export const now = () => new Date().toISOString();
 export const today = (d = new Date()) => d.toISOString().slice(0, 10);

@@ -12,7 +12,7 @@ export async function issueToken(userId, kind) {
   await db.emailTokens.updateMany({ userId, kind, usedAt: null }, { $set: { usedAt: now() } });
   const expires = new Date(Date.now() + TTL_MS[kind]);
   await db.emailTokens.insertOne({
-    _id: hash(token),
+    tokenHash: hash(token),
     userId,
     kind,
     expiresAt: expires.toISOString(),
@@ -26,7 +26,7 @@ export async function issueToken(userId, kind) {
 /** Atomically consumes a token. Returns the user id or null if invalid/expired/used. */
 export async function consumeToken(token, kind) {
   const t = await db.emailTokens.findOneAndUpdate(
-    { _id: hash(token), kind, usedAt: null, expiresAt: { $gt: now() } },
+    { tokenHash: hash(token), kind, usedAt: null, expiresAt: { $gt: now() } },
     { $set: { usedAt: now() } },
   );
   return t?.userId ?? null;

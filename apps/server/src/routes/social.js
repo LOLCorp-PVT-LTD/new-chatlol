@@ -1,8 +1,7 @@
 import { Router } from 'express';
-import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { REWARDS } from '@chatlol/shared';
-import { db, newId, now, isDuplicateKey } from '../db.js';
+import { db, newId, now, isDuplicateKey, isObjectIdHex } from '../db.js';
 import { optionalAuth, requireAuth, uid } from '../lib/auth.js';
 import { HttpError, parse, rateLimit } from '../lib/http.js';
 import {
@@ -26,6 +25,9 @@ import { shared } from '../lib/shared.js';
 
 export const socialRouter = Router();
 
+/** Lounges and boards can be addressed by id or by their readable slug (old links, persona configs). */
+const byIdOrSlug = (v) => (isObjectIdHex(String(v)) ? { _id: String(v) } : { slug: String(v) });
+
 // ——— Forums ———
 socialRouter.get('/forums/boards', async (_req, res) => {
   const [boards, counts] = await Promise.all([
@@ -33,7 +35,7 @@ socialRouter.get('/forums/boards', async (_req, res) => {
     db.threads.aggregate([{ $match: { hidden: { $ne: true } } }, { $group: { _id: '$boardId', n: { $sum: 1 } } }]).toArray(),
   ]);
   const n = new Map(counts.map((c) => [c._id, c.n]));
-  res.json({ boards: boards.map((b) => ({ id: b._id, name: b.name, emoji: b.emoji, threads: n.get(b._id) ?? 0 })) });
+  res.json({ boards: boards.map((b) => ({ id: b._id, slug: b.slug, name: b.name, emoji: b.emoji, threads: n.get(b._id) ?? 0 })) });
 });
 
 socialRouter.get('/forums', optionalAuth, async (req, res) => {
@@ -42,7 +44,8 @@ socialRouter.get('/forums', optionalAuth, async (req, res) => {
     req.query,
   );
   const offset = p.cursor ?? 0;
-  const filter = { hidden: { $ne: true }, ...(p.board ? { boardId: p.board } : {}) };
+  const board = p.board ? await db.boards.findOne(byIdOrSlug(p.board), { projection: { _id: 1 } }) : null;
+  const filter = { hidden: { $ne: true }, ...(p.board ? { boardId: board?._id ?? null } : {}) };
   let rows;
   if (p.sort === 'hot') {
     // Hot = (votes + 2×replies) decayed by hours since last activity; scored in JS over recent candidates.
@@ -80,11 +83,13 @@ socialRouter.get('/forums/:id', optionalAuth, async (req, res) => {
   });
 });
 
-export async function insertThread(authorId, board, title, body) {
-  if (!(await db.boards.findOne({ _id: board }))) throw new HttpError(404, 'Board not found');
+export async function insertThread(authorId, boardIdOrSlug, title, body) {
+  const b = await db.boards.findOne(byIdOrSlug(boardIdOrSlug), { projection: { _id: 1 } });
+  if (!b) throw new HttpError(404, 'Board not found');
+  const board = b._id;
   const t = now();
   const thread = {
-    _id: newId('t'),
+    _id: newId(),
     boardId: board,
     authorId,
     title,
@@ -103,7 +108,7 @@ export async function insertThread(authorId, board, title, body) {
 export async function insertReply(threadId, authorId, body) {
   const t = await db.threads.findOne({ _id: threadId });
   if (!t) throw new HttpError(404, 'Thread not found');
-  const reply = { _id: newId('r'), threadId, authorId, body, upvotes: 0, createdAt: now() };
+  const reply = { _id: newId(), threadId, authorId, body, upvotes: 0, createdAt: now() };
   await db.replies.insertOne(reply);
   await db.threads.updateOne({ _id: threadId }, { $inc: { replyCount: 1 }, $set: { lastActivityAt: now() } });
   if (t.authorId !== authorId) {
@@ -192,6 +197,7 @@ export async function serializeLounge(l, author) {
   const active = new Set([...ids, ...recentOnline]);
   return {
     id: l._id,
+    slug: l.slug,
     name: l.name,
     emoji: l.emoji,
     topic: l.topic,
@@ -211,7 +217,7 @@ socialRouter.get('/lounges', optionalAuth, async (req, res) => {
 });
 
 socialRouter.get('/lounges/:id', optionalAuth, async (req, res) => {
-  const l = await db.lounges.findOne({ _id: String(req.params.id) });
+  const l = await db.lounges.findOne(byIdOrSlug(req.params.id));
   if (!l) throw new HttpError(404, 'Lounge not found');
   const author = authorCache(req.userId);
   const rows = (await recentMessages('lounge', l._id, 60)).reverse();
@@ -222,7 +228,7 @@ export { recentMessages };
 
 export async function insertLoungeMessage(loungeId, authorId, body, replyToId = null) {
   const doc = {
-    _id: newId('m'),
+    _id: newId(),
     roomType: 'lounge',
     roomId: loungeId,
     authorId,
@@ -272,7 +278,6 @@ export async function getOrCreateDm(a, b) {
       { pairKey },
       {
         $setOnInsert: {
-          _id: `dm_${createHash('sha1').update(pairKey).digest('hex').slice(0, 24)}`,
           members: [
             { userId: a, lastReadAt: t },
             { userId: b, lastReadAt: t },
@@ -340,7 +345,7 @@ socialRouter.get('/conversations/:id/messages', requireAuth, async (req, res) =>
 
 export async function insertDm(convId, authorId, body, kind = 'text', mediaUrl = null) {
   const t = now();
-  const doc = { _id: newId('m'), roomType: 'dm', roomId: convId, authorId, body, mediaUrl, kind, replyToId: null, createdAt: t };
+  const doc = { _id: newId(), roomType: 'dm', roomId: convId, authorId, body, mediaUrl, kind, replyToId: null, createdAt: t };
   await db.messages.insertOne(doc);
   const c = await db.conversations.findOneAndUpdate(
     { _id: convId, 'members.userId': authorId },

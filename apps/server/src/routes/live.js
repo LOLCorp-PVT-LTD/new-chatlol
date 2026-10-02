@@ -56,7 +56,7 @@ export async function serializeStream(s, author) {
 /** Stores a stream chat line and returns it serialized (callers emit it to the room). */
 export async function insertStreamMessage(streamId, authorId, body, kind = 'text') {
   const doc = {
-    _id: newId('m'),
+    _id: newId(),
     roomType: 'stream',
     roomId: streamId,
     authorId,
@@ -93,7 +93,7 @@ export async function startStream(hostId, title, category, video, coverUrl) {
   await db.streams.updateMany({ hostId, endedAt: null }, { $set: { endedAt: now() } });
   const host = await db.users.findOne({ _id: hostId });
   const stream = {
-    _id: newId('live'),
+    _id: newId(),
     hostId,
     title,
     category,

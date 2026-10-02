@@ -1,4 +1,4 @@
-import { db, now, today } from '../db.js';
+import { db, newId, now, today } from '../db.js';
 import { grant, notify } from './rewards.js';
 import { shared } from './shared.js';
 import { io, room } from './io.js';
@@ -34,10 +34,13 @@ export async function runBirthdays(day = today()) {
     .toArray();
   let posted = 0;
   for (const u of people) {
-    const _id = `bday_${u._id}_${year}`;
+    // One birthday post per member per year: systemKey is unique, so repeated runs and other instances can't double-post.
+    const systemKey = birthdayKey(u._id, year);
+    const _id = newId();
     const fresh = await db.posts.insertIfMissing(
-      { _id },
+      { systemKey },
       {
+        _id,
         authorId: u._id,
         kind: 'birthday',
         system: true,
@@ -91,6 +94,9 @@ export async function runBirthdays(day = today()) {
   }
   return posted;
 }
+
+/** The unique key of a member's birthday post for a year. */
+export const birthdayKey = (userId, year) => `birthday:${userId}:${year}`;
 
 /** Members (in good standing, opted in) whose birthday is today — for the Home page. */
 export async function birthdaysToday(day = today()) {

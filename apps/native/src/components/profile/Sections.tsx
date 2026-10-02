@@ -213,7 +213,7 @@ function Body({ section, ctx, fg, tile, font }: { section: ProfileSection; ctx: 
           {(sc.threads ?? []).slice(0, limit).map((t) => (
             <Tap key={t.id} disabled={ctx.preview} onPress={() => router.push(`/forums/${t.id}`)} style={{ backgroundColor: tile, borderRadius: 12, padding: 10 }}>
               <Text variant="labelLg" color={fg} numberOfLines={1}>{t.title}</Text>
-              <Text variant="bodySm" color={fg} style={{ opacity: 0.72 }}>{t.replyCount} replies · {timeAgo(t.createdAt)}</Text>
+              <Text variant="bodySm" color={fg} style={{ opacity: 0.72 }}>{t.boardName ? `${t.boardName} · ` : ''}{t.replyCount} replies · {timeAgo(t.createdAt)}</Text>
             </Tap>
           ))}
         </View>

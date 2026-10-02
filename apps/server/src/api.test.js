@@ -282,7 +282,7 @@ test('live video: TURN creds, verified-only go-live, mesh signalling relay with 
   const turn = ice.iceServers.find((s) => String(s.urls).includes('turn:'));
   const expected = createHmac('sha1', 'coturn-secret').update(turn.username).digest('base64');
   assert.equal(turn.credential, expected, 'coturn REST credential');
-  assert.match(turn.username, /^\d+:u_/);
+  assert.match(turn.username, /^\d+:[0-9a-f]{24}$/);
   assert.equal(ice.maxViewers, 1);
 
   const host = await anon().register({
