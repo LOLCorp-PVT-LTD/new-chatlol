@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { ageFrom, MIN_AGE, GENDERS, INTEREST_GROUPS, type Gender } from '@chatlol/shared';
+import { ageFrom, MIN_AGE, GENDERS, INTEREST_GROUPS, MAX_INTERESTS, type Gender } from '@chatlol/shared';
 import { useSession } from '../stores/session';
 import Logo from '../components/Logo.vue';
 import Icon from '../components/Icon.vue';
@@ -17,7 +17,7 @@ const error = ref('');
 const age = computed(() => (f.value.birthdate ? ageFrom(f.value.birthdate) : null));
 const step1Ok = computed(() => f.value.displayName && /^[a-zA-Z0-9_.]{3,20}$/.test(f.value.handle) && f.value.email.includes('@') && f.value.password.length >= 8 && age.value !== null && age.value >= MIN_AGE && !!f.value.gender && agree.value);
 const toggle = (i: string) =>
-  (f.value.interests = f.value.interests.includes(i) ? f.value.interests.filter((x) => x !== i) : f.value.interests.length >= 20 ? f.value.interests : [...f.value.interests, i]);
+  (f.value.interests = f.value.interests.includes(i) ? f.value.interests.filter((x) => x !== i) : f.value.interests.length >= MAX_INTERESTS ? f.value.interests : [...f.value.interests, i]);
 
 async function submit() {
   busy.value = true;
@@ -62,7 +62,7 @@ async function submit() {
         <div v-else class="space-y-4">
           <h1 class="text-headline-lg">Pick your vibes</h1>
           <p class="text-body-md text-on-surface-variant">We’ll match you with lounges and people who get it.</p>
-          <p class="text-label-md text-flame">{{ f.interests.length }}/20 picked</p>
+          <p class="text-label-md text-flame">{{ f.interests.length }}/{{ MAX_INTERESTS }} picked</p>
           <div class="space-y-3 max-h-[46dvh] overflow-y-auto pr-1">
             <div v-for="g in INTEREST_GROUPS" :key="g.label"><p class="label mb-1.5">{{ g.label }}</p>
               <div class="flex flex-wrap gap-2">

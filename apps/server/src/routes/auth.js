@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { ageFrom, MIN_AGE, REWARDS } from '@chatlol/shared';
+import { ageFrom, MAX_INTERESTS, MIN_AGE, REWARDS } from '@chatlol/shared';
 import { db, newId, now, today, isDuplicateKey } from '../db.js';
 import { hashPassword, verifyPassword, signToken, requireAuth, uid, passwordVersion } from '../lib/auth.js';
 import { HttpError, parse, rateLimit } from '../lib/http.js';
@@ -27,7 +27,7 @@ authRouter.post('/auth/register', async (req, res) => {
       displayName: z.string().trim().min(1).max(40),
       birthdate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       gender: z.enum(['male', 'female'], { message: 'pick Male or Female' }),
-      interests: z.array(z.string().max(30)).max(20).optional(),
+      interests: z.array(z.string().max(30)).max(MAX_INTERESTS).optional(),
     }),
     req.body,
   );
@@ -179,7 +179,7 @@ authRouter.patch('/me', requireAuth, async (req, res) => {
       bio: z.string().max(280).optional(),
       pronouns: z.string().max(24).optional(),
       city: z.string().max(60).optional(),
-      interests: z.array(z.string().max(30)).max(12).optional(),
+      interests: z.array(z.string().max(30)).max(MAX_INTERESTS).optional(),
       avatarUrl: z.string().url().max(500).optional(),
     }),
     req.body,

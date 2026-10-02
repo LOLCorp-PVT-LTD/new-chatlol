@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BrandMark } from '../components/chrome';
 import { DatePicker } from '../components/DatePicker';
-import { ageFrom, MIN_AGE, GENDERS, INTEREST_GROUPS, type Gender } from '@chatlol/shared';
+import { ageFrom, MIN_AGE, GENDERS, INTEREST_GROUPS, MAX_INTERESTS, type Gender } from '@chatlol/shared';
 import { register } from '../lib/actions';
 import { useColors } from '../lib/theme';
 import { Button, Chip, IconButton, Input, Label, Row, Text } from '../components/ui';
@@ -70,12 +70,12 @@ export default function Join() {
           <>
             <Text variant="headlineXl">Pick your vibes</Text>
             <Text color={c.onSurfaceVariant}>We’ll match you with lounges and people who get it.</Text>
-            <Text variant="labelMd" color={c.flame}>{interests.length}/20 picked</Text>
+            <Text variant="labelMd" color={c.flame}>{interests.length}/{MAX_INTERESTS} picked</Text>
             {INTEREST_GROUPS.map((g) => (
               <View key={g.label} style={{ gap: 6 }}>
                 <Label>{g.label}</Label>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                  {g.items.map((i) => <Chip key={i} label={`#${i}`} active={interests.includes(i)} onPress={() => setInterests((x) => (x.includes(i) ? x.filter((y) => y !== i) : x.length >= 20 ? x : [...x, i]))} />)}
+                  {g.items.map((i) => <Chip key={i} label={`#${i}`} active={interests.includes(i)} onPress={() => setInterests((x) => (x.includes(i) ? x.filter((y) => y !== i) : x.length >= MAX_INTERESTS ? x : [...x, i]))} />)}
                 </View>
               </View>
             ))}

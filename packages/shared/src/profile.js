@@ -6,6 +6,9 @@ export const GENDERS = [
 ];
 
 /** Interests offered at sign-up, on profiles and in member search, grouped for pickers. */
+/** Most interests a profile can list (registration and profile edits). */
+export const MAX_INTERESTS = 20;
+
 export const INTEREST_GROUPS = [
   { label: 'Creative', items: ['photography', 'filmcamera', 'art', 'drawing', 'design', 'writing', 'poetry', 'diy', 'tattoos', 'makeup'] },
   { label: 'Music', items: ['music', 'lofi', 'hiphop', 'rnb', 'pop', 'kpop', 'rock', 'edm', 'jazz', 'producing', 'vinyl', 'concerts'] },

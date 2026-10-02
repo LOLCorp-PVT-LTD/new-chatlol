@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import type { Gender, ProfileSong } from '@chatlol/shared';
-import { GENDERS, INTEREST_GROUPS, PROFILE_ACCENTS, PROFILE_BACKGROUNDS } from '@chatlol/shared';
+import { GENDERS, INTEREST_GROUPS, MAX_INTERESTS, PROFILE_ACCENTS, PROFILE_BACKGROUNDS } from '@chatlol/shared';
 import { api, uploadImage } from '../lib/api';
 import { useSession } from '../stores/session';
 import { profileBg, bgIsDark } from '../lib/profileStyle';
@@ -44,7 +44,7 @@ async function upload(e: Event, target: 'cover' | 'background') {
   else look.value.background = { kind: 'image', value: url };
 }
 const toggleInterest = (i: string) =>
-  (about.value.interests = about.value.interests.includes(i) ? about.value.interests.filter((x) => x !== i) : about.value.interests.length >= 20 ? about.value.interests : [...about.value.interests, i]);
+  (about.value.interests = about.value.interests.includes(i) ? about.value.interests.filter((x) => x !== i) : about.value.interests.length >= MAX_INTERESTS ? about.value.interests : [...about.value.interests, i]);
 
 async function save() {
   busy.value = true;
@@ -125,7 +125,7 @@ async function save() {
         </div>
         <div class="grid grid-cols-2 gap-2"><input v-model="about.pronouns" class="input" placeholder="Pronouns" maxlength="24" /><input v-model="about.city" class="input" placeholder="City" maxlength="60" /></div>
         <textarea v-model="about.bio" class="textarea" rows="3" placeholder="Bio" maxlength="280" />
-        <p class="label">Interests • {{ about.interests.length }}/20</p>
+        <p class="label">Interests • {{ about.interests.length }}/{{ MAX_INTERESTS }}</p>
         <div class="space-y-3 max-h-64 overflow-y-auto">
           <div v-for="g in INTEREST_GROUPS" :key="g.label"><p class="text-label-sm text-on-surface-variant mb-1">{{ g.label }}</p>
             <div class="flex flex-wrap gap-1.5"><button v-for="i in g.items" :key="i" type="button" class="chip h-8 text-label-sm" :class="{ 'chip-active': about.interests.includes(i) }" @click="toggleInterest(i)">#{{ i }}</button></div></div>

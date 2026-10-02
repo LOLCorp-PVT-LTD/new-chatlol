@@ -3,7 +3,7 @@ import { ScrollView, View } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import type { Gender, ProfileSong } from '@chatlol/shared';
-import { GENDERS, INTEREST_GROUPS, PROFILE_ACCENTS, PROFILE_BACKGROUNDS } from '@chatlol/shared';
+import { GENDERS, INTEREST_GROUPS, MAX_INTERESTS, PROFILE_ACCENTS, PROFILE_BACKGROUNDS } from '@chatlol/shared';
 import { api, uploadUri } from '../lib/api';
 import { errorToast, toast } from '../lib/actions';
 import { pickImage } from '../lib/native';
@@ -105,12 +105,12 @@ export default function Customize() {
           <Row gap={8}>{GENDERS.map((g) => <Chip key={g.key} label={`${g.emoji} ${g.label}`} active={gender === g.key} onPress={() => setGender(g.key)} />)}</Row>
           <Row gap={8}><Input value={about.pronouns} onChangeText={(v) => setAbout({ ...about, pronouns: v })} placeholder="Pronouns" maxLength={24} style={{ flex: 1 }} /><Input value={about.city} onChangeText={(v) => setAbout({ ...about, city: v })} placeholder="City" maxLength={60} style={{ flex: 1 }} /></Row>
           <Input value={about.bio} onChangeText={(v) => setAbout({ ...about, bio: v })} placeholder="Bio" multiline maxLength={280} style={{ minHeight: 80 }} />
-          <Label>Interests • {interests.length}/20</Label>
+          <Label>Interests • {interests.length}/{MAX_INTERESTS}</Label>
           {INTEREST_GROUPS.map((g) => (
             <View key={g.label} style={{ gap: 6 }}>
               <Text variant="labelSm" color={c.onSurfaceVariant}>{g.label}</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                {g.items.map((i) => <Chip key={i} label={`#${i}`} active={interests.includes(i)} onPress={() => setInterests((x) => (x.includes(i) ? x.filter((y) => y !== i) : x.length >= 20 ? x : [...x, i]))} />)}
+                {g.items.map((i) => <Chip key={i} label={`#${i}`} active={interests.includes(i)} onPress={() => setInterests((x) => (x.includes(i) ? x.filter((y) => y !== i) : x.length >= MAX_INTERESTS ? x : [...x, i]))} />)}
               </View>
             </View>
           ))}

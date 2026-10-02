@@ -1,5 +1,6 @@
 export type Gender = 'male' | 'female';
 export declare const GENDERS: { key: Gender; label: string; emoji: string }[];
+export declare const MAX_INTERESTS: number;
 export declare const INTEREST_GROUPS: { label: string; items: string[] }[];
 export declare const INTERESTS: string[];
 export interface ProfileBackground { key: string; label: string; css: string; colors: string[]; dark: boolean }
