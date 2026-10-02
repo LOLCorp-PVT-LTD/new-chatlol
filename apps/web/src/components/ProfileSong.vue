@@ -21,15 +21,20 @@ const blocked = ref(false);
 const progress = ref(0);
 const isApple = () => props.song.source === 'apple';
 
-/** Blocked by the browser: start on the first click, tap or key press anywhere (those unlock sound). */
-const unlockEvents = ['pointerdown', 'keydown', 'touchend'] as const;
+/**
+ * Blocked by the browser: try again on every click, tap or key press anywhere until the song is actually playing.
+ * Browsers differ in which events unlock sound (Safari wants click/touchend, not pointerdown), so listen to all of them
+ * and only stop once playback has started.
+ */
+const unlockEvents = ['pointerdown', 'pointerup', 'click', 'touchend', 'keydown'] as const;
 function onFirstInteraction() {
-  stopWaiting();
-  if (blocked.value) play();
+  if (!blocked.value || playing.value) return stopWaiting();
+  playNow();
 }
 function waitForInteraction() {
   blocked.value = true;
-  unlockEvents.forEach((e) => document.addEventListener(e, onFirstInteraction, { capture: true, once: true }));
+  stopWaiting();
+  unlockEvents.forEach((e) => document.addEventListener(e, onFirstInteraction, { capture: true }));
 }
 function stopWaiting() {
   unlockEvents.forEach((e) => document.removeEventListener(e, onFirstInteraction, { capture: true }));
@@ -57,7 +62,17 @@ async function mountSpotify() {
   host.value.replaceChildren(el);
   api.createController(el, { uri: `spotify:${props.song.type}:${props.song.id}`, height: 80, width: '100%' }, (c) => {
     controller = c;
-    c.addListener('playback_update', (e) => (playing.value = !e.data.isPaused));
+    c.addListener('playback_update', (e) => {
+      playing.value = !e.data.isPaused;
+      if (playing.value) { blocked.value = false; stopWaiting(); }
+    });
+    // Let Spotify's player autoplay: a click on our page only unlocks sound inside an embedded frame from another
+    // site if the frame is allowed to autoplay. Set it if the player came without it (and reload the frame once).
+    const frame = host.value?.querySelector('iframe');
+    if (frame && !/\bautoplay\b/.test(frame.getAttribute('allow') ?? '')) {
+      frame.setAttribute('allow', `autoplay; encrypted-media; clipboard-write; fullscreen; picture-in-picture`);
+      frame.src = frame.src;
+    }
     c.addListener('ready', () => {
       if (!props.autoplay) return;
       c.play();
@@ -82,11 +97,15 @@ function mount() {
 onMounted(mount);
 watch(() => props.song.id, mount);
 onUnmounted(() => { stopWaiting(); controller?.destroy(); audio.value?.pause(); });
+/** Try to play; if the browser still says no, keep waiting for the next interaction. */
+function playNow() {
+  if (isApple()) {
+    void audio.value?.play().then(() => { blocked.value = false; stopWaiting(); }).catch(() => waitForInteraction());
+  } else controller?.play();
+}
 function play() {
-  stopWaiting();
   blocked.value = false;
-  if (isApple()) void audio.value?.play().catch(() => (blocked.value = true));
-  else controller?.play();
+  playNow();
 }
 function toggle() {
   if (!audio.value) return;
