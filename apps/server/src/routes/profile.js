@@ -67,7 +67,7 @@ async function spotifyAccessToken() {
 /** For the startup log: which song search is active, and whether the Spotify keys actually work. */
 export async function songSearchStatus() {
   if (!config.spotify.clientId || !config.spotify.clientSecret)
-    return '⚠️  Apple Music (30-second previews). SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET are not set';
+    return '⚠️  off: SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET are not set (pasting Spotify links still works)';
   try {
     await spotifyAccessToken();
     return `Spotify ✓ (client ${config.spotify.clientId.slice(0, 6)}…)`;

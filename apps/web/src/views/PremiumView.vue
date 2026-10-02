@@ -44,7 +44,7 @@ async function sparks(p: PremiumPlan) {
 
 <template>
   <div class="max-w-[860px] mx-auto space-y-6">
-    <section class="rounded-lg bg-[linear-gradient(135deg,#1a110c,#7f2b00_55%,#ff5e00)] text-white p-7 shadow-float">
+    <section class="rounded-lg bg-[linear-gradient(135deg,#1a110c,rgb(var(--c-flame)/0.55)_55%,rgb(var(--c-flame)))] text-white p-7 shadow-float">
       <p class="text-label-sm uppercase tracking-wider opacity-80">ChatLOL Premium</p>
       <h1 class="text-headline-xl mt-1">👑 Know who’s into your vibe</h1>
       <p v-if="active" class="mt-2 text-body-lg">You’re Premium until <b>{{ new Date(active).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' }) }}</b>. Buying again adds more days.</p>

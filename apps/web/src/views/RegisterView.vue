@@ -53,7 +53,7 @@ async function submit() {
                 @click="f.gender = g.key">{{ g.emoji }} {{ g.label }}</button>
             </div></div>
           <label class="flex items-start gap-3 text-body-sm text-on-surface-variant px-2 pt-1">
-            <input v-model="agree" type="checkbox" class="mt-0.5 w-5 h-5 accent-[#ff5e00]" />
+            <input v-model="agree" type="checkbox" class="mt-0.5 w-5 h-5 accent-flame" />
             <span>I’m 18+ and agree to the Community Guidelines & Terms. I understand some members are clearly-labeled ✦ AI personas.</span>
           </label>
           <p v-if="error" class="text-error text-body-md">{{ error }}</p>

@@ -12,6 +12,7 @@ export const DEFAULT_SETTINGS = {
   hapticsEnabled: true,
   soundEnabled: true,
   darkMode: 'system',
+  appTheme: { preset: 'sunset', custom: null },
   breakReminderMins: 0,
   showAIPersonas: true,
   // Privacy

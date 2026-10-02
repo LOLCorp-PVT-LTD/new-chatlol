@@ -6,7 +6,7 @@ import type { LiveStream } from '@chatlol/shared';
 import { compact } from '@chatlol/shared';
 import { api } from '../../lib/api';
 import { errorToast } from '../../lib/actions';
-import { useColors, shadow } from '../../lib/theme';
+import { useColors, shadow, WEB_THUMB } from '../../lib/theme';
 import { ScreenHeader } from '../../components/chrome';
 import { Avatar, UserName } from '../../components/people';
 import { Button, Chip, Empty, Input, Row, Tap, Text } from '../../components/ui';
@@ -49,7 +49,7 @@ export default function Live() {
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{CATS.map((x) => <Chip key={x} label={x} active={cat === x} onPress={() => setCat(x)} />)}</View>
             <Row gap={10} style={{ backgroundColor: c.surfaceContainerLow, borderRadius: 20, padding: 12 }}>
               <Text style={{ flex: 1 }}><Text variant="labelLg">Camera on</Text> — video for up to 12 viewers. Off = chat-only.</Text>
-              <Switch value={video} onValueChange={setVideo} trackColor={{ true: c.flame, false: c.sandstone }} thumbColor="#fff" />
+              <Switch value={video} onValueChange={setVideo} trackColor={{ true: c.flame, false: c.sandstone }} thumbColor="#fff" {...WEB_THUMB} />
             </Row>
             <Text variant="bodySm" color={c.onSurfaceVariant}>Followers get notified. You keep 70% of gifted Sparks. Needs a verified email.</Text>
             <Row gap={8}><Button title="Cancel" variant="ghost" onPress={() => setGoing(false)} /><Button title="Start broadcast" icon="videocam" style={{ flex: 1 }} disabled={title.length < 3} onPress={goLive} /></Row>

@@ -39,7 +39,7 @@ export default function Premium() {
     <View style={{ flex: 1 }}>
       <ScreenHeader title="Premium" />
       <ScrollView contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: 60, maxWidth: 680, width: '100%', alignSelf: 'center' }}>
-        <Gradient colors={['#1a110c', '#7f2b00', '#ff5e00']} style={[{ borderRadius: 30, padding: 20, gap: 8 }, shadow.float]}>
+        <Gradient colors={['#1a110c', `${c.flame}aa`, c.flame]} style={[{ borderRadius: 30, padding: 20, gap: 8 }, shadow.float]}>
           <Text variant="labelSm" color="rgba(255,255,255,0.8)">CHATLOL PREMIUM</Text>
           <Text variant="headlineLg" color="#fff">👑 Know who’s into your vibe</Text>
           {until ? <Text color="#fff">Premium until {new Date(until).toLocaleDateString()} — buying again adds days.</Text> : null}

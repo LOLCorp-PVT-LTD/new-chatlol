@@ -7,3 +7,4 @@ export * from './calendar.js';
 export * from './profileLayout.js';
 export * from './stickers.js';
 export * from './permissions.js';
+export * from './themes.js';

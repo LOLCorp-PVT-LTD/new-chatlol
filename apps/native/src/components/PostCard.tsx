@@ -77,7 +77,7 @@ function PostCardImpl({ post: initial, onDeleted }: { post: Post; onDeleted?: (i
       </Row>
 
       {post.kind === 'birthday' ? (
-        <Gradient colors={['#ff5e00', '#ff8c42', '#ffd166']} style={{ marginHorizontal: 12, borderRadius: 24, paddingVertical: 26, paddingHorizontal: 18, alignItems: 'center', gap: 6 }}>
+        <Gradient colors={[c.flame, c.tangerine, '#ffd166']} style={{ marginHorizontal: 12, borderRadius: 24, paddingVertical: 26, paddingHorizontal: 18, alignItems: 'center', gap: 6 }}>
           <Text style={{ fontSize: 30, lineHeight: 38 }}>🎈 🎂 🎉</Text>
           <Avatar user={post.author} size={80} />
           <Text variant="headlineMd" color="#fff" style={{ textAlign: 'center' }}>Happy birthday, {post.author.displayName.split(' ')[0]}! 🎂</Text>

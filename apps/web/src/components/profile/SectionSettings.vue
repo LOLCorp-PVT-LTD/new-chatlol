@@ -60,7 +60,7 @@ function removeItem(i: number) {
 
     <!-- Type-specific settings -->
     <label v-if="spec.limit" class="block"><span class="label">How many to show: {{ c.limit }}</span>
-      <input v-model.number="c.limit" type="range" class="w-full accent-[#ff5e00] mt-1" :min="spec.limit.min" :max="spec.limit.max" @input="touch" /></label>
+      <input v-model.number="c.limit" type="range" class="w-full accent-flame mt-1" :min="spec.limit.min" :max="spec.limit.max" @input="touch" /></label>
     <div v-if="spec.columns"><p class="label mb-1.5">Columns</p>
       <div class="flex gap-1.5"><button v-for="n in [2, 3, 4, 5]" :key="n" class="chip h-9 w-11 justify-center" :class="{ 'chip-active': c.columns === n }" @click="c.columns = n; touch()">{{ n }}</button></div></div>
 

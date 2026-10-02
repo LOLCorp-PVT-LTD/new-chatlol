@@ -172,9 +172,9 @@ function duplicate(s: ProfileSection) {
 @media (min-width: 768px) { .sec-grid { grid-template-columns: repeat(12, minmax(0, 1fr)); } }
 .sec-item { align-self: start; min-width: 0; }
 .editing .sec-item { outline: 2px dashed rgb(255 255 255 / 0.55); outline-offset: 3px; border-radius: var(--sec-radius, 16px); cursor: pointer; padding-top: 34px; }
-.editing .sec-item.is-selected { outline: 3px solid #ff5e00; }
+.editing .sec-item.is-selected { outline: 3px solid rgb(var(--c-flame)); }
 .sec-toolbar { position: absolute; top: 0; left: 0; right: 0; height: 30px; display: flex; align-items: center; gap: 4px; padding: 0 4px 0 8px; border-radius: 10px; background: rgb(20 12 8 / 0.82); color: #fff; font-size: 12px; font-weight: 700; z-index: 2; }
-.is-selected .sec-toolbar { background: #ff5e00; }
+.is-selected .sec-toolbar { background: rgb(var(--c-flame)); }
 .sec-handle { display: inline-flex; align-items: center; gap: 4px; cursor: grab; user-select: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; touch-action: none; }
 .sec-handle:active { cursor: grabbing; }
 .sec-tb-btn { width: 24px; height: 24px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; }
@@ -182,7 +182,7 @@ function duplicate(s: ProfileSection) {
 /* In edit mode the section is a preview: links, players and forms don't react to clicks. */
 .sec-content-locked { pointer-events: none; user-select: none; }
 .sec-resize { position: absolute; top: 34px; bottom: 0; right: -10px; width: 20px; cursor: ew-resize; align-items: center; justify-content: center; z-index: 3; touch-action: none; }
-.sec-resize span { width: 6px; height: 44px; border-radius: 99px; background: #ff5e00; box-shadow: 0 0 0 2px #fff; opacity: 0; transition: opacity 0.15s; }
+.sec-resize span { width: 6px; height: 44px; border-radius: 99px; background: rgb(var(--c-flame)); box-shadow: 0 0 0 2px #fff; opacity: 0; transition: opacity 0.15s; }
 .sec-item:hover .sec-resize span, .is-selected .sec-resize span, .is-resizing .sec-resize span { opacity: 1; }
 .sec-ghost { opacity: 0.35; }
 .sec-chosen { transform: scale(1.01); }

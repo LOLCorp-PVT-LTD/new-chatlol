@@ -39,7 +39,7 @@ const h = () => (props.size === 'sm' ? 'h-9' : 'h-10');
 <template>
   <span class="inline-flex gap-2">
     <template v-if="user.friendship === 'incoming'">
-      <button class="btn text-white" :class="h()" :style="{ background: accent ?? '#ff5e00' }" :disabled="busy" @click="accept"><Icon name="how_to_reg" :size="18" /> Accept</button>
+      <button class="btn text-white" :class="h()" :style="{ background: accent ?? 'rgb(var(--c-flame))' }" :disabled="busy" @click="accept"><Icon name="how_to_reg" :size="18" /> Accept</button>
       <button class="btn bg-white/90 text-[#251911]" :class="h()" :disabled="busy" @click="decline">Decline</button>
     </template>
     <button v-else-if="user.friendship === 'outgoing'" class="btn bg-white/90 text-[#251911]" :class="h()" :disabled="busy" title="Cancel request" @click="cancel"><Icon name="schedule" :size="18" /> Requested</button>

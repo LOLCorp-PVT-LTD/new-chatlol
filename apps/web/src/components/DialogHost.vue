@@ -66,7 +66,7 @@ function onKey(e: KeyboardEvent, id: number, multiline: boolean) {
               </label>
               <label v-else-if="f.type === 'toggle'" class="flex items-center gap-3 rounded-md bg-surface-container-low px-4 py-3 cursor-pointer">
                 <span class="flex-1"><span class="text-label-lg block">{{ f.label }}</span><span v-if="f.hint" class="text-body-sm text-on-surface-variant">{{ f.hint }}</span></span>
-                <input v-model="(values[d.id][f.key] as boolean)" type="checkbox" class="w-5 h-5 accent-[#ff5e00]" />
+                <input v-model="(values[d.id][f.key] as boolean)" type="checkbox" class="w-5 h-5 accent-flame" />
               </label>
               <div v-else-if="f.type === 'choices'">
                 <span v-if="f.label" class="label">{{ f.label }}</span>

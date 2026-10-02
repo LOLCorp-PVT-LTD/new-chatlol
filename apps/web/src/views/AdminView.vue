@@ -369,7 +369,7 @@ const INTEGRATION_LABELS: Record<string, string> = { database: 'Database', redis
               <div class="grid sm:grid-cols-3 gap-3">
                 <div v-for="g in PERM_GROUPS" :key="g"><p class="text-label-sm text-on-surface-variant mb-1">{{ g }}</p>
                   <label v-for="p in PERMISSIONS.filter((x) => x.group === g)" :key="p.key" class="flex items-start gap-2 py-1 text-body-sm" :class="{ 'opacity-50': !has(p.key) && !roleDefaults.has(p.key) }" :title="p.desc">
-                    <input type="checkbox" class="mt-0.5 accent-[#ff5e00]" :checked="roleDefaults.has(p.key) || detail.user.perms.includes(p.key)" :disabled="roleDefaults.has(p.key) || !has(p.key)" @change="togglePerm(p.key)" />
+                    <input type="checkbox" class="mt-0.5 accent-flame" :checked="roleDefaults.has(p.key) || detail.user.perms.includes(p.key)" :disabled="roleDefaults.has(p.key) || !has(p.key)" @change="togglePerm(p.key)" />
                     <span>{{ p.label }}<span v-if="roleDefaults.has(p.key)" class="text-on-surface-variant"> · with role</span></span>
                   </label></div>
               </div>

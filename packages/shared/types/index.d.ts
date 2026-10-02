@@ -9,3 +9,4 @@ export * from './calendar';
 export * from './profileLayout';
 export * from './stickers';
 export * from './permissions';
+export * from './themes';

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { ageFrom, MAX_INTERESTS, MIN_AGE, REWARDS } from '@chatlol/shared';
+import { ageFrom, APP_THEMES, MAX_INTERESTS, MIN_AGE, REWARDS } from '@chatlol/shared';
 import { db, newId, now, today, isDuplicateKey } from '../db.js';
 import { hashPassword, verifyPassword, signToken, requireAuth, uid, passwordVersion } from '../lib/auth.js';
 import { HttpError, parse, rateLimit } from '../lib/http.js';
@@ -207,6 +207,16 @@ authRouter.patch('/me/settings', requireAuth, async (req, res) => {
         hapticsEnabled: z.boolean(),
         soundEnabled: z.boolean(),
         darkMode: z.enum(['system', 'light', 'dark']),
+        appTheme: z
+          .object({
+            preset: z.enum([...APP_THEMES.map((t) => t.key), 'custom']),
+            custom: z
+              .string()
+              .regex(/^#[0-9a-fA-F]{6}$/)
+              .nullable()
+              .default(null),
+          })
+          .refine((t) => t.preset !== 'custom' || !!t.custom, 'Pick a colour for your custom theme'),
         breakReminderMins: z.number().int().min(0).max(240),
         showAIPersonas: z.boolean(),
         whoCanComment: z.enum(['everyone', 'following']),
@@ -258,9 +268,14 @@ authRouter.post('/me/equip', requireAuth, async (req, res) => {
 /** Registers a phone for push: its native APNs (iOS) or FCM (Android) device token. */
 authRouter.post('/me/push-token', requireAuth, async (req, res) => {
   const b = parse(z.object({ token: z.string().min(10).max(4096), platform: z.enum(['ios', 'android']) }), req.body);
-  if (b.token.startsWith('ExponentPushToken')) throw new HttpError(400, 'Send the native device token, not an Expo push token', 'expo_token');
+  if (b.token.startsWith('ExponentPushToken'))
+    throw new HttpError(400, 'Send the native device token, not an Expo push token', 'expo_token');
   const provider = b.platform === 'ios' ? 'apns' : 'fcm';
-  await db.pushTokens.updateOne({ token: b.token }, { $set: { userId: uid(req), platform: b.platform, provider, createdAt: now() } }, { upsert: true });
+  await db.pushTokens.updateOne(
+    { token: b.token },
+    { $set: { userId: uid(req), platform: b.platform, provider, createdAt: now() } },
+    { upsert: true },
+  );
   res.json({ ok: true });
 });
 

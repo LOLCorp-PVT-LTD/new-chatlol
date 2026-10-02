@@ -52,7 +52,7 @@ async function goLive() {
         <input v-model="form.title" class="input" placeholder="Stream title" maxlength="80" />
         <div class="flex flex-wrap gap-2"><button v-for="c in CATS" :key="c" class="chip" :class="{ 'chip-active': form.category === c }" @click="form.category = c">{{ c }}</button></div>
         <label class="flex items-center gap-3 rounded-md bg-surface-container-low p-3 cursor-pointer">
-          <input v-model="form.video" type="checkbox" class="w-5 h-5 accent-[#ff5e00]" />
+          <input v-model="form.video" type="checkbox" class="w-5 h-5 accent-flame" />
           <span class="text-body-md flex-1"><b>Camera on</b> — stream video to up to 12 viewers. Off = chat-only stream.</span>
         </label>
         <p class="text-body-sm text-on-surface-variant">Your followers get a notification. You keep 70% of gifted Sparks. You need a verified email to go live.</p>

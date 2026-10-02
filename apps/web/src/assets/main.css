@@ -29,9 +29,9 @@
   .chip-active { @apply bg-umber text-cream border-umber; }
   /* A selected / active state (picked reaction, active tab, chosen option). Bright orange in light mode; in dark
      mode a deep brown with an orange edge, so the emoji or label on it stays readable. */
-  .is-on { background-image: linear-gradient(135deg, #ff9900, #ff5e00); color: #fff; border-color: transparent; }
-  [data-theme='dark'] .is-on { background-image: none; background-color: #3d2416; color: #ffb68e; box-shadow: inset 0 0 0 1.5px #c2551a; }
-  [data-theme='dark'] .chip-active { background-color: #3d2416; color: #ffb68e; border-color: #c2551a; }
+  .is-on { background-image: linear-gradient(135deg, rgb(var(--c-tangerine)), rgb(var(--c-flame))); color: #fff; border-color: transparent; }
+  [data-theme='dark'] .is-on { background-image: none; background-color: rgb(var(--c-sel-bg)); color: rgb(var(--c-sel-fg)); box-shadow: inset 0 0 0 1.5px rgb(var(--c-sel-border)); }
+  [data-theme='dark'] .chip-active { background-color: rgb(var(--c-sel-bg)); color: rgb(var(--c-sel-fg)); border-color: rgb(var(--c-sel-border)); }
   .input { @apply w-full h-[52px] rounded-full bg-surface-container-lowest border border-sandstone px-6 text-body-lg text-on-surface placeholder:text-outline
     focus:outline-none focus:border-flame focus:border-2 focus:ring-4 focus:ring-flame/15 transition; }
   .textarea { @apply input h-auto rounded-md py-4 resize-none; }

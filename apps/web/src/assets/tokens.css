@@ -47,6 +47,9 @@
   --c-sunlit: 255 244 234;
   --c-sandstone: 243 231 220;
   --c-online: 34 197 94;
+  --c-sel-bg: 255 94 0;
+  --c-sel-fg: 255 255 255;
+  --c-sel-border: 255 94 0;
   color-scheme: light;
 }
 
@@ -98,5 +101,8 @@
   --c-sunlit: 40 29 22;
   --c-sandstone: 62 50 42;
   --c-online: 34 197 94;
+  --c-sel-bg: 61 36 22;
+  --c-sel-fg: 255 182 142;
+  --c-sel-border: 194 85 26;
   color-scheme: dark;
 }

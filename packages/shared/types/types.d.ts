@@ -94,6 +94,8 @@ export interface UserSettings {
     hapticsEnabled: boolean;
     soundEnabled: boolean;
     darkMode: 'system' | 'light' | 'dark';
+    /** App colours (theme), the same on every device. */
+    appTheme: import('./themes').AppThemeSetting;
     breakReminderMins: number;
     showAIPersonas: boolean;
     whoCanComment: 'everyone' | 'following';

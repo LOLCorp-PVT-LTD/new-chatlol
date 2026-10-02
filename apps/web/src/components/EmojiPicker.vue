@@ -149,5 +149,5 @@ onBeforeUnmount(() => { document.removeEventListener('mousedown', onDoc); docume
 <style scoped>
 .picker { width: 352px; max-width: calc(100vw - 24px); height: 420px; }
 .emoji-host { flex: 1; min-height: 0; }
-.emoji-host :deep(emoji-picker) { width: 100%; height: 100%; --border-size: 0; --background: rgb(var(--c-surface-container-lowest)); --input-border-radius: 999px; --outline-color: #ff5e00; --indicator-color: #ff5e00; --num-columns: 8; }
+.emoji-host :deep(emoji-picker) { width: 100%; height: 100%; --border-size: 0; --background: rgb(var(--c-surface-container-lowest)); --input-border-radius: 999px; --outline-color: rgb(var(--c-flame)); --indicator-color: rgb(var(--c-flame)); --num-columns: 8; }
 </style>

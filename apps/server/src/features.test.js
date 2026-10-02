@@ -517,7 +517,16 @@ test('song search is Spotify only: clear error without keys, Spotify results wit
     if (u.startsWith('https://api.spotify.com/v1/search')) {
       assert.equal(opts.headers.Authorization, 'Bearer tok');
       return Response.json({
-        tracks: { items: [{ id: '0VjIjW4GlUZAMYd2vXMi3b', name: 'Blinding Lights', artists: [{ name: 'The Weeknd' }], album: { images: [{ url: 'https://i.scdn.co/image/big' }, { url: 'https://i.scdn.co/image/small' }] } }] },
+        tracks: {
+          items: [
+            {
+              id: '0VjIjW4GlUZAMYd2vXMi3b',
+              name: 'Blinding Lights',
+              artists: [{ name: 'The Weeknd' }],
+              album: { images: [{ url: 'https://i.scdn.co/image/big' }, { url: 'https://i.scdn.co/image/small' }] },
+            },
+          ],
+        },
       });
     }
     return realFetch(url, opts);
@@ -530,18 +539,57 @@ test('song search is Spotify only: clear error without keys, Spotify results wit
     config.spotify.clientSecret = 'secret';
     const r = await c.songSearch('blinding lights');
     assert.equal(r.source, 'spotify');
-    assert.deepEqual(r.tracks[0], { source: 'spotify', type: 'track', id: '0VjIjW4GlUZAMYd2vXMi3b', title: 'Blinding Lights', artist: 'The Weeknd', artUrl: 'https://i.scdn.co/image/small' });
+    assert.deepEqual(r.tracks[0], {
+      source: 'spotify',
+      type: 'track',
+      id: '0VjIjW4GlUZAMYd2vXMi3b',
+      title: 'Blinding Lights',
+      artist: 'The Weeknd',
+      artUrl: 'https://i.scdn.co/image/small',
+    });
     assert.ok(!called.some((u) => u.includes('itunes')), 'Apple Music is never searched');
     const saved = await c.updateProfile({ song: r.tracks[0] });
     assert.equal(saved.user.profile.song.source, 'spotify');
     // Apple songs picked in older versions are still accepted, but only real Apple preview clips.
-    const apple = { source: 'apple', type: 'track', id: '1488408568', title: 'Blinding Lights', artist: 'The Weeknd', previewUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview/x.m4a' };
+    const apple = {
+      source: 'apple',
+      type: 'track',
+      id: '1488408568',
+      title: 'Blinding Lights',
+      artist: 'The Weeknd',
+      previewUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview/x.m4a',
+    };
     assert.equal((await c.updateProfile({ song: apple })).user.profile.song.source, 'apple');
     await assert.rejects(c.updateProfile({ song: { ...apple, previewUrl: 'https://evil.example/x.mp3' } }), (e) => e.status === 400);
   } finally {
     globalThis.fetch = realFetch;
     Object.assign(config.spotify, keys);
   }
+});
+
+test('app colour theme: presets, a custom colour, saved on the account', async () => {
+  await signUp('themer');
+  const c = as('themer');
+  assert.deepEqual((await c.me()).user.settings.appTheme, { preset: 'sunset', custom: null });
+  assert.deepEqual((await c.updateSettings({ appTheme: { preset: 'ocean', custom: null } })).user.settings.appTheme, {
+    preset: 'ocean',
+    custom: null,
+  });
+  assert.equal((await c.updateSettings({ appTheme: { preset: 'custom', custom: '#7c5cff' } })).user.settings.appTheme.custom, '#7c5cff');
+  await assert.rejects(c.updateSettings({ appTheme: { preset: 'custom', custom: null } }), (e) => e.status === 400);
+  await assert.rejects(c.updateSettings({ appTheme: { preset: 'neon', custom: null } }), (e) => e.status === 400);
+  await assert.rejects(c.updateSettings({ appTheme: { preset: 'custom', custom: 'red; background:url(x)' } }), (e) => e.status === 400);
+  // The palette keeps Sunset's lightness, so text contrast is the same in every theme.
+  const { themePalette, hexToHsl, colors } = await import('@chatlol/shared');
+  const ocean = themePalette({ preset: 'ocean', custom: null });
+  for (const k of ['surface', 'onSurface', 'onSurfaceVariant', 'flame', 'outline'])
+    assert.ok(Math.abs(hexToHsl(ocean[k])[2] - hexToHsl(colors[k])[2]) < 0.01, k);
+  assert.deepEqual(themePalette({ preset: 'sunset', custom: null }), {
+    ...colors,
+    selBg: colors.flame,
+    selFg: '#ffffff',
+    selBorder: colors.flame,
+  });
 });
 
 test('every _id and every reference is a real ObjectId in MongoDB', async () => {

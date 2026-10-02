@@ -14,7 +14,7 @@ import Notifications from './components/Notifications.vue';
 import Drawer from './components/Drawer.vue';
 import Modal from './components/Modal.vue';
 import VerifyBanner from './components/VerifyBanner.vue';
-import { themeMode } from './stores/theme';
+import { appTheme, themeMode } from './stores/theme';
 import { COPYRIGHT } from '@chatlol/shared';
 
 const route = useRoute();
@@ -34,6 +34,7 @@ const viewKey = computed(() => (route.meta.remount ? route.path : (route.matched
 
 // Sync theme with account preference.
 watch(() => s.user?.settings.darkMode, (m) => { if (m) themeMode.value = m; }, { immediate: true });
+watch(() => s.user?.settings.appTheme, (t) => { if (t) appTheme.value = t; }, { immediate: true, deep: true });
 
 // Optional "take a break" nudge (Settings → Wellbeing).
 let breakTimer: ReturnType<typeof setTimeout> | undefined;

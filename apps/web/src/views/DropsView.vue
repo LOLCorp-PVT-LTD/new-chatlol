@@ -33,7 +33,7 @@ function onPosted(p: Post) {
 <template>
   <div class="max-w-[640px] mx-auto space-y-5">
     <section v-if="drop" class="rounded-lg bg-inverse-surface text-inverse-on-surface p-6 relative overflow-hidden shadow-float">
-      <div class="absolute inset-0 bg-[radial-gradient(circle_at_80%_120%,rgba(255,94,0,.7),transparent_55%)]" />
+      <div class="absolute inset-0 bg-[radial-gradient(circle_at_80%_120%,rgb(var(--c-flame)/0.7),transparent_55%)]" />
       <div class="relative">
         <div class="flex items-center justify-between text-label-md">
           <span class="bg-white/10 rounded-full px-3 py-1">🌅 Sunset Ritual</span>

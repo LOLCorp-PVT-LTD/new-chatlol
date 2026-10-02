@@ -10,6 +10,7 @@ import { useSession } from '../stores/session';
 import { themeMode } from '../stores/theme';
 import Icon from '../components/Icon.vue';
 import Toggle from '../components/Toggle.vue';
+import AppThemePicker from '../components/AppThemePicker.vue';
 
 const s = useSession();
 const router = useRouter();
@@ -184,11 +185,12 @@ const go = (id: string) => document.getElementById(id)?.scrollIntoView({ behavio
       <!-- Appearance -->
       <section id="appearance" class="card scroll-mt-28">
         <h2 class="text-headline-md flex items-center gap-2 px-5 pt-5"><Icon name="palette" class="text-flame" /> Appearance & sound</h2>
-        <div class="px-5 py-4"><p class="label mb-2">Theme</p>
+        <div class="px-5 py-4"><p class="label mb-2">Light or dark</p>
           <div class="grid grid-cols-3 gap-2">
             <button v-for="o in ([['light', '☀️', 'Light'], ['dark', '🌙', 'Dark'], ['system', '⚙️', 'System']] as const)" :key="o[0]" class="rounded-md border p-4 text-center transition" :class="u.settings.darkMode === o[0] ? 'border-flame ring-2 ring-flame/30 bg-sunlit' : 'border-sandstone'" @click="set('darkMode', o[0])">
               <span class="text-2xl block">{{ o[1] }}</span><span class="text-label-lg">{{ o[2] }}</span></button>
           </div></div>
+        <div class="px-5 pb-5"><p class="label mb-2">Colours</p><AppThemePicker /></div>
         <div class="divide-y divide-sandstone border-t border-sandstone"><Toggle v-for="t in expToggles" :key="t.k" :model-value="!!u.settings[t.k]" :label="t.label" :hint="t.hint" :icon="t.icon" @update:model-value="set(t.k, $event as never)" /></div>
       </section>
 

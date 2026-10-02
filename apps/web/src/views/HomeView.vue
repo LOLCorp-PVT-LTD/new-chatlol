@@ -67,7 +67,7 @@ async function nextRate() {
     </section>
 
     <!-- Birthdays today -->
-    <section v-if="h.birthdays.length" class="card p-5 bg-[linear-gradient(135deg,rgba(255,94,0,.08),rgba(255,209,102,.18))]">
+    <section v-if="h.birthdays.length" class="card p-5 bg-[linear-gradient(135deg,rgb(var(--c-flame)/0.08),rgba(255,209,102,.18))]">
       <SectionHead title="Birthdays today 🎂" icon="cake" hint="Send them a wish!" />
       <div class="flex gap-4 overflow-x-auto scrollbar-none">
         <RouterLink v-for="b in h.birthdays" :key="b.user.id" :to="`/p/${b.postId}`" class="w-24 shrink-0 text-center group">

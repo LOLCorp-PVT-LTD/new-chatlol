@@ -133,7 +133,7 @@ async function remove() {
     </header>
 
     <!-- System birthday card -->
-    <div v-if="post.kind === 'birthday'" class="mx-3 mb-1 rounded-md bg-[linear-gradient(135deg,#ff5e00,#ff8c42_45%,#ffd166)] text-white text-center px-6 py-8 relative overflow-hidden">
+    <div v-if="post.kind === 'birthday'" class="mx-3 mb-1 rounded-md bg-[linear-gradient(135deg,rgb(var(--c-flame)),rgb(var(--c-tangerine))_45%,#ffd166)] text-white text-center px-6 py-8 relative overflow-hidden">
       <div class="absolute inset-0 opacity-25 text-5xl leading-[1.6] select-none pointer-events-none" aria-hidden="true">🎈 🎉 🎂 🎁 🎈 🎉 🎂 🎁 🎈 🎉</div>
       <Avatar :user="post.author" :size="88" class="mx-auto ring-4 ring-white/80 rounded-full" />
       <p class="text-headline-lg mt-3 relative">Happy birthday, {{ post.author.displayName.split(' ')[0] }}! 🎂</p>

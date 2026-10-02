@@ -2,7 +2,11 @@ import type { Config } from 'tailwindcss';
 import { colors, radii } from '../../packages/shared/src/tokens.js';
 
 const kebab = (s: string) => s.replace(/[A-Z]/g, (m) => '-' + m.toLowerCase());
-const palette = Object.fromEntries(Object.keys(colors).map((k) => [kebab(k), `rgb(var(--c-${kebab(k)}) / <alpha-value>)`]));
+const palette = Object.fromEntries(
+  [...Object.keys(colors), 'selBg', 'selFg', 'selBorder'].map((k) => [kebab(k), `rgb(var(--c-${kebab(k)}) / <alpha-value>)`]),
+);
+// Everything below follows the person's colour theme (CSS variables set by lib/appTheme.ts).
+const v = (name: string, a = 1) => `rgb(var(--c-${name}) / ${a})`;
 
 export default {
   content: ['./index.html', './src/**/*.{vue,ts}'],
@@ -27,20 +31,20 @@ export default {
         'label-sm': ['11px', { lineHeight: '14px', letterSpacing: '0.04em', fontWeight: '700' }],
       },
       boxShadow: {
-        warm: '0px 4px 20px -2px rgba(184, 82, 0, 0.06), 0px 1px 3px 0px rgba(71, 32, 0, 0.04)',
-        pop: '0px 12px 28px -4px rgba(255, 94, 0, 0.14), 0px 4px 10px -1px rgba(71, 32, 0, 0.05)',
-        float: '0px 20px 40px -8px rgba(255, 94, 0, 0.28)',
-        glow: '0 0 16px rgba(255, 94, 0, 0.45)',
+        warm: `0px 4px 20px -2px ${v('primary', 0.06)}, 0px 1px 3px 0px ${v('on-primary-container', 0.04)}`,
+        pop: `0px 12px 28px -4px ${v('flame', 0.14)}, 0px 4px 10px -1px ${v('on-primary-container', 0.05)}`,
+        float: `0px 20px 40px -8px ${v('flame', 0.28)}`,
+        glow: `0 0 16px ${v('flame', 0.45)}`,
       },
       backgroundImage: {
-        sunset: 'linear-gradient(135deg, #ff9900 0%, #ff5e00 100%)',
-        'sunset-v': 'linear-gradient(180deg, #ff5e00 0%, #ffa800 100%)',
-        dusk: 'linear-gradient(135deg, #ff5e00 0%, #bd0042 100%)',
+        sunset: `linear-gradient(135deg, ${v('tangerine')} 0%, ${v('flame')} 100%)`,
+        'sunset-v': `linear-gradient(180deg, ${v('flame')} 0%, ${v('secondary-container')} 100%)`,
+        dusk: `linear-gradient(135deg, ${v('flame')} 0%, ${v('tertiary')} 100%)`,
       },
       keyframes: {
         pop: { '0%': { transform: 'scale(.6)', opacity: '0' }, '60%': { transform: 'scale(1.08)', opacity: '1' }, '100%': { transform: 'scale(1)' } },
         floatUp: { '0%': { transform: 'translateY(0)', opacity: '1' }, '100%': { transform: 'translateY(-80px)', opacity: '0' } },
-        pulseRing: { '0%': { boxShadow: '0 0 0 0 rgba(255,94,0,.45)' }, '100%': { boxShadow: '0 0 0 12px rgba(255,94,0,0)' } },
+        pulseRing: { '0%': { boxShadow: `0 0 0 0 ${v('flame', 0.45)}` }, '100%': { boxShadow: `0 0 0 12px ${v('flame', 0)}` } },
         shimmer: { '0%': { backgroundPosition: '-400px 0' }, '100%': { backgroundPosition: '400px 0' } },
         wiggle: { '0%,100%': { transform: 'rotate(0)' }, '25%': { transform: 'rotate(-8deg)' }, '75%': { transform: 'rotate(8deg)' } },
         ticker: { '0%': { transform: 'translateX(0)' }, '100%': { transform: 'translateX(-50%)' } },

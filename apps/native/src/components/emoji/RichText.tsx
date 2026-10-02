@@ -3,13 +3,16 @@ import { View, type StyleProp, type TextStyle } from 'react-native';
 import { router } from 'expo-router';
 import { isJumbo, parseRich } from '@chatlol/shared';
 import { Text } from '../ui';
+import { useColors } from '../../lib/theme';
 import { CustomEmoji } from './CustomEmoji';
 
 /**
  * User text with ChatLOL custom emoji (:code:) drawn inline, @mentions that open the profile and, optionally,
  * #tags highlighted. Text that's only 1–3 custom emoji is shown big.
  */
-export function RichText({ text, color, linkColor = '#ff5e00', variant = 'bodyMd', style, tags, numberOfLines }: { text: string | null | undefined; color?: string; linkColor?: string; variant?: React.ComponentProps<typeof Text>['variant']; style?: StyleProp<TextStyle>; tags?: boolean; numberOfLines?: number }) {
+export function RichText({ text, color, linkColor: linkColorProp, variant = 'bodyMd', style, tags, numberOfLines }: { text: string | null | undefined; color?: string; linkColor?: string; variant?: React.ComponentProps<typeof Text>['variant']; style?: StyleProp<TextStyle>; tags?: boolean; numberOfLines?: number }) {
+  const c = useColors();
+  const linkColor = linkColorProp ?? c.flame;
   const parts = parseRich(text);
   if (!parts.length) return null;
   if (isJumbo(parts))

@@ -329,9 +329,9 @@ const addSection = (type: SectionType) => canvas.value?.addSection(type);
     <!-- Builder chrome -->
     <template v-if="editing">
       <div class="fixed top-0 inset-x-0 z-[60] h-14 bg-[#1a110c] text-white flex items-center gap-2 px-3 sm:px-5 shadow-float">
-        <Icon name="dashboard_customize" class="text-[#ff9900]" />
+        <Icon name="dashboard_customize" class="text-tangerine" />
         <p class="text-label-lg hidden sm:block">Editing your page</p>
-        <span v-if="dirty" class="text-label-sm text-[#ffb68e] hidden md:inline">· unsaved changes</span>
+        <span v-if="dirty" class="text-label-sm text-inverse-primary hidden md:inline">· unsaved changes</span>
         <span class="flex-1" />
         <button class="w-10 h-10 rounded-full hover:bg-white/10 disabled:opacity-30 flex items-center justify-center" :disabled="cursor === 0" title="Undo (Ctrl+Z)" aria-label="Undo" @click="undo"><Icon name="undo" /></button>
         <button class="w-10 h-10 rounded-full hover:bg-white/10 disabled:opacity-30 flex items-center justify-center" :disabled="cursor >= history.length - 1" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" @click="redo"><Icon name="redo" /></button>

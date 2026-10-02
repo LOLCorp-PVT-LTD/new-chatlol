@@ -30,7 +30,10 @@ export function ding(kind: 'reward' | 'match' | 'level' | 'tap' = 'reward') {
 export function confetti(originX = window.innerWidth / 2, originY = window.innerHeight / 2, count = 36) {
   if (!fxPrefs.motion) return;
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  const colors = ['#ff9900', '#ff5e00', '#ff3366', '#ffd700', '#fe9800'];
+  // Confetti in the person's theme colours (plus gold).
+  const css = getComputedStyle(document.documentElement);
+  const themed = (n: string) => `rgb(${css.getPropertyValue(`--c-${n}`).trim().replace(/ /g, ',')})`;
+  const colors = [themed('tangerine'), themed('flame'), themed('coral'), '#ffd700', themed('secondary-container')];
   const layer = document.createElement('div');
   layer.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:9999;overflow:hidden';
   document.body.appendChild(layer);

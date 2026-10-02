@@ -22,7 +22,7 @@ const s = useSession();
 <style scoped>
 .toast-info,
 .toast-level { background: rgb(var(--c-inverse-surface)); color: rgb(var(--c-inverse-on-surface)); }
-.toast-reward { background: linear-gradient(135deg, #ff9900, #ff5e00); color: #fff; }
+.toast-reward { background: linear-gradient(135deg, rgb(var(--c-tangerine)), rgb(var(--c-flame))); color: #fff; }
 .toast-error { background: rgb(var(--c-error)); color: #fff; }
 /* Dark theme: toasts flip to light cards so they stand out against the dark UI. */
 [data-theme='dark'] .toast-info,

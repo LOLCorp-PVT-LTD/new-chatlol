@@ -8,10 +8,11 @@ import { api } from '../lib/api';
 import { logout, errorToast, adoptSession, toast } from '../lib/actions';
 import { biometricsAvailable, unlockWithBiometrics } from '../lib/native';
 import { session, useSession } from '../lib/store';
-import { useColors } from '../lib/theme';
+import { useColors, WEB_THUMB } from '../lib/theme';
 import { ScreenHeader } from '../components/chrome';
 import { Button, Card, Chip, Input, Label, Row, Text, Icon, type IconName } from '../components/ui';
 import { APP_LOCK_KEY } from './_layout';
+import { AppThemePicker } from '../components/AppThemePicker';
 
 type ToggleDef = { k: keyof UserSettings; label: string; hint: string; icon: IconName };
 const PRIVACY: ToggleDef[] = [
@@ -90,7 +91,7 @@ export default function Settings() {
     <Row key={t.k} gap={12} style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
       <View style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: c.sunlit, alignItems: 'center', justifyContent: 'center' }}><Icon name={t.icon} color={c.flame} size={20} /></View>
       <View style={{ flex: 1 }}><Text variant="labelLg">{t.label}</Text><Text variant="bodySm" color={c.onSurfaceVariant}>{t.hint}</Text></View>
-      <Switch value={!!user!.settings[t.k]} onValueChange={(v) => set(t.k, v as never)} trackColor={{ true: c.flame, false: c.sandstone }} thumbColor="#fff" />
+      <Switch value={!!user!.settings[t.k]} onValueChange={(v) => set(t.k, v as never)} trackColor={{ true: c.flame, false: c.sandstone }} thumbColor="#fff" {...WEB_THUMB} />
     </Row>
   );
   const choices = <K extends keyof UserSettings>(title: string, k: K, opts: [UserSettings[K], string][]) => (
@@ -138,13 +139,15 @@ export default function Settings() {
             <Row gap={12} style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
               <View style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: c.sunlit, alignItems: 'center', justifyContent: 'center' }}><Icon name="fingerprint" color={c.flame} size={20} /></View>
               <View style={{ flex: 1 }}><Text variant="labelLg">Face ID / Biometric lock</Text><Text variant="bodySm" color={c.onSurfaceVariant}>Require unlock after 1 min away</Text></View>
-              <Switch value={lock} onValueChange={toggleLock} trackColor={{ true: c.flame, false: c.sandstone }} thumbColor="#fff" />
+              <Switch value={lock} onValueChange={toggleLock} trackColor={{ true: c.flame, false: c.sandstone }} thumbColor="#fff" {...WEB_THUMB} />
             </Row>
           ) : null}
         </Card>
         <Card style={{ padding: 16, gap: 14 }}>
-          <View style={{ gap: 8 }}><Label>Theme</Label>
+          <View style={{ gap: 8 }}><Label>Light or dark</Label>
             <Row gap={8}>{(['light', 'dark', 'system'] as const).map((o) => <Chip key={o} label={o === 'dark' ? '🌙 Dark' : o === 'light' ? '☀️ Light' : '⚙️ System'} active={user.settings.darkMode === o} onPress={() => set('darkMode', o)} />)}</Row></View>
+          <View style={{ gap: 8 }}><Label>Colours</Label>
+            <AppThemePicker value={user.settings.appTheme ?? { preset: 'sunset', custom: null }} onChange={(t) => set('appTheme', t)} /></View>
           <View style={{ gap: 8 }}><Label>Take-a-break reminder</Label>
             <Row gap={8}>{[0, 30, 60, 90].map((m) => <Chip key={m} label={m ? `${m} min` : 'Off'} active={user.settings.breakReminderMins === m} onPress={() => set('breakReminderMins', m)} />)}</Row></View>
         </Card>
