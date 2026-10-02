@@ -11,7 +11,7 @@ Wants=network-online.target
 Type=simple
 User=chatlol
 Group=chatlol
-WorkingDirectory=/opt/chatlol/apps/server
+WorkingDirectory=/var/www/chatlol/apps/server
 EnvironmentFile=/etc/chatlol/api.env
 Environment=PORT=%i
 Environment=HOST=127.0.0.1

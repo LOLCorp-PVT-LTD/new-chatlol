@@ -4,11 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --watch --env-file-if-exists=.env src/index.js",
-    "start": "node --env-file-if-exists=.env src/index.js",
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
     "check": "node ../../scripts/check-syntax.mjs src",
     "seed": "node src/seed.js --reset",
-    "db:migrate-ids": "node --env-file-if-exists=.env src/scripts/migrate-object-ids.js",
+    "db:migrate-ids": "node src/scripts/migrate-object-ids.js",
     "test": "node --test --test-concurrency=1 src/api.test.js src/ai.test.js src/shared.test.js src/push.test.js src/cluster.test.js src/features.test.js"
   },
   "dependencies": {

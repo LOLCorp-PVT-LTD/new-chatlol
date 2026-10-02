@@ -1,4 +1,11 @@
 import { randomBytes } from 'node:crypto';
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+// Settings from apps/server/.env, if there is one. Variables that are already set (systemd's EnvironmentFile,
+// the shell) win. Loaded here rather than with node --env-file, which crashes `node --watch` when the file is missing.
+const envFile = fileURLToPath(new URL('../.env', import.meta.url));
+if (existsSync(envFile)) process.loadEnvFile(envFile);
 
 const env = process.env;
 const isProd = env.NODE_ENV === 'production';

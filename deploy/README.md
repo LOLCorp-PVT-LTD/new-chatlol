@@ -4,7 +4,7 @@ One server running nginx, which serves the web app and passes `/api`, `/socket.i
 (two Node processes). MongoDB can be on the same server or on MongoDB Atlas.
 
 ```
-browser ──https──▶ nginx ─┬─ /            → /var/www/chatlol/web      (built web app)
+browser ──https──▶ nginx ─┬─ /            → /var/www/chatlol/apps/web/dist (built web app)
                           ├─ /uploads/    → /var/lib/chatlol/uploads  (photos, from disk)
                           └─ /api/, /socket.io/ → 127.0.0.1:4000, :4001 (API) ──▶ MongoDB
 ```
@@ -37,24 +37,33 @@ start it with `--replSet rs0` and run `rs.initiate()` once.
 
 ## 3. The code
 
+The code lives in `/var/www/chatlol` and runs as its own user, not root:
+
 ```sh
-sudo useradd --system --home /opt/chatlol --shell /usr/sbin/nologin chatlol
-sudo mkdir -p /opt/chatlol /var/lib/chatlol/uploads /var/www/chatlol/web /var/www/letsencrypt /etc/chatlol
-sudo chown -R chatlol:chatlol /opt/chatlol /var/lib/chatlol
-sudo -u chatlol git clone <your repo> /opt/chatlol
-cd /opt/chatlol
-sudo -u chatlol npm ci -w @chatlol/server -w @chatlol/web -w @chatlol/shared
+sudo useradd --system --home /var/www/chatlol --shell /usr/sbin/nologin chatlol
+sudo git clone <your repo> /var/www/chatlol        # skip if it's already there
+sudo mkdir -p /var/lib/chatlol/uploads /var/www/letsencrypt /etc/chatlol
+sudo chown -R chatlol:chatlol /var/www/chatlol /var/lib/chatlol
+cd /var/www/chatlol
+sudo -u chatlol npm ci
 ```
+
+Install from the repo root (`/var/www/chatlol`), not from `apps/server`: it's one workspace, and the server and
+web app both need the shared package.
+
+Don't use `npm run dev` on the server: that's development mode (restarts on every file change). The API runs
+through systemd in step 6.
 
 ## 4. Build the web app
 
 The web app calls the API on the same address (`/api`), so it needs no API URL.
 
 ```sh
-cd /opt/chatlol
+cd /var/www/chatlol
 sudo -u chatlol npm run build -w @chatlol/web
-sudo rsync -a --delete apps/web/dist/ /var/www/chatlol/web/
 ```
+
+nginx serves `apps/web/dist` directly, so there's nothing to copy.
 
 ## 5. API settings
 
@@ -110,11 +119,10 @@ Open https://chatlol.net. Sign up with an address from `ADMIN_EMAILS` to get the
 ## Updating
 
 ```sh
-cd /opt/chatlol
+cd /var/www/chatlol
 sudo -u chatlol git pull
-sudo -u chatlol npm ci -w @chatlol/server -w @chatlol/web -w @chatlol/shared
+sudo -u chatlol npm ci
 sudo -u chatlol npm run build -w @chatlol/web
-sudo rsync -a --delete apps/web/dist/ /var/www/chatlol/web/
 sudo systemctl restart chatlol-api@4000 && sleep 5 && sudo systemctl restart chatlol-api@4001
 ```
 
