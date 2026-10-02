@@ -534,3 +534,50 @@ test('custom emoji and stickers: free starter packs, paid packs locked until bou
 async function assertLocked(p, code) {
   await assert.rejects(p, (e) => e.status === 402 && e.code === code);
 }
+
+test('friend requests: send, accept, decline, cancel, unfriend, privacy setting, personas answer', async () => {
+  const a = await signUp('fra');
+  const b = await signUp('frb');
+  const d = await signUp('frd');
+  const A = as('fra');
+  const B = as('frb');
+  assert.equal((await A.user(b.handle)).user.friendship, 'none');
+  assert.equal((await A.addFriend(b.id)).friendship, 'outgoing');
+  assert.equal((await B.user(a.handle)).user.friendship, 'incoming');
+  const reqs = await B.friendRequests();
+  assert.deepEqual(reqs.incoming.map((r) => r.user.id), [a.id]);
+  assert.ok((await B.notifications()).items.some((n) => n.kind === 'friend_request' && n.link === '/friends'));
+  assert.equal((await B.acceptFriend(a.id)).friendship, 'friends');
+  assert.equal((await A.user(b.handle)).user.friendship, 'friends');
+  assert.ok((await A.notifications()).items.some((n) => n.kind === 'friend_accepted'));
+  assert.equal((await A.user(b.handle)).user.isFollowing, true, 'friends follow each other');
+  assert.deepEqual((await A.friends()).items.map((f) => f.user.id).filter((id) => id === b.id), [b.id]);
+  assert.equal((await A.user(a.handle)).user.friendsCount >= 1, true);
+  // Following back alone no longer makes friends; mutual requests do.
+  await as('frd').follow(a.id);
+  await A.follow(d.id);
+  assert.equal((await A.user(d.handle)).user.friendship, 'none');
+  await as('frd').addFriend(a.id);
+  assert.equal((await A.addFriend(d.id)).friendship, 'friends', 'asking someone who already asked you = friends');
+  // Decline is quiet; cancel withdraws.
+  const e = await signUp('fre');
+  await as('fre').addFriend(b.id);
+  await B.declineFriend(e.id);
+  assert.equal((await as('fre').user(b.handle)).user.friendship, 'none');
+  await as('fre').addFriend(d.id);
+  await as('fre').cancelFriendRequest(d.id);
+  assert.deepEqual((await as('frd').friendRequests()).incoming, []);
+  // Unfriend.
+  await A.unfriend(b.id);
+  assert.equal((await A.user(b.handle)).user.friendship, 'none');
+  // Privacy: nobody can send requests.
+  await B.updateSettings({ friendRequestsFrom: 'nobody' });
+  await assert.rejects(as('fre').addFriend(b.id), (err) => err.status === 403);
+  // Showcase friends come from friendships.
+  const sc = await A.showcase(a.id, ['friends'], 10);
+  assert.ok(sc.friends.some((f) => f.id === d.id) && !sc.friends.some((f) => f.id === b.id));
+  // Personas answer requests (most accept) after a short while.
+  await A.addFriend(MIA);
+  const mia = await until(async () => ((await A.user('mia.goldenhour').catch(() => null))?.user.friendship === 'friends' ? true : (await db.friendRequests.findOne({ fromId: a.id, toId: MIA }))?.status !== 'pending' ? true : null), 8000).catch(() => false);
+  assert.ok(mia, 'the persona responded to the request');
+});

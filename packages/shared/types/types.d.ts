@@ -39,6 +39,8 @@ export interface UserPublic {
     /** ChatLOL Premium member (crown badge). */
     premium: boolean;
     isFollowing?: boolean;
+    /** How you stand with them (only on other people). */
+    friendship?: Friendship | null;
     createdAt: ISODate;
 }
 export interface UserPrivate extends UserPublic {
@@ -92,6 +94,7 @@ export interface UserSettings {
     showAIPersonas: boolean;
     whoCanComment: 'everyone' | 'following';
     wallFrom: 'everyone' | 'following' | 'nobody';
+    friendRequestsFrom: 'everyone' | 'friends_of_friends' | 'nobody';
     profileVisibility: 'everyone' | 'members';
     showGender: boolean;
     showCity: boolean;
@@ -428,3 +431,6 @@ export interface Showcase {
     topPhotos?: Post[];
     threads?: { id: ID; boardId: string; boardName: string; title: string; replyCount: number; upvotes: number; createdAt: ISODate }[];
 }
+
+/** none · outgoing (you sent a request) · incoming (they sent you one) · friends */
+export type Friendship = 'none' | 'outgoing' | 'incoming' | 'friends';

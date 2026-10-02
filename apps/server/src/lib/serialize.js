@@ -1,3 +1,4 @@
+import { friendshipStatus } from './friends.js';
 import { summarizeRatings, levelForXp, tierByScore, REWARDS, gemPriceFor, normalizeLayout } from '@chatlol/shared';
 import { db, today } from '../db.js';
 import { presence } from './presence.js';
@@ -16,6 +17,7 @@ export const DEFAULT_SETTINGS = {
   // Privacy
   whoCanComment: 'everyone', // everyone | following
   wallFrom: 'everyone', // everyone | following | nobody
+  friendRequestsFrom: 'everyone', // everyone | friends_of_friends | nobody
   profileVisibility: 'everyone', // everyone | members (signed-in only)
   showGender: true,
   showCity: true,
@@ -106,7 +108,7 @@ async function stats(userId) {
   const followees = await db.follows.distinct('followeeId', { followerId: userId });
   const [followers, friends] = await Promise.all([
     db.follows.countDocuments({ followeeId: userId }),
-    followees.length ? db.follows.countDocuments({ followerId: { $in: followees }, followeeId: userId }) : 0,
+    db.friendships.countDocuments({ $or: [{ a: userId }, { b: userId }] }),
   ]);
   if (statsCache.size > 20_000) statsCache.clear();
   const s = {
@@ -163,6 +165,7 @@ export async function userPublic(u, viewerId) {
   };
   if (viewerId && viewerId !== u._id) {
     out.isFollowing = !!(await db.follows.findOne({ followerId: viewerId, followeeId: u._id }));
+    out.friendship = await friendshipStatus(viewerId, u._id);
   }
   return out;
 }

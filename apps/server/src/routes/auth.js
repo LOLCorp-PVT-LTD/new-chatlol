@@ -210,6 +210,7 @@ authRouter.patch('/me/settings', requireAuth, async (req, res) => {
         showAIPersonas: z.boolean(),
         whoCanComment: z.enum(['everyone', 'following']),
         wallFrom: z.enum(['everyone', 'following', 'nobody']),
+        friendRequestsFrom: z.enum(['everyone', 'friends_of_friends', 'nobody']),
         profileVisibility: z.enum(['everyone', 'members']),
         showGender: z.boolean(),
         showCity: z.boolean(),

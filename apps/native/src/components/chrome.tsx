@@ -11,6 +11,8 @@ import { api } from '../lib/api';
 import { haptic } from '../lib/native';
 import { gradients, shadow, useColors, useIsDark } from '../lib/theme';
 import { Avatar } from './people';
+import { actionSheet } from '../lib/dialog';
+import { logout } from '../lib/actions';
 import { Gradient, Icon, IconButton, Row, Tap, Text, type IconName } from './ui';
 
 const glass = Platform.OS === 'ios' && isLiquidGlassAvailable();
@@ -53,7 +55,15 @@ export function TopBar() {
             </Tap>
             <IconButton name="mail-outline" label="Messages" badge={dms} onPress={() => router.push('/messages')} />
             <IconButton name="notifications-none" label="Notifications" badge={unread} onPress={() => router.push('/notifications')} />
-            <Tap onPress={() => router.push('/locker')} accessibilityLabel="My profile"><Avatar user={user} size={34} showOnline={false} /></Tap>
+            <Tap onPress={() => void actionSheet(`@${user.handle}`, [
+              { label: 'My profile', icon: 'person', onPress: () => router.push('/locker') },
+              { label: 'Friends', icon: 'diversity-3', onPress: () => router.push('/friends') },
+              { label: 'Edit my page', icon: 'dashboard-customize', onPress: () => router.push('/page-builder') },
+              { label: 'Sparks Vault', icon: 'local-fire-department', onPress: () => router.push('/vault') },
+              { label: 'Premium', icon: 'workspace-premium', onPress: () => router.push('/premium') },
+              { label: 'Settings', icon: 'settings', onPress: () => router.push('/settings') },
+              { label: 'Log out', icon: 'logout', danger: true, onPress: () => void logout() },
+            ])} accessibilityLabel="Account menu: profile, friends, settings"><Avatar user={user} size={34} showOnline={false} /></Tap>
           </>
         ) : null}
       </Row>

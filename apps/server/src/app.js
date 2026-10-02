@@ -14,6 +14,7 @@ import { profileRouter } from './routes/profile.js';
 import { shoutsRouter } from './routes/shouts.js';
 import { homeRouter } from './routes/home.js';
 import { adminRouter } from './routes/admin.js';
+import { friendsRouter } from './routes/friends.js';
 import { presence } from './lib/presence.js';
 import { db } from './db.js';
 
@@ -57,6 +58,7 @@ export function createApp() {
     storeRouter,
     liveRouter,
     paymentsRouter,
+    friendsRouter,
   ])
     app.use('/api', r);
   app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));

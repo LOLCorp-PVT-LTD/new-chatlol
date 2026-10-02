@@ -96,8 +96,8 @@ usersRouter.post('/users/:id/follow', requireAuth, async (req, res) => {
       kind: 'follow',
       actorId: me,
       link: `/u/${meRow.handle}`,
-      title: mutual ? `You and @${meRow.handle} are now friends 🤝` : `@${meRow.handle} started following you`,
-      body: mutual ? 'Say hi in DMs!' : 'Follow back to become friends.',
+      title: mutual ? `@${meRow.handle} followed you back` : `@${meRow.handle} started following you`,
+      body: mutual ? 'You follow each other now.' : 'Follow back, or send a friend request.',
     });
   }
   invalidateStats(me);

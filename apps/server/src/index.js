@@ -4,6 +4,7 @@ import { createApp } from './app.js';
 import { attachRealtime } from './realtime.js';
 import { config } from './config.js';
 import { initDb, db } from './db.js';
+import { backfillFriendships } from './lib/friends.js';
 import { initShared, shared, sharedBackend } from './lib/shared.js';
 import { seedIfEmpty } from './seed.js';
 import { startPersonaEngine } from './ai/engine.js';
@@ -30,6 +31,9 @@ async function main() {
   await initDb();
   await initShared();
   await seedIfEmpty();
+  // Friends used to mean "follow each other": turn those pairs into friendships once.
+  const converted = await backfillFriendships();
+  if (converted) console.log(`🤝 ${converted} mutual follows became friendships`);
 
   const server = createServer(createApp());
   await attachRealtime(server);

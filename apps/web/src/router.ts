@@ -28,6 +28,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/live', component: () => import('./views/LiveView.vue'), meta: { title: 'Live' } },
   { path: '/live/:id', component: () => import('./views/LiveRoomView.vue'), meta: { remount: true, rails: false, title: 'Live' } },
   { path: '/messages/:id?', component: () => import('./views/MessagesView.vue'), meta: { auth: true, rails: false, title: 'Messages' } },
+  { path: '/friends', component: () => import('./views/FriendsView.vue'), meta: { auth: true, title: 'Friends' } },
   { path: '/members', component: () => import('./views/MembersView.vue'), meta: { title: 'Members' } },
   { path: '/leaderboard', component: () => import('./views/LeaderboardView.vue'), meta: { title: 'Hall of Fame' } },
   { path: '/vault', component: () => import('./views/VaultView.vue'), meta: { title: 'Sparks Vault' } },

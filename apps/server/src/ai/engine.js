@@ -16,6 +16,7 @@ import { ensureDrop } from '../lib/drops.js';
 import { personaById, systemPrompt, chatPrompt } from './personas.js';
 import { nimChat, nimImage, nimVision, nimEnabled } from './nim.js';
 import { fallback } from './fallback.js';
+import { acceptFriendRequest } from '../lib/friends.js';
 
 /**
  * The persona engine: a light scheduler that makes AI personas behave like regulars —
@@ -352,6 +353,15 @@ const WISHES = [
   'happy bday!! eat all the cake 🍰',
 ];
 /** A few personas leave birthday wishes on the birthday post over the next hours. */
+/** Personas answer friend requests like people do: most accept, after a little while. */
+function onFriendRequest({ fromId, toId }) {
+  const r = byUserId(toId);
+  if (!r || isAi(fromId)) return;
+  later(rand(20_000, 8 * 60_000) * config.ai.replyPace, async () => {
+    if (Math.random() < 0.85) await acceptFriendRequest(r.userId, fromId).catch(() => {});
+  });
+}
+
 function onBirthday({ postId, userId }) {
   const wishers = [...roster]
     .filter((r) => r.userId !== userId)
@@ -680,5 +690,6 @@ export async function startPersonaEngine(leader = async () => true) {
   bus.onEvent('stream:started', guard(onStreamStarted));
   bus.onEvent('shout:created', guard(onShout));
   bus.onEvent('birthday:posted', guard(onBirthday));
+  bus.onEvent('friend:requested', guard(onFriendRequest));
   console.log(`   ${roster.length} AI personas loaded (${awake().length} awake)`);
 }

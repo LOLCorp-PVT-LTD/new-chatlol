@@ -99,6 +99,7 @@ const privacyChoices = [
   { title: 'Who can message me', ...choice('dmFrom', [['everyone', 'Everyone'], ['following', 'People I follow'], ['nobody', 'Nobody']]) },
   { title: 'Who can comment on my posts', ...choice('whoCanComment', [['everyone', 'Everyone'], ['following', 'People I follow']]) },
   { title: 'Who can post on my wall', ...choice('wallFrom', [['everyone', 'Everyone'], ['following', 'People I follow'], ['nobody', 'Nobody']]) },
+  { title: 'Who can send me friend requests', ...choice('friendRequestsFrom', [['everyone', 'Everyone'], ['friends_of_friends', 'Friends of friends'], ['nobody', 'Nobody']]) },
   { title: 'Who can see my profile', ...choice('profileVisibility', [['everyone', 'Everyone'], ['members', 'Signed-in members']]) },
 ];
 const standing = computed(() => u.value.moderation);

@@ -62,6 +62,13 @@ export function createApi(opts) {
     user: (handle) => req('GET', `/users/${handle}`),
     members: (p = {}) => req('GET', `/users${q(p)}`),
     follow: (id) => req('POST', `/users/${id}/follow`),
+    friendRequests: () => req('GET', '/friend-requests'),
+    friends: (userId, before) => req('GET', `/friends${q({ user: userId, before })}`),
+    addFriend: (id) => req('POST', `/users/${id}/friend-request`),
+    cancelFriendRequest: (id) => req('DELETE', `/users/${id}/friend-request`),
+    acceptFriend: (id) => req('POST', `/users/${id}/friend-request/accept`),
+    declineFriend: (id) => req('POST', `/users/${id}/friend-request/decline`),
+    unfriend: (id) => req('DELETE', `/users/${id}/friend`),
     block: (id) => req('POST', `/users/${id}/block`),
     report: (b) => req('POST', '/reports', b),
 

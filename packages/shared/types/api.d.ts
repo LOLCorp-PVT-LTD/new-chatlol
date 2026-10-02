@@ -1,4 +1,4 @@
-import type { Showcase, Shout, WallNote, ProfileRatings, Insights, HomeData, AdminUser, ProfileSong, AuthResponse, ChatMessage, Comment, Conversation, Drop, HotTake, LeaderboardEntry, LiveStream, Lounge, NotificationItem, Page, Post, ReactionKind, RewardEvent, RouletteCard, RouletteResult, ShoutReply, ShoutThread, StoreItem, UserPrivate, UserPublic, UserSettings, VibeScore, Cosmetics, ID, GemPack, IceConfig } from './types';
+import type { Friendship, Showcase, Shout, WallNote, ProfileRatings, Insights, HomeData, AdminUser, ProfileSong, AuthResponse, ChatMessage, Comment, Conversation, Drop, HotTake, LeaderboardEntry, LiveStream, Lounge, NotificationItem, Page, Post, ReactionKind, RewardEvent, RouletteCard, RouletteResult, ShoutReply, ShoutThread, StoreItem, UserPrivate, UserPublic, UserSettings, VibeScore, Cosmetics, ID, GemPack, IceConfig } from './types';
 export declare class ApiError extends Error {
     status: number;
     code?: string | undefined;
@@ -80,6 +80,13 @@ export declare function createApi(opts: ApiClientOptions): {
         sort?: string;
         cursor?: string;
     }) => Promise<Page<UserPublic>>;
+    friendRequests: () => Promise<{ incoming: { user: UserPublic; at: string }[]; outgoing: { user: UserPublic; at: string }[] }>;
+    friends: (userId?: ID, before?: string) => Promise<{ items: { user: UserPublic; since: string }[]; nextCursor: string | null }>;
+    addFriend: (id: ID) => Promise<{ friendship: Friendship }>;
+    cancelFriendRequest: (id: ID) => Promise<{ friendship: Friendship }>;
+    acceptFriend: (id: ID) => Promise<{ friendship: Friendship }>;
+    declineFriend: (id: ID) => Promise<{ friendship: Friendship }>;
+    unfriend: (id: ID) => Promise<{ friendship: Friendship }>;
     follow: (id: ID) => Promise<{
         following: boolean;
     }>;

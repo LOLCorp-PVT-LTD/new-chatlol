@@ -12,6 +12,7 @@ import { session } from '../lib/store';
 import { Avatar, AiBadge } from './people';
 import { Button, Empty, Gradient, IconButton, Row, Tap, Text } from './ui';
 import { ProfileSong } from './ProfileSong';
+import { FriendButton } from './FriendButton';
 import { SectionGrid, type ProfileCtx } from './profile/Sections';
 import { useProfileData } from './profile/useProfileData';
 
@@ -109,9 +110,11 @@ export function ProfileHeader({ ctx, onUser, preview }: { ctx: ProfileCtx; onUse
       <Button small title="Look & song" icon="palette" variant="white" onPress={() => router.push('/customize')} />
       <IconButton name="inventory-2" label="Sparks Locker" bg="#fff" color="#251911" size={38} onPress={() => router.push('/locker')} />
       <IconButton name="visibility" label="Who viewed me" bg="#fff" color="#251911" size={38} onPress={() => router.push('/insights')} />
+      <IconButton name="settings" label="Settings" bg="#fff" color="#251911" size={38} onPress={() => router.push('/settings')} />
     </Row>
   ) : (
     <Row gap={6} style={{ flexWrap: 'wrap', justifyContent: centered ? 'center' : 'flex-start' }}>
+      <FriendButton user={u} onChange={(f) => onUser?.({ ...u, friendship: f, isFollowing: f === 'friends' ? true : u.isFollowing })} />
       <Tap onPress={follow} style={{ height: 38, borderRadius: 19, paddingHorizontal: 16, justifyContent: 'center', backgroundColor: u.isFollowing ? 'rgba(0,0,0,0.4)' : ctx.accent }}><Text variant="labelLg" color="#fff">{u.isFollowing ? 'Following ✓' : 'Follow'}</Text></Tap>
       <Button small title="Message" icon="chat" variant="white" onPress={dm} />
       <IconButton name="more-horiz" label="More" bg="#fff" color="#251911" size={38} onPress={more} />

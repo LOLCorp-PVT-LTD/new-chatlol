@@ -125,6 +125,7 @@ export default function Settings() {
           {choices('Who can message me', 'dmFrom', [['everyone', 'Everyone'], ['following', 'People I follow'], ['nobody', 'Nobody']])}
           {choices('Who can comment on my posts', 'whoCanComment', [['everyone', 'Everyone'], ['following', 'People I follow']])}
           {choices('Who can post on my wall', 'wallFrom', [['everyone', 'Everyone'], ['following', 'People I follow'], ['nobody', 'Nobody']])}
+          {choices('Who can send me friend requests', 'friendRequestsFrom', [['everyone', 'Everyone'], ['friends_of_friends', 'Friends of friends'], ['nobody', 'Nobody']])}
           {choices('Who can see my profile', 'profileVisibility', [['everyone', 'Everyone'], ['members', 'Signed-in members']])}
         </Card>
         <Card style={{ paddingVertical: 6 }}>{PRIVACY.map(toggleRow)}</Card>

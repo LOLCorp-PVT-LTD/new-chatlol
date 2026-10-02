@@ -5,6 +5,7 @@ export const NAV: NavItem[] = [
   { to: '/shouts', label: 'Shoutbox', icon: 'campaign', badge: 'live' },
   { to: '/roulette', label: 'Rate & Meet', icon: 'casino' },
   { to: '/members', label: 'Browse Members', icon: 'group' },
+  { to: '/friends', label: 'Friends', icon: 'diversity_3' },
   { to: '/messages', label: 'Messages', icon: 'mail', badge: 'dms' },
   { to: '/lounges', label: 'Hangout Lounges', icon: 'forum' },
   { to: '/forums', label: 'Forums', icon: 'groups' },

@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import { GENDERS, tierByKey, timeAgo } from '@chatlol/shared';
 import Avatar from '../Avatar.vue';
 import Icon from '../Icon.vue';
+import FriendButton from '../FriendButton.vue';
 import { useProfileCtx } from './context';
 
 /** The top of a profile, in the member's chosen header style (cover / centered / split / compact). */
@@ -71,8 +72,10 @@ function pickAvatar(e: Event) {
           <button class="btn h-10 bg-white/90 text-[#251911]" @click="emit('customize')"><Icon name="palette" :size="18" /> Look & song</button>
           <button class="btn-icon bg-white/90 text-[#251911]" aria-label="Sparks Locker" title="Sparks Locker" @click="emit('locker')"><Icon name="inventory_2" /></button>
           <RouterLink to="/insights" class="btn-icon bg-white/90 text-[#251911]" aria-label="Who viewed me" title="Who viewed me"><Icon name="visibility" /></RouterLink>
+          <RouterLink to="/settings" class="btn-icon bg-white/90 text-[#251911]" aria-label="Settings" title="Settings"><Icon name="settings" /></RouterLink>
         </template>
         <template v-else>
+          <FriendButton :user="u" :accent="ctx.accent.value" @change="(f) => (ctx.user.value = { ...ctx.user.value, friendship: f, isFollowing: f === 'friends' ? true : ctx.user.value.isFollowing })" />
           <button class="btn h-10 text-white" :style="{ background: u.isFollowing ? 'rgba(0,0,0,.4)' : ctx.accent.value }" @click="emit('follow')">{{ u.isFollowing ? 'Following ✓' : 'Follow' }}</button>
           <button class="btn h-10 bg-white/90 text-[#251911]" @click="emit('message')"><Icon name="chat" :size="18" /> Message</button>
           <button class="btn-icon bg-white/90 text-[#251911]" aria-label="Share profile" @click="emit('share')"><Icon name="share" /></button>

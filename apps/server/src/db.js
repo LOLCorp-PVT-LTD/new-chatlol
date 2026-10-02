@@ -54,6 +54,8 @@ export const COLLECTIONS = [
   'modFlags',
   'profileRatings',
   'profileViews',
+  'friendRequests',
+  'friendships',
   'kv',
   'busEvents',
   'socketEvents',

@@ -19,6 +19,7 @@ import { optionalAuth, requireAuth, uid } from '../lib/auth.js';
 import { HttpError, parse, rateLimit } from '../lib/http.js';
 import { authorCache, invalidateStats, isPremium, serializePosts, teaserAvatar, userPrivate, DEFAULT_SETTINGS } from '../lib/serialize.js';
 import { serializeShout } from './shouts.js';
+import { friendsFilter, otherOf } from '../lib/friends.js';
 import { emitWallet, notify } from '../lib/rewards.js';
 import { assertClean, classify } from '../lib/moderation.js';
 import { assertCanPost } from '../lib/enforcement.js';
@@ -254,14 +255,8 @@ profileRouter.get('/users/:id/showcase', optionalAuth, async (req, res) => {
           out.following = await people(rows.map((r) => r.followeeId));
         }
         if (want('friends')) {
-          const rows = followees.length
-            ? await db.follows
-                .find({ followerId: { $in: followees }, followeeId: profileId })
-                .sort({ createdAt: -1 })
-                .limit(limit)
-                .toArray()
-            : [];
-          out.friends = await people(rows.map((r) => r.followerId));
+          const rows = await db.friendships.find(friendsFilter(profileId)).sort({ since: -1 }).limit(limit).toArray();
+          out.friends = await people(rows.map((f) => otherOf(f, profileId)));
         }
       })(),
     want('shouts') &&

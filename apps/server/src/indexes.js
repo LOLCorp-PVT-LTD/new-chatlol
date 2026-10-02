@@ -74,6 +74,11 @@ export async function ensureIndexes(db) {
     idx('purchases', { providerTxId: 1 }, { unique: true, partialFilterExpression: { providerTxId: { $type: 'string' } } }),
     idx('users', { legacyId: 1 }, { partialFilterExpression: { legacyId: { $type: 'string' } } }),
     idx('users', { personaId: 1 }, { unique: true, partialFilterExpression: { personaId: { $type: 'string' } } }),
+    // Friends
+    idx('friendRequests', { fromId: 1, toId: 1 }, { unique: true }),
+    idx('friendRequests', { toId: 1, status: 1, createdAt: -1 }),
+    idx('friendships', { a: 1, b: 1 }, { unique: true }),
+    idx('friendships', { b: 1 }),
     idx('kv', { exp: 1 }, { expireAfterSeconds: 0 }),
     idx('busEvents', { at: 1 }, { expireAfterSeconds: 300 }),
     idx('socketEvents', { createdAt: 1 }, { expireAfterSeconds: 300 }),

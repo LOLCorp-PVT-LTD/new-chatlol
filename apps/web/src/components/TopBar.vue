@@ -3,7 +3,7 @@ import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { compact } from '@chatlol/shared';
 import { useSession } from '../stores/session';
-import Avatar from './Avatar.vue';
+import AccountMenu from './AccountMenu.vue';
 import Icon from './Icon.vue';
 import Logo from './Logo.vue';
 import ThemeSwitch from './ThemeSwitch.vue';
@@ -40,7 +40,7 @@ const search = () => q.value.trim() && router.push({ path: '/members', query: { 
         <button class="btn-icon relative" data-notifications-bell aria-label="Notifications" @click="$emit('notifications')"><Icon name="notifications" />
           <span v-if="s.unread" class="absolute top-2 right-2 w-2.5 h-2.5 rounded-full bg-flame ring-2 ring-surface animate-pulse-ring" /></button>
         <RouterLink v-if="s.user.role === 'admin' || s.user.role === 'mod'" to="/admin" class="btn-icon hidden md:inline-flex" aria-label="Admin panel" title="Admin panel"><Icon name="admin_panel_settings" /></RouterLink>
-        <RouterLink to="/locker" aria-label="My profile"><Avatar :user="s.user" :size="36" :show-online="false" /></RouterLink>
+        <AccountMenu />
       </template>
       <template v-else>
         <RouterLink to="/login" class="btn-ghost">Log in</RouterLink>
