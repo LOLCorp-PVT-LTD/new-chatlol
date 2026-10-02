@@ -4,6 +4,7 @@ import Sortable from 'sortablejs';
 import type { ProfileSection, SectionSize, SectionType } from '@chatlol/shared';
 import { MAX_PROFILE_SECTIONS, SECTION_GAPS, SECTION_SIZES, makeSection, sectionCols, sectionDef } from '@chatlol/shared';
 import Icon from '../Icon.vue';
+import { useMasonry } from '../../lib/masonry';
 import { useProfileCtx } from './context';
 import SectionFrame from './SectionFrame.vue';
 import SectionBody from './SectionBody.vue';
@@ -21,6 +22,8 @@ const sections = computed(() => ctx.layout.value.sections);
 const gapPx = computed(() => SECTION_GAPS.find((g) => g.key === ctx.layout.value.gap)?.px ?? 20);
 /** Bumped after a drag so Vue re-renders the list from the array (Sortable moved the DOM itself). */
 const renderKey = ref(0);
+// Sections pack like masonry: a short section never leaves empty space under it while a taller neighbour finishes.
+useMasonry(grid, gapPx, '.sec-item, .sec-empty');
 let sortable: Sortable | null = null;
 
 function moveSection(from: number, to: number) {
@@ -131,14 +134,14 @@ function duplicate(s: ProfileSection) {
 </script>
 
 <template>
-  <div ref="grid" class="sec-grid" :class="{ editing: ctx.editing.value }" :style="{ gap: `${gapPx}px` }">
+  <div ref="grid" class="sec-grid" :class="{ editing: ctx.editing.value }" :style="{ columnGap: `${gapPx}px`, marginBottom: `${-gapPx}px` }">
     <div
       v-for="s in sections"
       :id="`sec-${s.id}`"
       :key="`${s.id}-${renderKey}`"
       class="sec-item relative"
       :class="{ 'is-selected': selected === s.id, 'is-resizing': resizing === s.id }"
-      :style="{ '--span': sectionCols(s.size) }"
+      :data-cols="sectionCols(s.size)"
       @click="ctx.editing.value && emit('select', s.id)"
     >
       <!-- Edit toolbar -->
@@ -155,7 +158,7 @@ function duplicate(s: ProfileSection) {
       </div>
       <div v-if="ctx.editing.value" class="sec-resize hidden md:flex" title="Drag to resize" @pointerdown="startResize($event, s)"><span /></div>
     </div>
-    <div v-if="ctx.editing.value && !sections.length" class="sec-empty">
+    <div v-if="ctx.editing.value && !sections.length" class="sec-empty" data-cols="12">
       <Icon name="dashboard_customize" :size="36" />
       <p class="text-headline-sm mt-2">Your page is empty</p>
       <p class="text-body-md opacity-80">Drag sections here from the panel, or tap one to add it.</p>
@@ -164,9 +167,10 @@ function duplicate(s: ProfileSection) {
 </template>
 
 <style scoped>
-.sec-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); align-items: start; }
-.sec-item { grid-column: span 12; min-width: 0; }
-@media (min-width: 768px) { .sec-item { grid-column: span var(--span); } }
+/* Positions come from useMasonry (lib/masonry.ts); one column on phones, a 12-column grid from tablets up. */
+.sec-grid { display: grid; grid-template-columns: minmax(0, 1fr); grid-auto-rows: 4px; align-items: start; }
+@media (min-width: 768px) { .sec-grid { grid-template-columns: repeat(12, minmax(0, 1fr)); } }
+.sec-item { align-self: start; min-width: 0; }
 .editing .sec-item { outline: 2px dashed rgb(255 255 255 / 0.55); outline-offset: 3px; border-radius: var(--sec-radius, 16px); cursor: pointer; padding-top: 34px; }
 .editing .sec-item.is-selected { outline: 3px solid #ff5e00; }
 .sec-toolbar { position: absolute; top: 0; left: 0; right: 0; height: 30px; display: flex; align-items: center; gap: 4px; padding: 0 4px 0 8px; border-radius: 10px; background: rgb(20 12 8 / 0.82); color: #fff; font-size: 12px; font-weight: 700; z-index: 2; }
@@ -182,5 +186,5 @@ function duplicate(s: ProfileSection) {
 .sec-item:hover .sec-resize span, .is-selected .sec-resize span, .is-resizing .sec-resize span { opacity: 1; }
 .sec-ghost { opacity: 0.35; }
 .sec-chosen { transform: scale(1.01); }
-.sec-empty { grid-column: span 12; border: 3px dashed rgb(255 255 255 / 0.6); border-radius: 20px; padding: 56px 24px; text-align: center; color: #fff; background: rgb(0 0 0 / 0.25); display: flex; flex-direction: column; align-items: center; }
+.sec-empty { align-self: start; border: 3px dashed rgb(255 255 255 / 0.6); border-radius: 20px; padding: 56px 24px; text-align: center; color: #fff; background: rgb(0 0 0 / 0.25); display: flex; flex-direction: column; align-items: center; }
 </style>
