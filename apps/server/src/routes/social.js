@@ -336,14 +336,18 @@ export async function markRead(convId, userId, at = now()) {
 socialRouter.get('/conversations/:id/messages', requireAuth, async (req, res) => {
   const me = uid(req);
   const convId = String(req.params.id);
-  await memberConversation(convId, me);
+  const conv = await memberConversation(convId, me);
   const before = typeof req.query.before === 'string' ? req.query.before : '9999';
   const author = authorCache(me);
-  const rows = (await recentMessages('dm', convId, 50, { createdAt: { $lt: before } })).reverse();
-  await markRead(convId, me);
+  // Everything this needs runs at once; marking it read doesn't hold up the response.
+  const [rows, conversation] = await Promise.all([
+    recentMessages('dm', convId, 50, { createdAt: { $lt: before } }).then((r) => r.reverse()),
+    conversationFor(me, conv),
+    markRead(convId, me),
+  ]);
   res.json({
     messages: await Promise.all(rows.map((m) => serializeMessage(m, author))),
-    conversation: await conversationFor(me, await db.conversations.findOne({ _id: convId })),
+    conversation: { ...conversation, unread: 0 },
   });
 });
 

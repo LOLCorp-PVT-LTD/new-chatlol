@@ -33,14 +33,53 @@ const isTyping = computed(() => !!(active.value && s.typing[active.value.id]));
 const scroll = async () => { await nextTick(); list.value?.scrollTo({ top: list.value.scrollHeight }); };
 
 async function loadList() { conversations.value = (await api.conversations()).conversations; }
+
+// ——— Switching conversations: cached, prefetched, never showing the previous chat ———
+// Each conversation's messages are kept after the first load, so switching back is instant; a background
+// refresh then brings in anything new. Hovering a conversation in the list loads it before you click.
+const cache = new Map<string, ChatMessage[]>();
+const inflight = new Map<string, Promise<Awaited<ReturnType<typeof api.messages>>>>();
+const drafts = new Map<string, string>();
+const loading = ref(false);
+const showing = ref<string | null>(null); // the conversation whose messages are on screen
+function fetchMessages(id: string) {
+  let p = inflight.get(id);
+  if (!p) {
+    p = api.messages(id).finally(() => inflight.delete(id));
+    inflight.set(id, p);
+  }
+  return p;
+}
+function prefetch(id: string) {
+  if (!cache.has(id) && !inflight.has(id)) void fetchMessages(id).then((r) => cache.set(id, r.messages)).catch(() => {});
+}
 async function open(id: string) {
-  const r = await api.messages(id);
-  messages.value = r.messages;
+  if (showing.value && showing.value !== id) drafts.set(showing.value, draft.value);
+  draft.value = drafts.get(id) ?? '';
   readAt.value = null;
-  conversations.value = conversations.value.map((c) => (c.id === id ? { ...r.conversation, unread: 0 } : c));
-  if (!conversations.value.some((c) => c.id === id)) conversations.value.unshift(r.conversation);
-  s.unreadDms = conversations.value.reduce((a, c) => a + c.unread, 0);
-  void scroll();
+  const cached = cache.get(id);
+  showing.value = id;
+  if (cached) {
+    messages.value = cached;
+    void scroll();
+  } else {
+    messages.value = [];
+    loading.value = true;
+  }
+  try {
+    const r = await fetchMessages(id);
+    cache.set(id, r.messages);
+    if (showing.value !== id) return; // you've moved on to another chat meanwhile
+    messages.value = r.messages;
+    conversations.value = conversations.value.map((c) => (c.id === id ? { ...r.conversation, unread: 0 } : c));
+    if (!conversations.value.some((c) => c.id === id)) conversations.value.unshift(r.conversation);
+    s.unreadDms = conversations.value.reduce((a, c) => a + c.unread, 0);
+    void scroll();
+  } catch (e) {
+    if (showing.value === id) s.toast({ kind: 'error', title: (e as Error).message });
+  } finally {
+    if (showing.value === id) loading.value = false;
+  }
 }
 
 const off = s.onDm((m) => {
@@ -48,6 +87,9 @@ const off = s.onDm((m) => {
   if (c) { c.lastMessage = m; c.updatedAt = m.createdAt; if (m.roomId !== route.params.id && m.author.id !== s.user?.id) c.unread++; }
   else void loadList();
   conversations.value.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  // Keep cached chats current too, so switching to them never shows stale messages.
+  const cachedRoom = cache.get(m.roomId);
+  if (cachedRoom && cachedRoom !== messages.value && !cachedRoom.some((x) => x.id === m.id)) cache.set(m.roomId, [...cachedRoom, m]);
   if (m.roomId === route.params.id) {
     if (!messages.value.some((x) => x.id === m.id)) messages.value.push(m);
     s.socket().emit('dm:read', { conversationId: m.roomId });
@@ -78,7 +120,7 @@ async function send(sticker: StickerInput | null = null) {
   if (!active.value || (!draft.value.trim() && !sticker) || sending.value) return;
   sending.value = true;
   const body = sticker ? '' : draft.value.trim();
-  if (!sticker) draft.value = '';
+  if (!sticker) { draft.value = ''; drafts.delete(active.value.id); }
   try {
     const r = await api.sendMessage(active.value.id, { body, sticker });
     if (!messages.value.some((x) => x.id === r.message.id)) messages.value.push(r.message);
@@ -105,7 +147,7 @@ const seen = computed(() => !!readAt.value || (!!lastMine.value && messages.valu
         <Empty v-if="!conversations.length" emoji="💌" title="No DMs yet" body="Find someone in Browse Members and say hi.">
           <RouterLink to="/members" class="btn-primary">Browse Members</RouterLink></Empty>
         <button v-for="c in conversations" :key="c.id" class="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-surface-container-low transition"
-          :class="{ 'bg-sunlit': c.id === route.params.id }" @click="router.push(`/messages/${c.id}`)">
+          :class="{ 'bg-sunlit': c.id === route.params.id }" @mouseenter="prefetch(c.id)" @focus="prefetch(c.id)" @touchstart.passive="prefetch(c.id)" @click="router.push(`/messages/${c.id}`)">
           <Avatar v-if="c.members[0]" :user="c.members[0]" :size="48" />
           <div class="min-w-0 flex-1">
             <div class="flex items-center justify-between gap-2"><UserName v-if="c.members[0]" :user="c.members[0]" :link="false" class="text-body-md" /><span class="text-[11px] text-on-surface-variant shrink-0">{{ c.lastMessage ? timeAgo(c.lastMessage.createdAt) : '' }}</span></div>
@@ -127,7 +169,10 @@ const seen = computed(() => !!readAt.value || (!!lastMine.value && messages.valu
           <div class="min-w-0 flex-1"><UserName :user="other" /><p class="text-body-sm text-on-surface-variant">{{ isTyping ? 'typing…' : other.online ? 'Active now' : `Active ${timeAgo(other.lastSeenAt)} ago` }}</p></div>
         </header>
         <p v-if="other.isAI" class="mx-4 mt-3 rounded-full bg-surface-container-low px-4 py-2 text-body-sm text-on-surface-variant text-center">✦ {{ other.displayName }} is an AI persona powered by NVIDIA NIM. Don’t share private info.</p>
-        <div ref="list" class="flex-1 overflow-y-auto px-4 py-4 space-y-1.5">
+        <div ref="list" :key="showing ?? ''" class="thread flex-1 overflow-y-auto px-4 py-4 space-y-1.5">
+          <template v-if="loading && !messages.length">
+            <div v-for="i in 6" :key="i" class="flex" :class="i % 2 ? 'justify-start' : 'justify-end'"><div class="h-10 rounded-[22px] skeleton" :style="{ width: `${30 + ((i * 37) % 35)}%` }" /></div>
+          </template>
           <div v-for="(m, i) in messages" :key="m.id" class="flex" :class="m.author.id === s.user?.id ? 'justify-end' : 'justify-start'">
             <div class="max-w-[75%]" :class="{ 'mt-3': i > 0 && messages[i - 1].author.id !== m.author.id }">
               <img v-if="m.mediaUrl" :src="m.mediaUrl" class="rounded-md max-h-72 mb-1" alt="Photo" />
@@ -154,3 +199,9 @@ const seen = computed(() => !!readAt.value || (!!lastMine.value && messages.valu
     </section>
   </div>
 </template>
+
+<style scoped>
+/* A switched-to conversation fades in instead of popping. */
+.thread { animation: thread-in 0.16s ease-out; }
+@keyframes thread-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+</style>
