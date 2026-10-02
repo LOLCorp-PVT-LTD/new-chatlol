@@ -130,7 +130,7 @@ async function save() {
             <input v-model="songInput" class="input pl-11" placeholder="Song or artist — e.g. Blinding Lights" autocomplete="off" />
             <button v-if="songInput.includes('spotify')" class="btn-primary absolute right-1.5 top-1/2 -translate-y-1/2 h-10" @click="useLink">Use link</button></div>
           <p class="text-body-sm text-on-surface-variant mt-2">
-            <template v-if="searchSource === 'spotify'">Searching Spotify — the full song plays on your profile.</template>
+            <template v-if="searchSource === 'spotify'">Searching Spotify. Visitors signed in to Spotify hear the full song; everyone else hears a 30-second preview.</template>
             <template v-else>Searching Apple Music — a 30-second preview loops on your profile.</template>
             You can also paste a Spotify link.
           </p>

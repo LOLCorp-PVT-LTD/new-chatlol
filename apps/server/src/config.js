@@ -1,11 +1,32 @@
 import { randomBytes } from 'node:crypto';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { parseEnv } from 'node:util';
 
-// Settings from apps/server/.env, if there is one. Variables that are already set (systemd's EnvironmentFile,
-// the shell) win. Loaded here rather than with node --env-file, which crashes `node --watch` when the file is missing.
-const envFile = fileURLToPath(new URL('../.env', import.meta.url));
-if (existsSync(envFile)) process.loadEnvFile(envFile);
+/**
+ * Settings files, first one wins for each setting:
+ *   /etc/chatlol/api.env (the server install), apps/server/.env, and .env at the repo root.
+ * Real environment variables (PM2, systemd, the shell) beat all files. A blank value (`SPOTIFY_CLIENT_ID=`)
+ * counts as not set, so a blank line in one file never hides the real value in another.
+ */
+export const ENV_FILES = [
+  process.env.CHATLOL_ENV_FILE,
+  '/etc/chatlol/api.env',
+  fileURLToPath(new URL('../.env', import.meta.url)),
+  fileURLToPath(new URL('../../../.env', import.meta.url)),
+].filter(Boolean);
+export const loadedEnvFiles = [];
+for (const file of ENV_FILES) {
+  let text;
+  try {
+    if (!existsSync(file)) continue;
+    text = readFileSync(file, 'utf8');
+  } catch {
+    continue; // not readable by this user
+  }
+  loadedEnvFiles.push(file);
+  for (const [k, v] of Object.entries(parseEnv(text))) if (v !== '' && !process.env[k]) process.env[k] = v;
+}
 
 const env = process.env;
 const isProd = env.NODE_ENV === 'production';

@@ -2,7 +2,8 @@ import { createServer } from 'node:http';
 import { hostname } from 'node:os';
 import { createApp } from './app.js';
 import { attachRealtime } from './realtime.js';
-import { config } from './config.js';
+import { config, loadedEnvFiles } from './config.js';
+import { songSearchStatus } from './routes/profile.js';
 import { initDb, db } from './db.js';
 import { backfillFriendships } from './lib/friends.js';
 import { initShared, shared, sharedBackend } from './lib/shared.js';
@@ -39,6 +40,8 @@ async function main() {
   await attachRealtime(server);
   server.listen(config.port, config.host, () => {
     console.log(`🌅 ChatLOL API on http://localhost:${config.port} (db: ${db.kind}, shared state: ${sharedBackend()})`);
+    console.log(`   Settings from: ${loadedEnvFiles.length ? loadedEnvFiles.join(', ') : 'environment only (no settings file found)'}`);
+    void songSearchStatus().then((s) => console.log(`   Song search: ${s}`));
     console.log(
       `   AI personas: ${config.ai.enabled ? (config.nim.apiKey ? `on (NVIDIA NIM: ${config.nim.models.length} models)` : '⚠️  NO NVIDIA_API_KEY — personas will not reply to DMs and only post canned filler. Get a free key at https://build.nvidia.com and put it in apps/server/.env') : 'off'}`,
     );

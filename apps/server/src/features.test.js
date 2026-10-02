@@ -502,43 +502,45 @@ test('profile showcase: friends, followers, following, shouts and top photos', a
   assert.deepEqual(Object.keys(only), ['friends'], 'only what was asked for');
 });
 
-test('song search works without Spotify keys (Apple Music previews) and only Apple clips are accepted', async () => {
+test('song search is Spotify only: clear error without keys, Spotify results with keys, never Apple', async () => {
   await signUp('song');
   const c = as('song');
+  const { config } = await import('./config.js');
+  const keys = { ...config.spotify };
   const realFetch = globalThis.fetch;
+  const called = [];
   globalThis.fetch = async (url, opts) => {
-    if (String(url).startsWith('https://itunes.apple.com/search')) {
-      return new Response(
-        JSON.stringify({
-          results: [
-            {
-              trackId: 1488408568,
-              trackName: 'Blinding Lights',
-              artistName: 'The Weeknd',
-              artworkUrl100: 'https://is1-ssl.mzstatic.com/image/thumb/a/100x100bb.jpg',
-              previewUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview/x.m4a',
-              trackViewUrl: 'https://music.apple.com/us/album/blinding-lights/1488408555?i=1488408568',
-            },
-            { trackId: 2, trackName: 'Bad', artistName: 'X', previewUrl: 'https://evil.example/x.mp3' },
-          ],
-        }),
-        { headers: { 'content-type': 'application/json' } },
-      );
+    const u = String(url);
+    if (/itunes\.apple\.com|spotify\.com/.test(u)) called.push(u.split('?')[0]);
+    if (u === 'https://accounts.spotify.com/api/token')
+      return Response.json({ access_token: 'tok', token_type: 'Bearer', expires_in: 3600 });
+    if (u.startsWith('https://api.spotify.com/v1/search')) {
+      assert.equal(opts.headers.Authorization, 'Bearer tok');
+      return Response.json({
+        tracks: { items: [{ id: '0VjIjW4GlUZAMYd2vXMi3b', name: 'Blinding Lights', artists: [{ name: 'The Weeknd' }], album: { images: [{ url: 'https://i.scdn.co/image/big' }, { url: 'https://i.scdn.co/image/small' }] } }] },
+      });
     }
     return realFetch(url, opts);
   };
   try {
+    config.spotify.clientId = '';
+    config.spotify.clientSecret = '';
+    await assert.rejects(c.songSearch('blinding lights'), (e) => e.status === 503 && e.code === 'spotify_not_configured');
+    config.spotify.clientId = 'id';
+    config.spotify.clientSecret = 'secret';
     const r = await c.songSearch('blinding lights');
-    assert.equal(r.source, 'apple');
-    assert.equal(r.tracks.length, 1, 'tracks without an Apple preview are left out');
-    const t = r.tracks[0];
-    assert.equal(t.artUrl, 'https://is1-ssl.mzstatic.com/image/thumb/a/300x300bb.jpg');
-    const saved = await c.updateProfile({ song: t });
-    assert.equal(saved.user.profile.song.source, 'apple');
-    assert.equal(saved.user.profile.song.previewUrl, t.previewUrl);
-    await assert.rejects(c.updateProfile({ song: { ...t, previewUrl: 'https://evil.example/x.mp3' } }), (e) => e.status === 400);
+    assert.equal(r.source, 'spotify');
+    assert.deepEqual(r.tracks[0], { source: 'spotify', type: 'track', id: '0VjIjW4GlUZAMYd2vXMi3b', title: 'Blinding Lights', artist: 'The Weeknd', artUrl: 'https://i.scdn.co/image/small' });
+    assert.ok(!called.some((u) => u.includes('itunes')), 'Apple Music is never searched');
+    const saved = await c.updateProfile({ song: r.tracks[0] });
+    assert.equal(saved.user.profile.song.source, 'spotify');
+    // Apple songs picked in older versions are still accepted, but only real Apple preview clips.
+    const apple = { source: 'apple', type: 'track', id: '1488408568', title: 'Blinding Lights', artist: 'The Weeknd', previewUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview/x.m4a' };
+    assert.equal((await c.updateProfile({ song: apple })).user.profile.song.source, 'apple');
+    await assert.rejects(c.updateProfile({ song: { ...apple, previewUrl: 'https://evil.example/x.mp3' } }), (e) => e.status === 400);
   } finally {
     globalThis.fetch = realFetch;
+    Object.assign(config.spotify, keys);
   }
 });
 

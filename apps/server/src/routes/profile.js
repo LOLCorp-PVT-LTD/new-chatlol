@@ -55,60 +55,50 @@ async function spotifyAccessToken() {
     headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
     body: 'grant_type=client_credentials',
   });
-  if (!r.ok) throw new HttpError(502, 'Spotify is unavailable right now');
+  if (!r.ok) {
+    console.warn(`[spotify] login failed (${r.status}): check SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET`);
+    throw new HttpError(502, 'Spotify is unavailable right now');
+  }
   const j = await r.json();
   spotifyToken = { value: j.access_token, exp: Date.now() + j.expires_in * 1000 };
   return spotifyToken.value;
 }
 
+/** For the startup log: which song search is active, and whether the Spotify keys actually work. */
+export async function songSearchStatus() {
+  if (!config.spotify.clientId || !config.spotify.clientSecret)
+    return '⚠️  Apple Music (30-second previews). SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET are not set';
+  try {
+    await spotifyAccessToken();
+    return `Spotify ✓ (client ${config.spotify.clientId.slice(0, 6)}…)`;
+  } catch {
+    return '⚠️  Spotify keys are set but Spotify rejected them: check SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET';
+  }
+}
+
 /**
- * In-app song search. Uses Spotify when SPOTIFY_CLIENT_ID/SECRET are set (full songs via the Spotify player);
- * otherwise Apple Music's public search, which needs no keys (30-second previews).
+ * In-app song search: Spotify only. Needs SPOTIFY_CLIENT_ID/SECRET; without them search says so (pasting a Spotify
+ * link still works). Songs picked from Apple Music in older versions keep playing.
  */
 export async function searchSongs(q) {
-  if (config.spotify.clientId && config.spotify.clientSecret) {
-    const r = await fetch(`https://api.spotify.com/v1/search?type=track&limit=12&q=${encodeURIComponent(q)}`, {
-      headers: { Authorization: `Bearer ${await spotifyAccessToken()}` },
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!r.ok) throw new HttpError(502, 'Spotify search failed');
-    const j = await r.json();
-    return {
-      source: 'spotify',
-      tracks: (j.tracks?.items ?? []).map((t) => ({
-        source: 'spotify',
-        type: 'track',
-        id: t.id,
-        title: t.name,
-        artist: t.artists.map((a) => a.name).join(', '),
-        artUrl: t.album?.images?.at(-1)?.url ?? t.album?.images?.[0]?.url ?? null,
-      })),
-    };
-  }
-  let r;
-  try {
-    r = await fetch(`https://itunes.apple.com/search?media=music&entity=song&limit=15&term=${encodeURIComponent(q)}`, {
-      signal: AbortSignal.timeout(8000),
-    });
-  } catch {
-    throw new HttpError(502, 'Song search is unavailable right now');
-  }
-  if (!r.ok) throw new HttpError(502, 'Song search is unavailable right now');
+  if (!config.spotify.clientId || !config.spotify.clientSecret)
+    throw new HttpError(503, 'Song search isn’t set up yet. Paste a Spotify link to a song instead', 'spotify_not_configured');
+  const r = await fetch(`https://api.spotify.com/v1/search?type=track&limit=12&q=${encodeURIComponent(q)}`, {
+    headers: { Authorization: `Bearer ${await spotifyAccessToken()}` },
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!r.ok) throw new HttpError(502, 'Spotify search failed');
   const j = await r.json();
   return {
-    source: 'apple',
-    tracks: (j.results ?? [])
-      .filter((t) => t.trackId && isApplePreviewUrl(t.previewUrl))
-      .map((t) => ({
-        source: 'apple',
-        type: 'track',
-        id: String(t.trackId),
-        title: String(t.trackName ?? '').slice(0, 120),
-        artist: String(t.artistName ?? '').slice(0, 120),
-        artUrl: t.artworkUrl100 ? String(t.artworkUrl100).replace('100x100', '300x300') : null,
-        previewUrl: t.previewUrl,
-        linkUrl: t.trackViewUrl ?? null,
-      })),
+    source: 'spotify',
+    tracks: (j.tracks?.items ?? []).map((t) => ({
+      source: 'spotify',
+      type: 'track',
+      id: t.id,
+      title: t.name,
+      artist: t.artists.map((a) => a.name).join(', '),
+      artUrl: t.album?.images?.at(-1)?.url ?? t.album?.images?.[0]?.url ?? null,
+    })),
   };
 }
 
@@ -117,7 +107,7 @@ async function songSearchRoute(req, res) {
   const q = String(req.query.q ?? '')
     .trim()
     .slice(0, 100);
-  if (!q) return res.json({ enabled: true, source: config.spotify.clientId ? 'spotify' : 'apple', tracks: [] });
+  if (!q) return res.json({ enabled: !!(config.spotify.clientId && config.spotify.clientSecret), source: 'spotify', tracks: [] });
   res.json({ enabled: true, ...(await searchSongs(q)) });
 }
 profileRouter.get('/songs/search', requireAuth, songSearchRoute);

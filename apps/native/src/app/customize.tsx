@@ -92,7 +92,7 @@ export default function Customize() {
           ) : null}
           <Input value={songInput} onChangeText={setSongInput} autoCapitalize="none" placeholder="Search a song or artist" />
           {songInput.includes('spotify') ? <Button small title="Use this link" onPress={useLink} /> : null}
-          <Text variant="bodySm" color={c.onSurfaceVariant}>{source === 'spotify' ? 'Searching Spotify — the full song plays on your profile.' : 'Searching Apple Music — a 30-second preview loops on your profile.'} You can also paste a Spotify link.</Text>
+          <Text variant="bodySm" color={c.onSurfaceVariant}>{source === 'spotify' ? 'Searching Spotify. Visitors signed in to Spotify hear the full song; everyone else hears a 30-second preview.' : 'Searching Apple Music — a 30-second preview loops on your profile.'} You can also paste a Spotify link.</Text>
           {results.map((r) => (
             <Tap key={r.id} onPress={() => { setSong(r); setResults([]); setSongInput(''); }} style={{ flexDirection: 'row', gap: 10, alignItems: 'center', paddingVertical: 4 }}>
               {r.artUrl ? <Image source={r.artUrl} style={{ width: 40, height: 40, borderRadius: 8 }} /> : null}

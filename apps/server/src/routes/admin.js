@@ -93,7 +93,7 @@ adminRouter.get('/admin/overview', requirePerm('overview'), async (req, res) => 
       safetyModel: config.nim.safetyModel || null,
       turn: config.rtc.turnUrls.length > 0,
       s3: !!config.s3.bucket,
-      songSearch: config.spotify.clientId ? 'Spotify (full songs)' : 'Apple Music previews (no keys needed)',
+      songSearch: config.spotify.clientId && config.spotify.clientSecret ? 'Spotify' : 'not set: add SPOTIFY_CLIENT_ID + SPOTIFY_CLIENT_SECRET',
       pushIos: apnsConfigured() ? `APNs (${config.push.apns.env})` : 'not set — add APNS_* keys',
       pushAndroid: fcmConfigured() ? 'Firebase (FCM)' : 'not set — add FIREBASE_SERVICE_ACCOUNT',
       pushWeb: 'Web Push (VAPID) ✓',
