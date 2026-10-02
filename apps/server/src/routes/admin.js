@@ -9,6 +9,7 @@ import { applyAction, standing } from '../lib/enforcement.js';
 import { removeContent } from '../lib/aiModeration.js';
 import { presence } from '../lib/presence.js';
 import { redisClient, sharedBackend } from '../lib/shared.js';
+import { apnsConfigured, fcmConfigured } from '../lib/push.js';
 import { extendPremium } from './profile.js';
 
 /** Admin panel API. Moderators can review and mute/suspend; admins can also ban, change roles and grant Premium. */
@@ -68,7 +69,9 @@ adminRouter.get('/admin/overview', async (_req, res) => {
       turn: config.rtc.turnUrls.length > 0,
       s3: !!config.s3.bucket,
       songSearch: config.spotify.clientId ? 'Spotify (full songs)' : 'Apple Music previews (no keys needed)',
-      push: !!config.expoAccessToken,
+      pushIos: apnsConfigured() ? `APNs (${config.push.apns.env})` : 'not set — add APNS_* keys',
+      pushAndroid: fcmConfigured() ? 'Firebase (FCM)' : 'not set — add FIREBASE_SERVICE_ACCOUNT',
+      pushWeb: 'Web Push (VAPID) ✓',
     },
   });
 });

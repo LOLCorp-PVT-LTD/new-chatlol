@@ -4,6 +4,7 @@ import type { NotificationItem, RewardEvent, UserPrivate, UserPublic, ChatMessag
 import { levelForXp } from '@chatlol/shared';
 import { api, tokenStore, setUnauthorizedHandler } from '../lib/api';
 import { getSocket, reconnectSocket, type AppSocket } from '../lib/socket';
+import { syncWebPush } from '../lib/webPush';
 import { ding, buzz, confetti, fxPrefs } from '../lib/fx';
 
 export interface Toast { id: number; kind: 'reward' | 'info' | 'error' | 'level'; title: string; body?: string; sparks?: number; xp?: number }
@@ -48,8 +49,14 @@ export const useSession = defineStore('session', () => {
     }
   }
 
+  let pushSyncedFor = '';
   function applyUser(u: UserPrivate) {
     user.value = u;
+    // Signed in on a browser that already allows notifications: make sure the server knows this subscription.
+    if (pushSyncedFor !== u.id) {
+      pushSyncedFor = u.id;
+      void syncWebPush();
+    }
     fxPrefs.sound = u.settings.soundEnabled;
     fxPrefs.haptics = u.settings.hapticsEnabled;
     fxPrefs.motion = !u.settings.reduceMotion;

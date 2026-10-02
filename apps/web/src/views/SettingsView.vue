@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { disableWebPush, enableWebPush, webPushState, type WebPushState } from '../lib/webPush';
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import type { UserSettings } from '@chatlol/shared';
@@ -48,6 +49,21 @@ async function resend() {
 }
 async function setGender(g: 'male' | 'female') {
   try { s.applyUser((await api.updateProfile({ gender: g })).user); } catch (e) { toast((e as Error).message, 'error'); }
+}
+
+// ——— Web Push on this browser ———
+const webPush = ref<WebPushState>('off');
+const webPushBusy = ref(false);
+const webPushHint = computed(() => ({
+  on: 'You’ll get notifications here even when ChatLOL isn’t open.',
+  off: 'Get notifications here even when ChatLOL isn’t open.',
+  blocked: 'Blocked in your browser — allow notifications for this site in the address bar’s site settings, then reload.',
+  unsupported: 'This browser can’t receive push notifications. On iPhone, add ChatLOL to your Home Screen first.',
+})[webPush.value]);
+void webPushState().then((st) => (webPush.value = st));
+async function toggleWebPush(on: boolean) {
+  webPushBusy.value = true;
+  try { webPush.value = on ? await enableWebPush() : await disableWebPush(); } catch (e) { toast((e as Error).message, 'error'); } finally { webPushBusy.value = false; }
 }
 
 const notifyToggles: { k: keyof UserSettings; label: string; hint: string; icon: string }[] = [
@@ -149,6 +165,16 @@ const go = (id: string) => document.getElementById(id)?.scrollIntoView({ behavio
       <!-- Notifications -->
       <section id="notifications" class="card scroll-mt-28">
         <h2 class="text-headline-md flex items-center gap-2 px-5 pt-5 pb-2"><Icon name="notifications_active" class="text-flame" /> Notifications</h2>
+        <!-- This browser: free Web Push straight from the browser -->
+        <div class="mx-5 my-3 rounded-md bg-surface-container-low p-4 flex items-center gap-3 flex-wrap">
+          <Icon name="web" class="text-flame" />
+          <div class="flex-1 min-w-[200px]">
+            <p class="text-label-lg">Notifications on this browser</p>
+            <p class="text-body-sm text-on-surface-variant">{{ webPushHint }}</p>
+          </div>
+          <button v-if="webPush === 'off'" class="btn-primary h-10" :disabled="webPushBusy" @click="toggleWebPush(true)">Turn on</button>
+          <button v-else-if="webPush === 'on'" class="btn-secondary h-10" :disabled="webPushBusy" @click="toggleWebPush(false)">Turn off</button>
+        </div>
         <div class="divide-y divide-sandstone"><Toggle v-for="t in notifyToggles" :key="t.k" :model-value="!!u.settings[t.k]" :label="t.label" :hint="t.hint" :icon="t.icon" @update:model-value="set(t.k, $event as never)" /></div>
       </section>
 

@@ -63,7 +63,7 @@ The demo login is **demo@chatlol.app / sunset123**, and every login screen also 
 
 | | iOS / Android | Desktop |
 | --- | --- | --- |
-| Notifications | Expo push → APNs/FCM, tap to deep link, app badge | OS notifications, click to deep link, dock/taskbar badge |
+| Notifications | Native push: APNs (iPhone) and Firebase FCM (Android) straight from our server, tap to deep link, app badge | OS notifications, click to deep link, dock/taskbar badge |
 | Camera & photos | Camera and photo library with crop | File picker; camera for Go Live |
 | Security | Face ID / fingerprint app lock, token in Keychain/Keystore | Sandboxed renderer, context isolation |
 | Links | `chatlol://` scheme and universal/app links for `chatlol.app` | `chatlol://` protocol handler, single instance |
@@ -150,6 +150,9 @@ Everything lives in **`apps/server/.env`** (copy `apps/server/.env.example`). Wi
 | Card payments (web/desktop) | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` (webhook → `/api/payments/stripe/webhook`) |
 | In-app purchases (iOS/Android) | Server: `REVENUECAT_WEBHOOK_AUTH` (webhook → `/api/payments/revenuecat/webhook`). App: `EXPO_PUBLIC_REVENUECAT_IOS_KEY` / `_ANDROID_KEY` in `apps/native/.env` |
 | AI personas | `NVIDIA_API_KEY` (free at build.nvidia.com). Without it personas don't answer DMs. |
+| Push — iPhone (APNs, free with your developer account) | `APNS_TEAM_ID`, `APNS_KEY_ID`, `APNS_KEY` (the .p8 key or its path), `APNS_BUNDLE_ID`, `APNS_ENV` (`production` / `sandbox`) |
+| Push — Android (Firebase Cloud Messaging, free) | `FIREBASE_SERVICE_ACCOUNT` (service-account JSON or its path) on the server, and `google-services.json` in `apps/native/` for the app build |
+| Push — web browsers (Web Push, free) | Nothing: VAPID keys are generated once and kept in the database. Set `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` to use your own. People turn it on in Settings → Notifications ("Notifications on this browser"). The desktop app uses system notifications over its live connection. |
 | Song search | Works with no setup: searches Apple Music and plays 30-second previews. Add `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` (free at developer.spotify.com) to search Spotify instead and play full songs. Pasting a Spotify link always works. |
 | Live video | `TURN_URLS`, `TURN_SECRET` |
 

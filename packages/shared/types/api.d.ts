@@ -52,12 +52,11 @@ export declare function createApi(opts: ApiClientOptions): {
     equip: (b: Partial<Cosmetics>) => Promise<{
         user: UserPrivate;
     }>;
-    registerPushToken: (b: {
-        token: string;
-        platform: string;
-    }) => Promise<{
-        ok: true;
-    }>;
+    /** A phone's native push token: APNs on iOS, FCM on Android. */
+    registerPushToken: (b: { token: string; platform: 'ios' | 'android' }) => Promise<{ ok: true }>;
+    webPushKey: () => Promise<{ publicKey: string }>;
+    saveWebPush: (subscription: { endpoint: string; expirationTime?: number | null; keys: { p256dh: string; auth: string } }) => Promise<{ ok: true }>;
+    removeWebPush: (endpoint: string) => Promise<{ ok: true }>;
     deleteAccount: () => Promise<{
         ok: true;
     }>;

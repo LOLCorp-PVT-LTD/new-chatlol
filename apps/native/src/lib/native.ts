@@ -5,7 +5,6 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as Clipboard from 'expo-clipboard';
-import Constants from 'expo-constants';
 import { api } from './api';
 import { session } from './store';
 import { desktop } from './desktop';
@@ -43,7 +42,7 @@ export async function shareLink(path: string, message?: string) {
   await Share.share({ message: message ? `${message} ${url}` : url, url });
 }
 
-// ——— Push notifications (APNs / FCM via Expo push) ———
+// ——— Push notifications: native APNs (iOS) and FCM (Android) device tokens, sent straight to our server ———
 if (Platform.OS !== 'web') {
   Notifications.setNotificationHandler({
     handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: true }),
@@ -58,13 +57,27 @@ export async function registerForPush() {
   let { status } = await Notifications.getPermissionsAsync();
   if (status !== 'granted') status = (await Notifications.requestPermissionsAsync()).status;
   if (status !== 'granted') return;
-  const projectId = (Constants.expoConfig?.extra?.eas as { projectId?: string } | undefined)?.projectId || Constants.easConfig?.projectId;
   try {
-    const token = (await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined)).data;
-    await api.registerPushToken({ token, platform: Platform.OS === 'ios' ? 'ios' : 'android' });
+    // The raw device token: an APNs token on iOS, an FCM registration token on Android. Our server delivers
+    // through Apple and Firebase directly — no Expo push service in between.
+    const { data } = await Notifications.getDevicePushTokenAsync();
+    await api.registerPushToken({ token: String(data), platform: Platform.OS === 'ios' ? 'ios' : 'android' });
   } catch (e) {
     console.warn('push registration failed', e);
   }
+  // Tokens can change (reinstall, restore, FCM rotation): re-register when they do.
+  tokenSub ??= Notifications.addPushTokenListener(({ data }) => {
+    void api.registerPushToken({ token: String(data), platform: Platform.OS === 'ios' ? 'ios' : 'android' }).catch(() => {});
+  });
+}
+let tokenSub: { remove: () => void } | null = null;
+
+/** The in-app link a push carries: in the data of an Android (FCM) message, or the payload of an iOS (APNs) one. */
+export function pushLink(n: Notifications.Notification): string | null {
+  const content = n.request.content.data as { link?: unknown } | undefined;
+  const payload = (n.request.trigger as { payload?: { link?: unknown } } | null)?.payload;
+  const link = content?.link ?? payload?.link;
+  return typeof link === 'string' ? link : null;
 }
 
 /** Shows an OS-level notification for socket events while the app is backgrounded / on desktop. */

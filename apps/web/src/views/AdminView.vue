@@ -67,7 +67,7 @@ async function resolveFlag(id: string, status: 'resolved' | 'dismissed') { try {
 async function setPersona(id: string, b: { dmFrom?: 'everyone' | 'following' | 'nobody'; active?: boolean }) { try { await api.admin.updatePersona(id, b); void load(); } catch (e) { err(e); } }
 const statusColor = (st: string) => ({ active: 'bg-online/15 text-green-700 dark:text-green-300', muted: 'bg-yellow-400/20 text-yellow-800 dark:text-yellow-200', suspended: 'bg-orange-500/20 text-orange-800 dark:text-orange-200', banned: 'bg-error/15 text-error' })[st] ?? '';
 const DURATIONS = [[60, '1 hour'], [24 * 60, '1 day'], [3 * 24 * 60, '3 days'], [7 * 24 * 60, '7 days'], [30 * 24 * 60, '30 days']] as const;
-const INTEGRATION_LABELS: Record<string, string> = { database: 'Database', redis: 'Redis (optional)', sharedState: 'Shared state', smtp: 'Email (SMTP)', mailFrom: 'From address', stripe: 'Stripe', revenueCat: 'RevenueCat (in-app purchases)', nvidiaNim: 'NVIDIA NIM (AI)', safetyModel: 'AI safety model', turn: 'TURN server', s3: 'Object storage', songSearch: 'Song search', push: 'Expo push' };
+const INTEGRATION_LABELS: Record<string, string> = { database: 'Database', redis: 'Redis (optional)', sharedState: 'Shared state', smtp: 'Email (SMTP)', mailFrom: 'From address', stripe: 'Stripe', revenueCat: 'RevenueCat (in-app purchases)', nvidiaNim: 'NVIDIA NIM (AI)', safetyModel: 'AI safety model', turn: 'TURN server', s3: 'Object storage', songSearch: 'Song search', pushIos: 'Push — iPhone', pushAndroid: 'Push — Android', pushWeb: 'Push — web browsers' };
 </script>
 
 <template>

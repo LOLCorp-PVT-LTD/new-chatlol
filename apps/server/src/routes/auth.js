@@ -8,6 +8,7 @@ import { userPrivate, invalidateStats, newUser } from '../lib/serialize.js';
 import { grant, notify } from '../lib/rewards.js';
 import { assertClean } from '../lib/moderation.js';
 import { itemIdFor } from '../lib/ids.js';
+import { vapidKeys } from '../lib/push.js';
 import { consumeToken, sendPasswordReset, sendVerification, sendEmailChangedNotice } from '../lib/emailTokens.js';
 import { config } from '../config.js';
 import { assertNotBanned } from '../lib/enforcement.js';
@@ -252,9 +253,37 @@ authRouter.post('/me/equip', requireAuth, async (req, res) => {
   res.json({ user: await me(id) });
 });
 
+/** Registers a phone for push: its native APNs (iOS) or FCM (Android) device token. */
 authRouter.post('/me/push-token', requireAuth, async (req, res) => {
-  const b = parse(z.object({ token: z.string().min(10).max(300), platform: z.enum(['ios', 'android', 'web', 'desktop']) }), req.body);
-  await db.pushTokens.updateOne({ token: b.token }, { $set: { userId: uid(req), platform: b.platform, createdAt: now() } }, { upsert: true });
+  const b = parse(z.object({ token: z.string().min(10).max(4096), platform: z.enum(['ios', 'android']) }), req.body);
+  if (b.token.startsWith('ExponentPushToken')) throw new HttpError(400, 'Send the native device token, not an Expo push token', 'expo_token');
+  const provider = b.platform === 'ios' ? 'apns' : 'fcm';
+  await db.pushTokens.updateOne({ token: b.token }, { $set: { userId: uid(req), platform: b.platform, provider, createdAt: now() } }, { upsert: true });
+  res.json({ ok: true });
+});
+
+/** Web Push: the browser's public key to subscribe with, and saving / removing this browser's subscription. */
+authRouter.get('/push/web-key', async (_req, res) => {
+  res.json({ publicKey: (await vapidKeys()).publicKey });
+});
+const webSubscription = z.object({
+  endpoint: z.string().url().max(2048),
+  expirationTime: z.number().nullable().optional(),
+  keys: z.object({ p256dh: z.string().max(200), auth: z.string().max(100) }),
+});
+authRouter.post('/me/web-push', requireAuth, async (req, res) => {
+  const sub = parse(webSubscription, req.body);
+  if (!/^https:\/\//.test(sub.endpoint) && config.isProd) throw new HttpError(400, 'Push endpoints must be https');
+  await db.pushTokens.updateOne(
+    { token: sub.endpoint },
+    { $set: { userId: uid(req), platform: 'web', provider: 'webpush', subscription: sub, createdAt: now() } },
+    { upsert: true },
+  );
+  res.json({ ok: true });
+});
+authRouter.delete('/me/web-push', requireAuth, async (req, res) => {
+  const { endpoint } = parse(z.object({ endpoint: z.string().max(2048) }), req.body ?? {});
+  await db.pushTokens.deleteOne({ token: endpoint, userId: uid(req) });
   res.json({ ok: true });
 });
 

@@ -12,7 +12,7 @@ import { boot } from '../lib/actions';
 import { session, useSession } from '../lib/store';
 import { useColors, useIsDark } from '../lib/theme';
 import { desktop } from '../lib/desktop';
-import { biometricsAvailable, unlockWithBiometrics } from '../lib/native';
+import { biometricsAvailable, pushLink, unlockWithBiometrics } from '../lib/native';
 import { Toasts } from '../components/Toasts';
 import { LevelUpModal } from '../components/LevelUp';
 import { LockScreen } from '../components/LockScreen';
@@ -47,8 +47,8 @@ export default function RootLayout() {
   useEffect(() => {
     if (Platform.OS === 'web') return desktop?.onDeepLink((path) => router.push(path as never));
     const sub = Notifications.addNotificationResponseReceivedListener((r) => {
-      const link = r.notification.request.content.data?.link;
-      if (typeof link === 'string') router.push(link as never);
+      const link = pushLink(r.notification);
+      if (link) router.push(link as never);
     });
     return () => sub.remove();
   }, []);

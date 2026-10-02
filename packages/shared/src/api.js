@@ -48,6 +48,9 @@ export function createApi(opts) {
     updateSettings: (b) => req('PATCH', '/me/settings', b),
     equip: (b) => req('POST', '/me/equip', b),
     registerPushToken: (b) => req('POST', '/me/push-token', b),
+    webPushKey: () => req('GET', '/push/web-key'),
+    saveWebPush: (subscription) => req('POST', '/me/web-push', subscription),
+    removeWebPush: (endpoint) => req('DELETE', '/me/web-push', { endpoint }),
     deleteAccount: () => req('DELETE', '/me'),
 
     // upload

@@ -52,7 +52,36 @@ export const config = {
     /** Multiplies persona reply delays (read, typing). 1 = human-like; tests use a tiny value. */
     replyPace: Number(env.AI_REPLY_PACE ?? 1),
   },
-  expoAccessToken: env.EXPO_ACCESS_TOKEN ?? '',
+  /**
+   * Push notifications, straight to each platform's own free service (no third-party push provider):
+   *  - iOS: Apple Push Notification service with your developer account's .p8 key.
+   *  - Android: Firebase Cloud Messaging (HTTP v1) with a Firebase service-account JSON.
+   *  - Web: standard Web Push with VAPID keys (generated and stored automatically if you leave them blank).
+   */
+  push: {
+    apns: {
+      teamId: env.APNS_TEAM_ID ?? '',
+      keyId: env.APNS_KEY_ID ?? '',
+      /** The .p8 key: its contents (newlines may be written as \n) or a path to the file. */
+      key: env.APNS_KEY ?? '',
+      bundleId: env.APNS_BUNDLE_ID ?? 'app.chatlol',
+      /** 'production' for App Store / TestFlight builds, 'sandbox' for development builds. */
+      env: env.APNS_ENV ?? (isProd ? 'production' : 'sandbox'),
+      host: env.APNS_HOST ?? '',
+    },
+    fcm: {
+      /** The Firebase service-account JSON (Project settings → Service accounts → Generate new private key): contents or a path. */
+      serviceAccount: env.FIREBASE_SERVICE_ACCOUNT ?? '',
+      baseUrl: env.FCM_BASE_URL ?? 'https://fcm.googleapis.com',
+      tokenUrl: env.FCM_TOKEN_URL ?? 'https://oauth2.googleapis.com/token',
+    },
+    web: {
+      publicKey: env.VAPID_PUBLIC_KEY ?? '',
+      privateKey: env.VAPID_PRIVATE_KEY ?? '',
+      /** Contact for push services: mailto: or https: URL. */
+      subject: env.VAPID_SUBJECT ?? 'mailto:support@chatlol.app',
+    },
+  },
   /** Object storage for uploads (S3, Cloudflare R2, MinIO…). Empty bucket = local disk. */
   s3: {
     bucket: env.S3_BUCKET ?? '',
