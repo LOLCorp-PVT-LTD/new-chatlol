@@ -9,8 +9,9 @@ import Icon from './Icon.vue';
  *  - Spotify songs play in Spotify's embed (iFrame API).
  *  - Apple Music songs (used when the server has no Spotify keys) play their 30-second preview in our own player.
  * It starts automatically when the visitor allows it (Settings → "Autoplay profile songs"). Browsers only allow
- * sound after the visitor has interacted with the site — arriving by clicking a link counts — so if a browser
- * still blocks it, the player shows a play button instead.
+ * sound after the visitor has interacted with the site: clicking through to a profile inside ChatLOL counts, opening
+ * the link fresh in a new tab doesn't. When the browser blocks it, the song starts on the visitor's first click,
+ * tap or key press anywhere on the page (and the player shows a play button meanwhile).
  */
 const props = defineProps<{ song: ProfileSong; autoplay?: boolean }>();
 const host = ref<HTMLElement>();
@@ -19,6 +20,20 @@ const playing = ref(false);
 const blocked = ref(false);
 const progress = ref(0);
 const isApple = () => props.song.source === 'apple';
+
+/** Blocked by the browser: start on the first click, tap or key press anywhere (those unlock sound). */
+const unlockEvents = ['pointerdown', 'keydown', 'touchend'] as const;
+function onFirstInteraction() {
+  stopWaiting();
+  if (blocked.value) play();
+}
+function waitForInteraction() {
+  blocked.value = true;
+  unlockEvents.forEach((e) => document.addEventListener(e, onFirstInteraction, { capture: true, once: true }));
+}
+function stopWaiting() {
+  unlockEvents.forEach((e) => document.removeEventListener(e, onFirstInteraction, { capture: true }));
+}
 let controller: { play: () => void; pause: () => void; destroy: () => void; loadUri: (u: string) => void; addListener: (e: string, fn: (ev: { data: { isPaused: boolean } }) => void) => void } | null = null;
 
 type IFrameAPI = { createController: (el: HTMLElement, o: object, cb: (c: NonNullable<typeof controller>) => void) => void };
@@ -47,15 +62,16 @@ async function mountSpotify() {
       if (!props.autoplay) return;
       c.play();
       // If nothing is playing shortly after, the browser blocked autoplay: offer a button.
-      setTimeout(() => (blocked.value = !playing.value), 2500);
+      setTimeout(() => !playing.value && waitForInteraction(), 2500);
     });
   });
 }
 async function mountApple() {
   if (!props.autoplay || !audio.value) return;
-  try { await audio.value.play(); } catch { blocked.value = true; }
+  try { await audio.value.play(); } catch { waitForInteraction(); }
 }
 function mount() {
+  stopWaiting();
   blocked.value = false;
   playing.value = false;
   controller?.destroy();
@@ -65,8 +81,9 @@ function mount() {
 }
 onMounted(mount);
 watch(() => props.song.id, mount);
-onUnmounted(() => { controller?.destroy(); audio.value?.pause(); });
+onUnmounted(() => { stopWaiting(); controller?.destroy(); audio.value?.pause(); });
 function play() {
+  stopWaiting();
   blocked.value = false;
   if (isApple()) void audio.value?.play().catch(() => (blocked.value = true));
   else controller?.play();
