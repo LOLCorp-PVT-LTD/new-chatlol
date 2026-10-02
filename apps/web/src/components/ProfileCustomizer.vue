@@ -154,7 +154,7 @@ async function save() {
       <template v-else>
         <input v-model="about.displayName" class="input" placeholder="Name" maxlength="40" />
         <div class="grid grid-cols-2 gap-2">
-          <button v-for="g in GENDERS" :key="g.key" type="button" class="h-11 rounded-full border font-bold" :class="about.gender === g.key ? 'bg-sunset text-white border-transparent' : 'border-sandstone'" @click="about.gender = g.key">{{ g.emoji }} {{ g.label }}</button>
+          <button v-for="g in GENDERS" :key="g.key" type="button" class="h-11 rounded-full border font-bold" :class="about.gender === g.key ? 'is-on' : 'border-sandstone'" @click="about.gender = g.key">{{ g.emoji }} {{ g.label }}</button>
         </div>
         <div class="grid grid-cols-2 gap-2"><input v-model="about.pronouns" class="input" placeholder="Pronouns" maxlength="24" /><input v-model="about.city" class="input" placeholder="City" maxlength="60" /></div>
         <textarea v-model="about.bio" class="textarea" rows="3" placeholder="Bio" maxlength="280" />

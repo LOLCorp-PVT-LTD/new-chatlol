@@ -56,7 +56,7 @@ const set = <K extends 'header' | 'width' | 'gap' | 'corners' | 'font'>(k: K, v:
 <template>
   <div class="h-full flex flex-col">
     <div class="flex gap-1 p-2 border-b border-outline-variant/40 shrink-0">
-      <button v-for="t in ([['add', 'add_box', 'Add'], ['page', 'view_quilt', 'Page'], ['section', 'tune', 'Section']] as const)" :key="t[0]" class="flex-1 h-10 rounded-md text-label-lg inline-flex items-center justify-center gap-1.5 disabled:opacity-40" :class="tab === t[0] ? 'bg-sunset text-white' : 'hover:bg-surface-container-low'" :disabled="t[0] === 'section' && !selected" @click="tab = t[0]"><Icon :name="t[1]" :size="18" /> {{ t[2] }}</button>
+      <button v-for="t in ([['add', 'add_box', 'Add'], ['page', 'view_quilt', 'Page'], ['section', 'tune', 'Section']] as const)" :key="t[0]" class="flex-1 h-10 rounded-md text-label-lg inline-flex items-center justify-center gap-1.5 disabled:opacity-40" :class="tab === t[0] ? 'is-on' : 'hover:bg-surface-container-low'" :disabled="t[0] === 'section' && !selected" @click="tab = t[0]"><Icon :name="t[1]" :size="18" /> {{ t[2] }}</button>
     </div>
 
     <div class="flex-1 overflow-y-auto p-4">

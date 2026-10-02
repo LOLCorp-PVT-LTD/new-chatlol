@@ -48,7 +48,7 @@ function removeItem(i: number) {
 
     <div><p class="label mb-1.5">Width</p>
       <div class="grid grid-cols-4 gap-1.5">
-        <button v-for="z in SECTION_SIZES" :key="z.key" class="h-10 rounded-md border text-label-lg disabled:opacity-30" :class="section.size === z.key ? 'bg-sunset text-white border-transparent' : 'border-sandstone'" :disabled="!def.sizes.includes(z.key)" @click="section.size = z.key; touch()">{{ z.label }}</button>
+        <button v-for="z in SECTION_SIZES" :key="z.key" class="h-10 rounded-md border text-label-lg disabled:opacity-30" :class="section.size === z.key ? 'is-on' : 'border-sandstone'" :disabled="!def.sizes.includes(z.key)" @click="section.size = z.key; touch()">{{ z.label }}</button>
       </div>
       <p class="text-body-sm text-on-surface-variant mt-1">Or drag the section’s right edge. On phones every section is full width.</p>
     </div>

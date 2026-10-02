@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, View, useWindowDimensions } from 'react-native';
+import { Modal, Pressable, ScrollView, View, useWindowDimensions } from 'react-native';
+import { confirmDialog } from '../lib/dialog';
 import { router, useNavigation } from 'expo-router';
 import ReorderableList, { reorderItems, useIsActive, useReorderableDrag, type ReorderableListReorderEvent } from 'react-native-reorderable-list';
 import type { ProfileLayout, ProfileSection, SectionType } from '@chatlol/shared';
@@ -54,10 +55,7 @@ export default function PageBuilder() {
       nav.addListener('beforeRemove', (e) => {
         if (!dirty || busy) return;
         e.preventDefault();
-        Alert.alert('Discard changes?', 'Your page changes aren’t saved yet.', [
-          { text: 'Keep editing', style: 'cancel' },
-          { text: 'Discard', style: 'destructive', onPress: () => nav.dispatch(e.data.action) },
-        ]);
+        void confirmDialog({ title: 'Discard changes?', body: 'Your page changes aren’t saved yet.', icon: 'undo', danger: true, confirmText: 'Discard', cancelText: 'Keep editing' }).then((yes) => yes && nav.dispatch(e.data.action));
       }),
     [nav, dirty, busy],
   );
@@ -146,7 +144,7 @@ export default function PageBuilder() {
             <Label>Start from a preset</Label>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               {LAYOUT_PRESETS.map((p) => (
-                <Tap key={p.key} onPress={() => Alert.alert(`Use “${p.label}”?`, 'This replaces your sections. You can undo.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Use it', onPress: () => update((l) => Object.assign(l, p.build())) }])} style={{ width: '48%', flexGrow: 1, borderRadius: 14, padding: 10, borderWidth: 1, borderColor: c.outlineVariant }}>
+                <Tap key={p.key} onPress={async () => { if (await confirmDialog({ title: `Use “${p.label}”?`, body: 'This replaces your sections. You can undo.', icon: 'view-quilt', confirmText: 'Use it' })) update((l) => Object.assign(l, p.build())); }} style={{ width: '48%', flexGrow: 1, borderRadius: 14, padding: 10, borderWidth: 1, borderColor: c.outlineVariant }}>
                   <Text variant="labelLg">{p.label}</Text><Text variant="bodySm" color={c.onSurfaceVariant}>{p.desc}</Text>
                 </Tap>
               ))}

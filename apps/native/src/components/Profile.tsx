@@ -1,11 +1,12 @@
 import React from 'react';
-import { Alert, ScrollView, View, useWindowDimensions } from 'react-native';
+import { ScrollView, View, useWindowDimensions } from 'react-native';
+import { actionSheet, confirmDialog, reportDialog } from '../lib/dialog';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import type { ProfileCustomization, UserPublic } from '@chatlol/shared';
 import { GENDERS, PAGE_WIDTHS, profileBackground, tierByKey, timeAgo } from '@chatlol/shared';
 import { api, uploadUri } from '../lib/api';
-import { errorToast } from '../lib/actions';
+import { errorToast, toast } from '../lib/actions';
 import { pickImage, shareLink } from '../lib/native';
 import { session } from '../lib/store';
 import { Avatar, AiBadge } from './people';
@@ -74,11 +75,18 @@ export function ProfileHeader({ ctx, onUser, preview }: { ctx: ProfileCtx; onUse
     try { router.push(`/messages/${(await api.openConversation(u.id)).conversation.id}`); } catch (e) { errorToast(e); }
   }
   function more() {
-    Alert.alert(`@${u.handle}`, undefined, [
-      { text: 'Share profile', onPress: () => shareLink(`/u/${u.handle}`) },
-      { text: 'Report', onPress: () => api.report({ targetType: 'user', targetId: u.id, reason: 'Reported from profile' }) },
-      { text: 'Block', style: 'destructive', onPress: async () => { await api.block(u.id); router.back(); } },
-      { text: 'Cancel', style: 'cancel' },
+    void actionSheet(`@${u.handle}`, [
+      { label: 'Share profile', icon: 'ios-share', onPress: () => shareLink(`/u/${u.handle}`) },
+      { label: 'Report', icon: 'flag', onPress: async () => {
+        const reason = await reportDialog(`@${u.handle}`);
+        if (!reason) return;
+        await api.report({ targetType: 'user', targetId: u.id, reason });
+        toast({ kind: 'info', title: 'Thanks — SafeShield is reviewing it 🛡️' });
+      } },
+      { label: 'Block', icon: 'block', danger: true, onPress: async () => {
+        if (!(await confirmDialog({ title: `Block @${u.handle}?`, body: 'They won’t be able to message you or see you in feeds.', icon: 'block', danger: true, confirmText: 'Block' }))) return;
+        await api.block(u.id); router.back();
+      } },
     ]);
   }
 

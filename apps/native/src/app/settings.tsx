@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Platform, ScrollView, Switch, View } from 'react-native';
+import { Platform, ScrollView, Switch, View } from 'react-native';
+import { formDialog } from '../lib/dialog';
 import { router } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import type { UserSettings } from '@chatlol/shared';
@@ -68,7 +69,7 @@ export default function Settings() {
     setLock(on);
   }
   async function saveProfile() {
-    try { session.set({ user: (await api.updateMe({ displayName: name, bio })).user }); Alert.alert('Saved ✨'); } catch (e) { errorToast(e); }
+    try { session.set({ user: (await api.updateMe({ displayName: name, bio })).user }); toast({ kind: 'info', title: 'Saved ✨' }); } catch (e) { errorToast(e); }
   }
   async function changePassword() {
     try {
@@ -97,10 +98,11 @@ export default function Settings() {
       <Row gap={8} style={{ flexWrap: 'wrap' }}>{opts.map(([v, l]) => <Chip key={String(v)} label={l} active={user!.settings[k] === v} onPress={() => set(k, v)} />)}</Row></View>
   );
   function remove() {
-    Alert.alert('Delete account?', 'Your posts, streak and Sparks will be gone forever.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => { await api.deleteAccount(); await logout(); router.replace('/welcome'); } },
-    ]);
+    void (async () => {
+      const r = await formDialog({ title: 'Delete your account?', body: 'This is permanent: your posts, photos, streak, Sparks and Gems are gone for good. Type DELETE to confirm.', icon: 'delete-forever', danger: true, confirmText: 'Delete forever', fields: [{ key: 'typed', type: 'text', placeholder: 'DELETE', required: true }] });
+      if (r?.typed.trim().toUpperCase() !== 'DELETE') return;
+      await api.deleteAccount(); await logout(); router.replace('/welcome');
+    })();
   }
 
   return (

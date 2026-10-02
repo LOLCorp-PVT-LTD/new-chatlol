@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ScrollView } from 'react-native';
+import type { StickerInput } from '@chatlol/shared';
 import { useLocalSearchParams } from 'expo-router';
 import type { ChatMessage, Lounge } from '@chatlol/shared';
 import { api } from '../../lib/api';
@@ -28,11 +29,11 @@ export default function LoungeRoom() {
     s.on('lounge:presence', onPresence);
     return () => { s.emit('lounge:leave', id); s.off('lounge:message', onMsg); s.off('lounge:presence', onPresence); };
   }, [id]);
-  const send = (text = draft) => {
-    if (!text.trim()) return;
+  const send = (text = draft, sticker: StickerInput | null = null) => {
+    if (!text.trim() && !sticker) return;
     haptic.tap();
-    getSocket().emit('lounge:send', { loungeId: id, body: text.trim() });
-    setDraft('');
+    getSocket().emit('lounge:send', { loungeId: id, body: sticker ? '' : text.trim(), sticker });
+    if (!sticker) setDraft('');
   };
   return (
     <ChatScreen>
@@ -42,7 +43,7 @@ export default function LoungeRoom() {
       <ScrollView horizontal style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 6, paddingHorizontal: 10, paddingBottom: 6 }} keyboardShouldPersistTaps="handled">
         {EMOJI.map((e) => <Tap key={e} onPress={() => send(e)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: c.surfaceContainerLow, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 20, lineHeight: 26 }}>{e}</Text></Tap>)}
       </ScrollView>
-      <Composer value={draft} onChange={setDraft} onSend={() => send()} placeholder="Say something… (@mention people)" />
+      <Composer value={draft} onChange={setDraft} onSend={() => send()} onSticker={(st) => send('', st)} placeholder="Say something… (@mention people)" />
     </ChatScreen>
   );
 }

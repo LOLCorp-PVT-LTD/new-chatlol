@@ -6,7 +6,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import { typography, countdown } from '@chatlol/shared';
-import { fonts, gradients, shadow, useColors } from '../lib/theme';
+import { fonts, gradients, shadow, useColors, useSelectedColors } from '../lib/theme';
 import { haptic } from '../lib/native';
 
 type Variant = keyof typeof typography;
@@ -78,12 +78,15 @@ export function Card({ style, children }: { style?: StyleProp<ViewStyle>; childr
 
 export function Chip({ label, active, onPress, icon }: { label: string; active?: boolean; onPress?: () => void; icon?: IconName }) {
   const c = useColors();
+  // Active chips: dark umber in light mode; deep brown with an orange edge in dark mode.
+  const sel = useSelectedColors();
+  const selDark = sel.fg === '#fff' ? { bg: c.umber, fg: c.cream, border: c.umber } : sel;
   return (
     <Pressable onPress={() => { haptic.tap(); onPress?.(); }}
       style={{ flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1,
-        borderColor: active ? c.umber : c.sandstone, backgroundColor: active ? c.umber : c.surfaceContainerLowest }}>
-      {icon ? <Icon name={icon} size={16} color={active ? c.cream : c.onSurfaceVariant} /> : null}
-      <Text variant="labelMd" color={active ? c.cream : c.onSurface}>{label}</Text>
+        borderColor: active ? selDark.border : c.sandstone, backgroundColor: active ? selDark.bg : c.surfaceContainerLowest }}>
+      {icon ? <Icon name={icon} size={16} color={active ? selDark.fg : c.onSurfaceVariant} /> : null}
+      <Text variant="labelMd" color={active ? selDark.fg : c.onSurface}>{label}</Text>
     </Pressable>
   );
 }

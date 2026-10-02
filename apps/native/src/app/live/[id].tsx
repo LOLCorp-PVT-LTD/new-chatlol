@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Platform, View } from 'react-native';
+import type { StickerInput } from '@chatlol/shared';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
@@ -109,7 +110,11 @@ export default function LiveRoom() {
   async function gift(giftId: string) {
     try { const r = await api.sendGift(id, giftId); session.patchUser({ sparks: r.sparks }); haptic.success(); } catch (e) { errorToast(e); }
   }
-  const send = () => { if (!draft.trim()) return; getSocket().emit('stream:chat', { streamId: id, body: draft.trim() }); setDraft(''); };
+  const send = (sticker: StickerInput | null = null) => {
+    if (!draft.trim() && !sticker) return;
+    getSocket().emit('stream:chat', { streamId: id, body: sticker ? '' : draft.trim(), sticker });
+    if (!sticker) setDraft('');
+  };
   const showVideo = isHost ? !!local : vstate === 'live' && !!remote;
 
   return (
@@ -162,7 +167,7 @@ export default function LiveRoom() {
           ))}
         </Row>
       ) : null}
-      <Composer value={draft} onChange={setDraft} onSend={send} placeholder="Say something nice…" />
+      <Composer value={draft} onChange={setDraft} onSend={() => send()} onSticker={(st) => send(st)} placeholder="Say something nice…" />
     </ChatScreen>
   );
 }

@@ -93,7 +93,7 @@ onBeforeUnmount(() => { document.removeEventListener('mousedown', onDoc); docume
 <template>
   <div ref="host" class="picker card shadow-float overflow-hidden flex flex-col" role="dialog" aria-label="Emoji and stickers">
     <div class="flex gap-1 p-1.5 border-b border-outline-variant/40">
-      <button type="button" v-for="x in tabs" :key="x[0]" class="flex-1 h-9 rounded-md text-label-md inline-flex items-center justify-center gap-1" :class="tab === x[0] ? 'bg-sunset text-white' : 'hover:bg-surface-container-low'" @click="tab = x[0]"><Icon :name="x[1]" :size="16" /> {{ x[2] }}</button>
+      <button type="button" v-for="x in tabs" :key="x[0]" class="flex-1 h-9 rounded-md text-label-md inline-flex items-center justify-center gap-1" :class="tab === x[0] ? 'is-on' : 'hover:bg-surface-container-low'" @click="tab = x[0]"><Icon :name="x[1]" :size="16" /> {{ x[2] }}</button>
     </div>
 
     <div v-show="tab === 'emoji'" ref="pickerHost" class="emoji-host" />

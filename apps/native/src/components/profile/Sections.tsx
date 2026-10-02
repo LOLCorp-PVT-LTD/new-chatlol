@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Linking, View, type ViewStyle } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import type { Post, ProfileLayout, ProfileRatings, ProfileSection, Showcase, UserPublic, VibeScore, WallNote } from '@chatlol/shared';
+import type { StickerInput, Post, ProfileLayout, ProfileRatings, ProfileSection, Showcase, UserPublic, VibeScore, WallNote } from '@chatlol/shared';
 import {
   GENDERS, PROFILE_FONTS, SPACER_HEIGHTS, TIERS, WALL_MOODS, compact, formatDate, levelProgress, levelTitle, sectionCols, sectionDef, tierByKey, timeAgo, toTen,
 } from '@chatlol/shared';
@@ -15,6 +15,10 @@ import { ProfileSong } from '../ProfileSong';
 import { PostCard } from '../PostCard';
 import { ShoutCard } from '../ShoutCard';
 import { YouTube } from './YouTube';
+import { EmojiButton } from '../emoji/EmojiSheet';
+import { RichText } from '../emoji/RichText';
+import { StickerView } from '../emoji/StickerView';
+import { useCaretInsert } from '../emoji/useCaretInsert';
 
 /** Everything the sections read and do, from the profile screen. */
 export interface ProfileCtx {
@@ -37,7 +41,7 @@ export interface ProfileCtx {
   /** In the builder: a preview — no players, forms or links. */
   preview?: boolean;
   rateProfile: (s: VibeScore) => void;
-  postNote: (body: string, mood: string | null) => Promise<boolean>;
+  postNote: (body: string, mood: string | null, sticker?: StickerInput | null) => Promise<boolean>;
   deleteNote: (id: string) => void;
   setAlbum: (a: string | null) => void;
   addPhoto: () => void;
@@ -286,13 +290,17 @@ function People({ people, total, fg, tile, empty, preview }: { people: UserPubli
 function Wall({ ctx, limit, fg, tile }: { ctx: ProfileCtx; limit: number; fg: string; tile: string }) {
   const [body, setBody] = useState('');
   const [mood, setMood] = useState<string | null>('hyped');
+  const caret = useCaretInsert(body, setBody);
   const [all, setAll] = useState(false);
   const notes = all ? ctx.wall : ctx.wall.slice(0, limit);
   return (
     <View style={{ gap: 8 }}>
       {ctx.signedIn && !ctx.preview ? (
         <View style={{ gap: 6 }}>
-          <Input value={body} onChangeText={setBody} placeholder={ctx.isMe ? 'Pin a note on your own profile…' : `Leave a comment for ${ctx.user.displayName.split(' ')[0]}…`} maxLength={280} multiline />
+          <Row gap={8} style={{ alignItems: 'flex-start' }}>
+            <Input value={body} onChangeText={setBody} onSelectionChange={caret.onSelectionChange} placeholder={ctx.isMe ? 'Pin a note on your own profile…' : `Leave a comment for ${ctx.user.displayName.split(' ')[0]}…`} maxLength={280} multiline style={{ flex: 1 }} />
+            <EmojiButton onInsert={caret.insert} onSticker={(st) => void ctx.postNote('', mood, st)} />
+          </Row>
           <Row gap={6} style={{ flexWrap: 'wrap' }}>
             {WALL_MOODS.map((m) => <Chip key={m.key} label={`${m.emoji} ${m.label}`} active={mood === m.key} onPress={() => setMood(m.key)} />)}
             <Button small title="Post" icon="send" disabled={!body.trim()} onPress={async () => { if (await ctx.postNote(body.trim(), mood)) setBody(''); }} />
@@ -304,7 +312,8 @@ function Wall({ ctx, limit, fg, tile }: { ctx: ProfileCtx; limit: number; fg: st
           <Tap disabled={ctx.preview} onPress={() => router.push(`/u/${n.author.handle}`)}><Avatar user={n.author} size={36} /></Tap>
           <View style={{ flex: 1 }}>
             <Text variant="labelLg" color={fg}>{n.author.displayName} <Text variant="bodySm" color={fg} style={{ opacity: 0.72 }}>{WALL_MOODS.find((m) => m.key === n.mood)?.emoji ?? ''} {timeAgo(n.createdAt)}</Text></Text>
-            <Text variant="bodyMd" color={fg}>{n.body}</Text>
+            {n.body ? <RichText text={n.body} color={fg} /> : null}
+            {n.sticker ? <StickerView sticker={n.sticker} size={96} /> : null}
           </View>
           {(ctx.isMe || n.author.id === ctx.myId) && !ctx.preview ? <Tap onPress={() => ctx.deleteNote(n.id)} accessibilityLabel="Delete comment"><Icon name="delete" size={18} color={fg} /></Tap> : null}
         </View>

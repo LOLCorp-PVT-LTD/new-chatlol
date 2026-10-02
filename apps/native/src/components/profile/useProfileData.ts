@@ -88,9 +88,9 @@ export function useProfileData(handle: string | undefined, draft?: ProfileLayout
           if (!me) return router.push('/join');
           try { setRatings((await api.rateProfile(user.id, score)).ratings); toast({ kind: 'info', title: 'Vibe locked in ⭐' }); } catch (e) { errorToast(e); }
         },
-        postNote: async (body, mood) => {
+        postNote: async (body, mood, sticker = null) => {
           try {
-            const r = await api.postWall(user.id, { body, mood });
+            const r = await api.postWall(user.id, { body, mood, sticker });
             setWall((w) => [r.note, ...w]);
             setWallCount((n) => n + 1);
             return true;

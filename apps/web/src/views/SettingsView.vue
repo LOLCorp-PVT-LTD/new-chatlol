@@ -143,7 +143,7 @@ const go = (id: string) => document.getElementById(id)?.scrollIntoView({ behavio
           <button class="btn-secondary w-full" :disabled="pwBusy || !pw.current || pw.next.length < 8">Change password</button>
         </form>
         <div><p class="label mb-2">Gender</p>
-          <div class="grid grid-cols-2 gap-2"><button v-for="g in GENDERS" :key="g.key" class="h-11 rounded-full border font-bold" :class="u.gender === g.key ? 'bg-sunset text-white border-transparent' : 'border-sandstone'" @click="setGender(g.key)">{{ g.emoji }} {{ g.label }}</button></div></div>
+          <div class="grid grid-cols-2 gap-2"><button v-for="g in GENDERS" :key="g.key" class="h-11 rounded-full border font-bold" :class="u.gender === g.key ? 'is-on' : 'border-sandstone'" @click="setGender(g.key)">{{ g.emoji }} {{ g.label }}</button></div></div>
         <div class="grid sm:grid-cols-2 gap-2">
           <RouterLink to="/locker" class="btn-ghost justify-start"><Icon name="palette" /> Customize profile, song & background</RouterLink>
           <RouterLink to="/premium" class="btn-ghost justify-start"><Icon name="workspace_premium" /> {{ u.premiumUntil ? `Premium until ${new Date(u.premiumUntil).toLocaleDateString()}` : 'Get Premium' }}</RouterLink>

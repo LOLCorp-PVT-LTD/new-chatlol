@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { FlatList, View } from 'react-native';
+import type { StickerInput } from '@chatlol/shared';
+import { RichText } from '../../components/emoji/RichText';
+import { StickerView } from '../../components/emoji/StickerView';
 import { useLocalSearchParams } from 'expo-router';
 import type { Comment, Post } from '@chatlol/shared';
 import { TIERS, timeAgo } from '@chatlol/shared';
@@ -22,10 +25,10 @@ export default function PostScreen() {
   const [missing, setMissing] = useState(false);
   const [draft, setDraft] = useState('');
   useEffect(() => { api.post(id).then((r) => { setPost(r.post); setComments(r.comments); }).catch(() => setMissing(true)); }, [id]);
-  async function send() {
-    if (!draft.trim()) return;
+  async function send(sticker: StickerInput | null = null) {
+    if (!draft.trim() && !sticker) return;
     try {
-      const r = await api.comment(id, draft.trim());
+      const r = await api.comment(id, sticker ? '' : draft.trim(), sticker);
       setComments((x) => [...x, r.comment]); setDraft(''); reward(r.reward);
     } catch (e) { errorToast(e); }
   }
@@ -43,13 +46,14 @@ export default function PostScreen() {
               <Avatar user={item.author} size={32} showOnline={false} />
               <View style={{ flex: 1, backgroundColor: c.surfaceContainerLow, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 }}>
                 <Row gap={6}><UserName user={item.author} variant="bodyMd" />{item.rating ? <Text variant="labelSm" color={c.primary}>{TIERS[item.rating - 1].emoji}</Text> : null}<Text variant="labelSm" color={c.outline}>{timeAgo(item.createdAt)}</Text></Row>
-                <Text>{item.body}</Text>
+                {item.body ? <RichText text={item.body} /> : null}
+                {item.sticker ? <StickerView sticker={item.sticker} size={96} /> : null}
               </View>
             </Row>
           )}
         />
       )}
-      {user && post ? <Composer value={draft} onChange={setDraft} onSend={send} placeholder="Add your take or a sweet compliment…" /> : null}
+      {user && post ? <Composer value={draft} onChange={setDraft} onSend={() => send()} onSticker={(st) => send(st)} placeholder="Add your take or a sweet compliment…" /> : null}
     </ChatScreen>
   );
 }

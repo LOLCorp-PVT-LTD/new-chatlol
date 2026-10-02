@@ -1,5 +1,7 @@
 import React, { useEffect, useRef } from 'react';
-import { Alert, AppState, Platform, View } from 'react-native';
+import { AppState, Platform, View } from 'react-native';
+import { alertDialog } from '../lib/dialog';
+import { DialogHost } from '../components/DialogHost';
 import { Stack, router, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
@@ -73,7 +75,7 @@ export default function RootLayout() {
   const breakMins = user?.settings.breakReminderMins ?? 0;
   useEffect(() => {
     if (!breakMins) return;
-    const t = setTimeout(() => Alert.alert('🌇 Golden hour check-in', `You’ve been vibing for ${breakMins} minutes. Stretch, hydrate — your streak will wait.`), breakMins * 60_000);
+    const t = setTimeout(() => void alertDialog({ title: '🌇 Golden hour check-in', body: `You’ve been vibing for ${breakMins} minutes. Stretch, hydrate — your streak will wait.`, icon: 'wb-twilight' }), breakMins * 60_000);
     return () => clearTimeout(t);
   }, [breakMins]);
 
@@ -89,6 +91,7 @@ export default function RootLayout() {
             <Stack.Screen name="welcome" options={{ animation: 'fade' }} />
           </Stack>
           <Toasts />
+          <DialogHost />
           <LevelUpModal />
           {locked ? <LockScreen /> : null}
         </View>

@@ -30,3 +30,13 @@ export const shadow = {
   pop: { shadowColor: '#ff5e00', shadowOpacity: 0.16, shadowRadius: 22, shadowOffset: { width: 0, height: 10 }, elevation: 6 },
   float: { shadowColor: '#ff5e00', shadowOpacity: 0.3, shadowRadius: 26, shadowOffset: { width: 0, height: 14 }, elevation: 10 },
 };
+
+/**
+ * Colours for a selected / active thing (picked reaction, active chip). Orange in light mode; in dark mode a deep
+ * brown with an orange edge so the emoji or label on it stays readable.
+ */
+export function useSelectedColors() {
+  const c = useColors();
+  const dark = c.surface === (darkColors as Palette).surface;
+  return dark ? { bg: '#3d2416', fg: '#ffb68e', border: '#c2551a' } : { bg: c.flame, fg: '#fff', border: c.flame };
+}

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
+import type { StickerInput } from '@chatlol/shared';
 import { router, useLocalSearchParams } from 'expo-router';
 import type { ChatMessage, Conversation } from '@chatlol/shared';
 import { timeAgo } from '@chatlol/shared';
@@ -40,12 +41,12 @@ export default function DM() {
     return () => { s.off('dm:message', onMsg); s.off('dm:read', onRead); };
   }, [id, me]);
 
-  async function send() {
-    const body = draft.trim();
-    if (!body) return;
-    setDraft('');
+  async function send(sticker: StickerInput | null = null) {
+    const body = sticker ? '' : draft.trim();
+    if (!body && !sticker) return;
+    if (!sticker) setDraft('');
     try {
-      const r = await api.sendMessage(id, { body });
+      const r = await api.sendMessage(id, { body, sticker });
       setMessages((x) => (x.some((y) => y.id === r.message.id) ? x : [...x, r.message]));
       setSeenAt(null);
     } catch (e) { setDraft(body); errorToast(e); }
@@ -82,7 +83,7 @@ export default function DM() {
           {typingUser ? <Row gap={4} style={{ backgroundColor: c.surfaceContainerLow, alignSelf: 'flex-start', borderRadius: 22, paddingHorizontal: 16, paddingVertical: 12, marginTop: 8 }}><Text color={c.outline}>• • •</Text></Row> : null}
         </View>
       } />
-      <Composer value={draft} onChange={setDraft} onSend={send} placeholder="Message…" onAttach={attach} onTyping={typing} />
+      <Composer value={draft} onChange={setDraft} onSend={() => send()} onSticker={(st) => send(st)} placeholder="Message…" onAttach={attach} onTyping={typing} />
     </ChatScreen>
   );
 }

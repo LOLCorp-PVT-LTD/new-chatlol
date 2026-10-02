@@ -1,5 +1,7 @@
 import React, { memo, useState } from 'react';
-import { Alert, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { RichText } from './emoji/RichText';
+import { actionSheet, confirmDialog, reportDialog } from '../lib/dialog';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import type { Post, ReactionKind, VibeScore } from '@chatlol/shared';
@@ -48,12 +50,18 @@ function PostCardImpl({ post: initial, onDeleted }: { post: Post; onDeleted?: (i
     setPost((await api.voteBattle(post.id, id)).post);
   }
   function more() {
-    Alert.alert('Post', undefined, [
-      { text: 'Share', onPress: () => shareLink(`/p/${post.id}`, post.body) },
+    void actionSheet(undefined, [
+      { label: 'Share', icon: 'ios-share', onPress: () => shareLink(`/p/${post.id}`, post.body) },
       mine
-        ? { text: 'Delete', style: 'destructive', onPress: async () => { await api.deletePost(post.id); onDeleted?.(post.id); } }
-        : { text: 'Report', style: 'destructive', onPress: async () => { await api.report({ targetType: 'post', targetId: post.id, reason: 'Reported from app' }); toast({ kind: 'info', title: 'Thanks — SafeShield will review it 🛡️' }); } },
-      { text: 'Cancel', style: 'cancel' },
+        ? { label: 'Delete post', icon: 'delete', danger: true, onPress: async () => {
+            if (!(await confirmDialog({ title: 'Delete this post?', body: 'Its ratings and comments go with it.', icon: 'delete', danger: true, confirmText: 'Delete' }))) return;
+            await api.deletePost(post.id); onDeleted?.(post.id);
+          } }
+        : { label: 'Report', icon: 'flag', danger: true, onPress: async () => {
+            const reason = await reportDialog('this post');
+            if (!reason) return;
+            await api.report({ targetType: 'post', targetId: post.id, reason }); toast({ kind: 'info', title: 'Thanks — SafeShield will review it 🛡️' });
+          } },
     ]);
   }
 
@@ -76,7 +84,7 @@ function PostCardImpl({ post: initial, onDeleted }: { post: Post; onDeleted?: (i
           <Text variant="bodyMd" color="rgba(255,255,255,0.95)">Leave a wish below — it means a lot 🧡</Text>
           {!mine ? <Button small variant="white" title="🎉 Send a birthday wish" onPress={() => router.push(`/p/${post.id}`)} style={{ marginTop: 6 }} /> : null}
         </Gradient>
-      ) : post.body ? <Text variant="bodyLg" style={{ paddingHorizontal: 16, paddingBottom: 10 }}>{post.body}</Text> : null}
+      ) : post.body ? <View style={{ paddingHorizontal: 16, paddingBottom: 10 }}><RichText text={post.body} variant="bodyLg" tags /></View> : null}
 
       {post.mediaUrl ? (
         <Pressable onPress={() => router.push(`/p/${post.id}`)} onLongPress={() => rate(5)} delayLongPress={350} style={{ marginHorizontal: 10, borderRadius: 24, overflow: 'hidden', backgroundColor: c.surfaceContainer }}>

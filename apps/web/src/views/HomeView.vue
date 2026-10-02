@@ -135,7 +135,7 @@ async function nextRate() {
       <section class="card p-5">
         <SectionHead title="Hall of Fame" icon="emoji_events" to="/leaderboard" hint="All-time top vibes" />
         <RouterLink v-for="e in h.hallOfFame" :key="e.user.id" :to="`/u/${e.user.handle}`" class="flex items-center gap-3 py-2">
-          <span class="w-8 h-8 rounded-full flex items-center justify-center font-bold" :class="e.rank === 1 ? 'bg-sunset text-white' : 'bg-surface-container-low'">{{ e.rank === 1 ? '👑' : e.rank }}</span>
+          <span class="w-8 h-8 rounded-full flex items-center justify-center font-bold" :class="e.rank === 1 ? 'is-on' : 'bg-surface-container-low'">{{ e.rank === 1 ? '👑' : e.rank }}</span>
           <Avatar :user="e.user" :size="40" />
           <UserName :user="e.user" :link="false" class="flex-1 min-w-0 text-body-md" />
           <span class="text-label-lg text-flame">{{ e.score }}/10</span>

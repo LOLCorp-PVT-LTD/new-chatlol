@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
+import { confirmDialog } from '../lib/dialog';
 import type { PremiumPlan } from '@chatlol/shared';
 import { PREMIUM_PERKS } from '@chatlol/shared';
 import { api } from '../lib/api';
@@ -28,14 +29,10 @@ export default function Premium() {
       }
     } catch (e) { errorToast(e); } finally { setBusy(null); }
   }
-  function sparks(p: PremiumPlan) {
-    Alert.alert(`Premium ${p.label}`, `Spend ${p.sparks.toLocaleString()} Sparks?`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Buy', onPress: async () => {
-        setBusy(p.id);
-        try { const r = await api.buyPremium(p.id); session.set({ user: r.user }); setInfo(await api.premium()); toast({ kind: 'reward', title: 'Welcome to Premium 👑' }); } catch (e) { errorToast(e); } finally { setBusy(null); }
-      } },
-    ]);
+  async function sparks(p: PremiumPlan) {
+    if (!(await confirmDialog({ title: `Premium ${p.label}`, body: `Spend ${p.sparks.toLocaleString()} Sparks on ${p.label} of Premium?`, icon: 'workspace-premium', confirmText: `Spend ${p.sparks.toLocaleString()} ✦` }))) return;
+    setBusy(p.id);
+    try { const r = await api.buyPremium(p.id); session.set({ user: r.user }); setInfo(await api.premium()); toast({ kind: 'reward', title: 'Welcome to Premium 👑' }); } catch (e) { errorToast(e); } finally { setBusy(null); }
   }
   const until = info?.premiumUntil ?? user?.premiumUntil;
   return (

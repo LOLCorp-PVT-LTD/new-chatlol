@@ -2,12 +2,17 @@ import React, { useRef } from 'react';
 import { FlatList, KeyboardAvoidingView, Platform, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { ChatMessage } from '@chatlol/shared';
+import type { ChatMessage, StickerInput } from '@chatlol/shared';
+import { isJumbo, parseRich } from '@chatlol/shared';
 import { timeAgo } from '@chatlol/shared';
 import { useSession } from '../lib/store';
 import { useColors } from '../lib/theme';
 import { Avatar, UserName } from './people';
 import { IconButton, Input, Row, Text } from './ui';
+import { RichText } from './emoji/RichText';
+import { StickerView } from './emoji/StickerView';
+import { EmojiButton } from './emoji/EmojiSheet';
+import { useCaretInsert } from './emoji/useCaretInsert';
 
 export function ChatList({ messages, showNames = true, footer }: { messages: ChatMessage[]; showNames?: boolean; footer?: React.ReactNode }) {
   const c = useColors();
@@ -30,10 +35,11 @@ export function ChatList({ messages, showNames = true, footer }: { messages: Cha
             <View style={{ maxWidth: '78%', gap: 2, alignItems: mine ? 'flex-end' : 'flex-start' }}>
               {showNames && !mine && !grouped ? <Row gap={6}><UserName user={m.author} variant="bodyMd" /><Text variant="labelSm" color={c.outline}>{timeAgo(m.createdAt)}</Text></Row> : null}
               {m.mediaUrl ? <Image source={m.mediaUrl} style={{ width: 220, height: 260, borderRadius: 20 }} contentFit="cover" /> : null}
-              {m.body ? (
+              {m.sticker ? <StickerView sticker={m.sticker} size={140} /> : null}
+              {m.body && isJumbo(parseRich(m.body)) ? <RichText text={m.body} /> : m.body ? (
                 <View style={{ paddingHorizontal: 14, paddingVertical: 9, borderRadius: 22, backgroundColor: m.kind === 'gift' ? c.sunlit : mine ? c.flame : c.surfaceContainerLow,
                   borderBottomRightRadius: mine ? 6 : 22, borderBottomLeftRadius: mine ? 22 : 6 }}>
-                  <Text color={mine && m.kind !== 'gift' ? '#fff' : c.onSurface}>{m.body}</Text>
+                  <RichText text={m.body} color={mine && m.kind !== 'gift' ? '#fff' : c.onSurface} linkColor={mine && m.kind !== 'gift' ? '#fff' : c.flame} />
                 </View>
               ) : null}
             </View>
@@ -44,13 +50,15 @@ export function ChatList({ messages, showNames = true, footer }: { messages: Cha
   );
 }
 
-export function Composer({ value, onChange, onSend, placeholder, onAttach, onTyping }: { value: string; onChange: (s: string) => void; onSend: () => void; placeholder: string; onAttach?: () => void; onTyping?: () => void }) {
+export function Composer({ value, onChange, onSend, placeholder, onAttach, onTyping, onSticker }: { value: string; onChange: (s: string) => void; onSend: () => void; placeholder: string; onAttach?: () => void; onTyping?: () => void; onSticker?: (s: StickerInput) => void }) {
   const c = useColors();
   const insets = useSafeAreaInsets();
+  const caret = useCaretInsert(value, onChange);
   return (
     <Row gap={8} style={{ padding: 10, paddingBottom: Math.max(10, insets.bottom), borderTopWidth: 1, borderTopColor: c.sandstone, backgroundColor: c.surfaceContainerLowest }}>
       {onAttach ? <IconButton name="image" label="Attach photo" bg={c.sunlit} color={c.flame} onPress={onAttach} /> : null}
-      <Input value={value} onChangeText={(t) => { onChange(t); onTyping?.(); }} placeholder={placeholder} style={{ flex: 1, minHeight: 46 }} onSubmitEditing={onSend} returnKeyType="send" maxLength={2000} />
+      <EmojiButton onInsert={caret.insert} onSticker={onSticker} size={44} />
+      <Input value={value} onSelectionChange={caret.onSelectionChange} onChangeText={(t) => { onChange(t); onTyping?.(); }} placeholder={placeholder} style={{ flex: 1, minHeight: 46 }} onSubmitEditing={onSend} returnKeyType="send" maxLength={2000} />
       <IconButton name="send" label="Send" bg={value.trim() ? c.flame : c.surfaceContainer} color="#fff" onPress={onSend} />
     </Row>
   );

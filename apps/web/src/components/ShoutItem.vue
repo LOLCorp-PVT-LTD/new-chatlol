@@ -55,7 +55,7 @@ async function report() {
       <StickerView v-if="shout.sticker" :sticker="shout.sticker" :size="compact ? 96 : 128" class="mt-1" />
       <div class="flex items-center gap-1 mt-2 flex-wrap">
         <button v-for="r in REACTIONS" :key="r.key" class="rounded-full px-2 h-8 text-body-sm flex items-center gap-1 transition active:scale-90"
-          :class="shout.myReaction === r.key ? 'bg-sunset text-white' : 'bg-surface-container-low hover:bg-surface-container'"
+          :class="shout.myReaction === r.key ? 'is-on' : 'bg-surface-container-low hover:bg-surface-container'"
           :aria-label="`React ${r.key}`" @click="react(r.key)">
           <span>{{ r.emoji }}</span><span v-if="shout.reactions[r.key]" class="font-bold tabular-nums">{{ shout.reactions[r.key] }}</span>
         </button>
