@@ -57,5 +57,9 @@ export async function ensureIndexes(db) {
     idx('profileViews', { profileId: 1, viewerId: 1, day: 1 }, { unique: true }),
     idx('profileViews', { profileId: 1, at: -1 }),
     idx('shouts', { mentions: 1, createdAt: -1 }),
+    // Shared state (rate limits, cooldowns, leases…) expires on its own; cluster events are kept for a few minutes.
+    idx('kv', { exp: 1 }, { expireAfterSeconds: 0 }),
+    idx('busEvents', { at: 1 }, { expireAfterSeconds: 300 }),
+    idx('socketEvents', { createdAt: 1 }, { expireAfterSeconds: 300 }),
   ]);
 }

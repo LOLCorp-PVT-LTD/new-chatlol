@@ -5,14 +5,16 @@ import { createApi } from '@chatlol/shared';
 import { io as ioClient } from 'socket.io-client';
 
 /**
- * Two real API processes sharing MongoDB + Redis: a socket on instance A must receive a DM sent
- * through instance B, only one instance may hold the worker lease, and booting both at once seeds once.
- * Runs only when TEST_MONGODB_URL and TEST_REDIS_URL are set.
+ * Two real API processes sharing MongoDB (and Redis, if TEST_REDIS_URL is set — otherwise MongoDB alone
+ * carries the shared state and realtime fan-out): a socket on instance A must receive a DM sent through
+ * instance B, only one instance may hold the worker lease, and booting both at once seeds once.
+ * Runs when TEST_MONGODB_URL (a replica set) is set.
  */
 const DB = process.env.TEST_MONGODB_URL;
 const DB_NAME = `chatlol_test_cluster_${process.pid}`;
 const REDIS = process.env.TEST_REDIS_URL;
-const skip = !DB || !REDIS;
+const skip = !DB;
+const MODE = REDIS ? 'Redis' : 'MongoDB';
 const procs = [];
 const logs = ['', ''];
 
@@ -23,7 +25,7 @@ function start(port, i) {
       PORT: String(port),
       MONGODB_URL: DB,
       MONGODB_DB: DB_NAME,
-      REDIS_URL: REDIS,
+      REDIS_URL: REDIS ?? '',
       AI_PERSONAS_ENABLED: '0',
       JWT_SECRET: 'cluster-test-secret',
       NODE_ENV: 'test',
@@ -48,10 +50,12 @@ async function waitUp(port) {
 
 before(async () => {
   if (skip) return;
-  const { default: Redis } = await import('ioredis');
-  const r = new Redis(REDIS);
-  await r.flushdb(); // fresh rate-limit windows and leases
-  r.disconnect();
+  if (REDIS) {
+    const { default: Redis } = await import('ioredis');
+    const r = new Redis(REDIS);
+    await r.flushdb(); // fresh rate-limit windows and leases
+    r.disconnect();
+  }
   // Both boot at once against an empty database: the seed lock must let exactly one of them seed.
   start(4711, 0);
   start(4712, 1);
@@ -77,7 +81,7 @@ test('two instances booting together seed the database exactly once', { skip }, 
   assert.equal((logs.join('\n').match(/Seed complete/g) ?? []).length, 1);
 });
 
-test('socket on instance A receives a DM sent via instance B (Redis adapter)', { skip }, async () => {
+test(`socket on instance A receives a DM sent via instance B (${MODE} adapter)`, { skip }, async () => {
   const a = createApi({ baseUrl: 'http://127.0.0.1:4711', getToken: () => null });
   const login = await a.login({ login: 'demo@chatlol.app', password: 'sunset123' });
   const other = await a.register({
@@ -112,9 +116,17 @@ test('presence and rate limits are shared across instances', { skip }, async () 
 });
 
 test('exactly one instance holds the worker lease', { skip }, async () => {
-  const { default: Redis } = await import('ioredis');
-  const r = new Redis(REDIS);
-  const holder = await r.get('lease:workers');
-  r.disconnect();
+  let holder;
+  if (REDIS) {
+    const { default: Redis } = await import('ioredis');
+    const r = new Redis(REDIS);
+    holder = await r.get('lease:workers');
+    r.disconnect();
+  } else {
+    const { MongoClient } = await import('mongodb');
+    const c = await MongoClient.connect(DB);
+    holder = (await c.db(DB_NAME).collection('kv').findOne({ _id: 'lease:workers' }))?.v;
+    await c.close();
+  }
   assert.ok(holder, 'a worker lease exists');
 });

@@ -20,7 +20,10 @@ export const config = {
     dbName: env.MONGODB_DB ?? '',
     embeddedPath: env.MONGODB_EMBEDDED_PATH ?? './data/mongo',
   },
+  /** Optional. Without it, shared state, realtime fan-out and cluster events all run on MongoDB. */
   redisUrl: env.REDIS_URL ?? '',
+  /** 'auto' (Redis if REDIS_URL, else MongoDB) or 'memory' (single process, tests). */
+  sharedState: env.SHARED_STATE ?? 'auto',
   /** Multiplies every per-minute rate limit (tests raise it). */
   rateLimitScale: Number(env.RATE_LIMIT_SCALE ?? 1),
   /** Set to 0 on extra instances so only one runs the AI persona engine & schedulers (a Redis lock also guards this). */

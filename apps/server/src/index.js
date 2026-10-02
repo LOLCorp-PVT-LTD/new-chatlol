@@ -4,7 +4,7 @@ import { createApp } from './app.js';
 import { attachRealtime } from './realtime.js';
 import { config } from './config.js';
 import { initDb, db } from './db.js';
-import { initShared, shared } from './lib/shared.js';
+import { initShared, shared, sharedBackend } from './lib/shared.js';
 import { seedIfEmpty } from './seed.js';
 import { startPersonaEngine } from './ai/engine.js';
 import { resolveExpiredTakes } from './routes/arena.js';
@@ -14,7 +14,7 @@ const INSTANCE = `${hostname()}:${process.pid}`;
 
 /**
  * Background work (AI personas, Hot Take resolution) must run on exactly one instance.
- * A Redis lease (renewed every 20s, expires after 60s) elects the worker; without Redis this instance is it.
+ * A lease in the shared state (MongoDB or Redis; renewed every 20s, expires after 60s) elects the worker.
  */
 async function acquireWorkerLease() {
   const key = 'lease:workers';
@@ -27,14 +27,14 @@ async function acquireWorkerLease() {
 }
 
 async function main() {
-  await initShared();
   await initDb();
+  await initShared();
   await seedIfEmpty();
 
   const server = createServer(createApp());
   await attachRealtime(server);
   server.listen(config.port, () => {
-    console.log(`🌅 ChatLOL API on http://localhost:${config.port} (db: ${db.kind}, redis: ${config.redisUrl ? 'on' : 'off'})`);
+    console.log(`🌅 ChatLOL API on http://localhost:${config.port} (db: ${db.kind}, shared state: ${sharedBackend()})`);
     console.log(
       `   AI personas: ${config.ai.enabled ? (config.nim.apiKey ? `on (NVIDIA NIM: ${config.nim.models.length} models)` : '⚠️  NO NVIDIA_API_KEY — personas will not reply to DMs and only post canned filler. Get a free key at https://build.nvidia.com and put it in apps/server/.env') : 'off'}`,
     );

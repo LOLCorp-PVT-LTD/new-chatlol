@@ -1,4 +1,5 @@
-# Full ChatLOL stack: MongoDB (single-node replica set), Redis, 2× API, web (nginx). Optional coturn with `--profile turn`.
+# Full ChatLOL stack: MongoDB (single-node replica set), 2× API, web (nginx). Optional coturn with `--profile turn`.
+# MongoDB also carries shared state and realtime fan-out between the API replicas — no Redis needed.
 #   cp .env.example .env   # fill in secrets
 #   docker compose up -d --build
 #   docker compose --profile turn up -d   # if you want the bundled coturn instead of your own TURN server
@@ -21,15 +22,6 @@ services:
       start_period: 10s
       retries: 30
 
-  redis:
-    image: redis:7-alpine
-    command: ['redis-server', '--appendonly', 'yes']
-    volumes: [redisdata:/data]
-    healthcheck:
-      test: ['CMD', 'redis-cli', 'ping']
-      interval: 5s
-      retries: 20
-
   api:
     build: { context: ., dockerfile: apps/server/Dockerfile }
     image: chatlol-api
@@ -37,11 +29,9 @@ services:
     env_file: [.env]
     environment:
       MONGODB_URL: ${MONGODB_URL:-mongodb://mongo:27017/chatlol?replicaSet=rs0}
-      REDIS_URL: redis://redis:6379
     volumes: [uploads:/data/uploads]
     depends_on:
       mongo: { condition: service_healthy }
-      redis: { condition: service_healthy }
 
   web:
     build: { context: ., dockerfile: apps/web/Dockerfile }
@@ -70,5 +60,4 @@ services:
 
 volumes:
   mongodata:
-  redisdata:
   uploads:

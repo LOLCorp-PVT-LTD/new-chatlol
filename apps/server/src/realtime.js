@@ -10,7 +10,7 @@ import { screen } from './lib/aiModeration.js';
 import { insertLoungeMessage, loungeKey, markRead, recentMessages } from './routes/social.js';
 import { streamKeys, endStream, insertStreamMessage } from './routes/live.js';
 import { bus } from './lib/events.js';
-import { shared, redisClient, duplicateRedis } from './lib/shared.js';
+import { shared, redisClient, duplicateRedis, sharedBackend } from './lib/shared.js';
 import { config } from './config.js';
 
 export async function attachRealtime(server) {
@@ -24,6 +24,10 @@ export async function attachRealtime(server) {
     // Fan events out across every API instance.
     const { createAdapter } = await import('@socket.io/redis-adapter');
     io.adapter(createAdapter(redis, duplicateRedis()));
+  } else if (sharedBackend() === 'mongodb' && db.transactions) {
+    // No Redis: fan events out through MongoDB (change streams on a replica set, e.g. Atlas).
+    const { createAdapter } = await import('@socket.io/mongo-adapter');
+    io.adapter(createAdapter(db.socketEvents.raw, { addCreatedAtField: true }));
   }
   setIo(io);
 

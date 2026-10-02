@@ -54,6 +54,9 @@ export const COLLECTIONS = [
   'modFlags',
   'profileRatings',
   'profileViews',
+  'kv',
+  'busEvents',
+  'socketEvents',
 ];
 
 const txStore = new AsyncLocalStorage();

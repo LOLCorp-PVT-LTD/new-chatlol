@@ -7,7 +7,7 @@
 | **Web** | Vue 3 · Vite · Pinia · Tailwind | `apps/web` |
 | **iOS & Android** | React Native · Expo SDK 57 · expo-router | `apps/native` |
 | **Desktop** (macOS / Windows / Linux) | The same React Native app (react-native-web) in an Electron shell | `apps/desktop` |
-| **Backend (API + realtime)** | **Node.js 22, plain JavaScript (ES modules)** · Express 5 · Socket.IO · **MongoDB** (official driver) · Redis | `apps/server` |
+| **Backend (API + realtime)** | **Node.js 22, plain JavaScript (ES modules)** · Express 5 · Socket.IO · **MongoDB** (official driver) — also the shared state and realtime fan-out (Redis optional) | `apps/server` |
 | **AI personas** | Free NVIDIA NIM models (chat, vision, FLUX image gen, NemoGuard safety) | `apps/server/src/ai` |
 | **Shared** | Design tokens, game rules, API client, WebRTC mesh (plain JavaScript; `types/*.d.ts` lets the TypeScript frontends type-check against it) | `packages/shared` |
 
@@ -116,12 +116,13 @@ The original files are in `design/brand/`: `chatlol-wordmark.webp` (text logo), 
 
 ## Production & scaling
 
-`docker compose up -d --build` runs the whole stack: MongoDB 8 (single-node replica set), Redis 7, **2 API replicas** and nginx serving the web app and proxying `/api`, `/uploads` and `/socket.io`. Copy `.env.example` to `.env` first. Add `--profile turn` if you want a bundled coturn instead of your own.
+`docker compose up -d --build` runs the whole stack: MongoDB 8 (single-node replica set), **2 API replicas** and nginx serving the web app and proxying `/api`, `/uploads` and `/socket.io`. Copy `.env.example` to `.env` first. Add `--profile turn` if you want a bundled coturn instead of your own.
 
 - **Database:** MongoDB via `MONGODB_URL` (MongoDB Atlas works as is: `mongodb+srv://…`). Use a replica set in production (Atlas always is one, and the compose file sets one up) so multi-document writes such as payouts and purchases run in transactions. Indexes are created on boot, and first-boot seeding takes a lock so replicas never race. Collections and indexes are listed in `apps/server/src/db.js` and `src/indexes.js`.
-- **Redis** (`REDIS_URL`): Socket.IO adapter (cross-instance fan-out), presence, rate limits, lounge and stream state, cluster-wide domain events, and a worker lease so exactly one instance runs the AI personas and Arena payouts.
+- **Shared state runs on MongoDB — no Redis needed.** Presence, rate limits, shout cooldowns, lounge and stream state and the worker lease (so exactly one instance runs the AI personas, birthdays and Arena payouts) live in the `kv` collection, which expires keys with a TTL index. Realtime messages reach sockets on every API instance through Socket.IO's MongoDB adapter, and domain events (what the AI personas react to) travel over a change stream. Change streams need a replica set: MongoDB Atlas always is one, and the bundled `mongo` container is set up as one. On a standalone `mongod`, run a single API instance.
+- **Redis (optional):** set `REDIS_URL` and it takes over all of the above. You'd only want it for very high traffic, where its lower latency for rate-limit checks matters.
 - **Uploads:** stored on the shared volume, or on S3 / Cloudflare R2 / MinIO with `S3_BUCKET` (+ `S3_ENDPOINT`, `S3_PUBLIC_URL`). Files are type-checked by their bytes, not their extension.
-- **Tests:** `npm test` runs the server suite on an embedded MongoDB. Set `TEST_MONGODB_URL` (a replica set, e.g. `mongodb://localhost:27017/?replicaSet=rs0`) and `TEST_REDIS_URL` to run it on real servers, plus a two-process cluster test.
+- **Tests:** `npm test` runs the server suite on an embedded MongoDB. Set `TEST_MONGODB_URL` (a replica set, e.g. `mongodb://localhost:27017/?replicaSet=rs0`) to run it on a real server, including a two-process cluster test on MongoDB alone; add `TEST_REDIS_URL` to run that cluster test on Redis instead.
 
 ### Live video (your TURN server)
 

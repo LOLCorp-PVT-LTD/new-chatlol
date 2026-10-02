@@ -8,7 +8,7 @@ import { authorCache, userPublic, isPremium } from '../lib/serialize.js';
 import { applyAction, standing } from '../lib/enforcement.js';
 import { removeContent } from '../lib/aiModeration.js';
 import { presence } from '../lib/presence.js';
-import { redisClient } from '../lib/shared.js';
+import { redisClient, sharedBackend } from '../lib/shared.js';
 import { extendPremium } from './profile.js';
 
 /** Admin panel API. Moderators can review and mute/suspend; admins can also ban, change roles and grant Premium. */
@@ -56,7 +56,8 @@ adminRouter.get('/admin/overview', async (_req, res) => {
     // Which integrations are configured (values live in apps/server/.env — never sent to the browser).
     integrations: {
       database: 'mongodb',
-      redis: !!redisClient(),
+      redis: redisClient() ? 'on' : 'not used — MongoDB handles it',
+      sharedState: sharedBackend(),
       smtp: !!(config.mail.host || config.mail.url),
       smtpServer: config.mail.host ? `${config.mail.host}:${config.mail.port}${config.mail.secure ? ' (TLS)' : ''}` : null,
       mailFrom: config.mail.from,
