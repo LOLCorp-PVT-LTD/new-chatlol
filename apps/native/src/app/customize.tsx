@@ -12,7 +12,7 @@ import { useColors } from '../lib/theme';
 import { ScreenHeader } from '../components/chrome';
 import { Button, Card, Chip, Gradient, Icon, Input, Label, Row, Tap, Text } from '../components/ui';
 
-/** Profile customizer: background, accent, cover, headline, Spotify song and about-me. */
+/** Profile customizer: background, accent, cover, headline, profile song (searched in-app) and about-me. */
 export default function Customize() {
   const c = useColors();
   const u = useSession((s) => s.user);
@@ -23,7 +23,7 @@ export default function Customize() {
   const [song, setSong] = useState<ProfileSong | null>(u?.profile.song ?? null);
   const [songInput, setSongInput] = useState('');
   const [results, setResults] = useState<ProfileSong[]>([]);
-  const [searchOn, setSearchOn] = useState(true);
+  const [source, setSource] = useState<'spotify' | 'apple'>('spotify');
   const [about, setAbout] = useState({ displayName: u?.displayName ?? '', bio: u?.bio ?? '', pronouns: u?.pronouns ?? '', city: u?.city ?? '' });
   const [gender, setGender] = useState<Gender | null>(u?.gender ?? null);
   const [interests, setInterests] = useState<string[]>(u?.interests ?? []);
@@ -31,7 +31,9 @@ export default function Customize() {
 
   useEffect(() => {
     if (!songInput.trim() || songInput.includes('spotify')) return setResults([]);
-    const t = setTimeout(async () => { const r = await api.spotifySearch(songInput.trim()); setSearchOn(r.enabled); setResults(r.tracks); }, 300);
+    const t = setTimeout(async () => {
+      try { const r = await api.songSearch(songInput.trim()); setSource(r.source); setResults(r.tracks); } catch (e) { errorToast(e); }
+    }, 350);
     return () => clearTimeout(t);
   }, [songInput]);
   if (!u) return null;
@@ -47,7 +49,7 @@ export default function Customize() {
     setBusy(true);
     try {
       await api.updateMe({ ...about, interests });
-      const r = await api.updateProfile({ background: bg, accent, coverUrl, headline, gender: gender ?? undefined, song: song ? { type: song.type, id: song.id, title: song.title, artist: song.artist, artUrl: song.artUrl } : null });
+      const r = await api.updateProfile({ background: bg, accent, coverUrl, headline, gender: gender ?? undefined, song });
       session.set({ user: r.user });
       toast({ kind: 'info', title: 'Profile updated ✨' });
       router.back();
@@ -80,7 +82,7 @@ export default function Customize() {
         </Card>
 
         <Card style={{ padding: 16, gap: 10 }}>
-          <Label>Profile song (Spotify)</Label>
+          <Label>Profile song</Label>
           {song ? (
             <Row gap={10}>
               {song.artUrl ? <Image source={song.artUrl} style={{ width: 48, height: 48, borderRadius: 10 }} /> : <Icon name="music-note" color={c.flame} />}
@@ -88,9 +90,9 @@ export default function Customize() {
               <Button small variant="ghost" title="Remove" onPress={() => setSong(null)} />
             </Row>
           ) : null}
-          <Input value={songInput} onChangeText={setSongInput} autoCapitalize="none" placeholder={searchOn ? 'Search Spotify or paste a link' : 'Paste a Spotify link'} />
+          <Input value={songInput} onChangeText={setSongInput} autoCapitalize="none" placeholder="Search a song or artist" />
           {songInput.includes('spotify') ? <Button small title="Use this link" onPress={useLink} /> : null}
-          {!searchOn ? <Text variant="bodySm" color={c.onSurfaceVariant}>In Spotify tap Share → Copy Song Link, then paste it here.</Text> : null}
+          <Text variant="bodySm" color={c.onSurfaceVariant}>{source === 'spotify' ? 'Searching Spotify — the full song plays on your profile.' : 'Searching Apple Music — a 30-second preview loops on your profile.'} You can also paste a Spotify link.</Text>
           {results.map((r) => (
             <Tap key={r.id} onPress={() => { setSong(r); setResults([]); setSongInput(''); }} style={{ flexDirection: 'row', gap: 10, alignItems: 'center', paddingVertical: 4 }}>
               {r.artUrl ? <Image source={r.artUrl} style={{ width: 40, height: 40, borderRadius: 8 }} /> : null}

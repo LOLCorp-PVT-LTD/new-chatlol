@@ -67,7 +67,7 @@ adminRouter.get('/admin/overview', async (_req, res) => {
       safetyModel: config.nim.safetyModel || null,
       turn: config.rtc.turnUrls.length > 0,
       s3: !!config.s3.bucket,
-      spotifySearch: !!config.spotify.clientId,
+      songSearch: config.spotify.clientId ? 'Spotify (full songs)' : 'Apple Music previews (no keys needed)',
       push: !!config.expoAccessToken,
     },
   });

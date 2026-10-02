@@ -16,7 +16,7 @@ const search = () => q.value.trim() && router.push({ path: '/members', query: { 
 </script>
 
 <template>
-  <header class="sticky top-0 z-40 glass shadow-[0_1px_8px_rgba(0,0,0,0.04)] pt-[env(safe-area-inset-top)]">
+  <header data-topbar class="sticky top-0 z-40 glass shadow-[0_1px_8px_rgba(0,0,0,0.04)] pt-[env(safe-area-inset-top)]">
     <div class="max-w-[1320px] mx-auto h-16 lg:h-20 px-4 lg:px-10 flex items-center gap-3">
       <button class="btn-icon w-10 h-10 bg-surface-container-low shadow-warm" aria-label="Open navigation menu" @click="$emit('menu')"><Icon name="menu" /></button>
       <RouterLink to="/" class="shrink-0" aria-label="ChatLOL home"><Logo /></RouterLink>

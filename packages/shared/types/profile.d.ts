@@ -16,6 +16,7 @@ export declare const WALL_MOODS: { key: WallMood; label: string; emoji: string }
 export type SpotifyKind = 'track' | 'album' | 'playlist' | 'artist' | 'episode';
 export interface SpotifyRef { type: SpotifyKind; id: string }
 export declare function parseSpotify(input: string | null | undefined): SpotifyRef | null;
+export declare function isApplePreviewUrl(u: string | null | undefined): boolean;
 export declare function spotifyEmbedUrl(song: SpotifyRef): string;
 export declare function spotifyOpenUrl(song: SpotifyRef): string;
 export type ModStatus = 'active' | 'muted' | 'suspended' | 'banned';

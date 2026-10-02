@@ -58,6 +58,10 @@ export async function ensureIndexes(db) {
     idx('profileViews', { profileId: 1, at: -1 }),
     idx('shouts', { mentions: 1, createdAt: -1 }),
     // Shared state (rate limits, cooldowns, leases…) expires on its own; cluster events are kept for a few minutes.
+    // Profile showcase lists (followers / following / friends, threads).
+    idx('follows', { followeeId: 1, createdAt: -1 }),
+    idx('follows', { followerId: 1, createdAt: -1 }),
+    idx('threads', { authorId: 1, createdAt: -1 }),
     idx('kv', { exp: 1 }, { expireAfterSeconds: 0 }),
     idx('busEvents', { at: 1 }, { expireAfterSeconds: 300 }),
     idx('socketEvents', { createdAt: 1 }, { expireAfterSeconds: 300 }),

@@ -59,11 +59,16 @@ export interface UserPrivate extends UserPublic {
     moderation: { status: import('./profile').ModStatus; until: ISODate | null; reason: string | null };
 }
 export interface ProfileSong {
+    /** Where it plays from: a Spotify embed, or an Apple Music 30-second preview (used when Spotify search isn't set up). */
+    source?: 'spotify' | 'apple';
     type: import('./profile').SpotifyKind;
     id: string;
     title: string;
     artist: string;
     artUrl: string | null;
+    /** Apple previews only. */
+    previewUrl?: string | null;
+    linkUrl?: string | null;
 }
 export interface ProfileCustomization {
     song: ProfileSong | null;
@@ -71,6 +76,8 @@ export interface ProfileCustomization {
     accent: string;
     headline: string;
     coverUrl: string | null;
+    /** Present on full profiles (GET /users/:handle) and your own account; not on authors embedded in feeds. */
+    layout?: import('./profileLayout').ProfileLayout;
 }
 export interface UserSettings {
     pushEnabled: boolean;
@@ -405,4 +412,15 @@ export interface AdminUser extends UserPublic {
     strikes30d: number;
     reportsAgainst: number;
     deleted: boolean;
+}
+
+/** Data for a profile's list sections (GET /users/:id/showcase). Only the requested kinds are present. */
+export interface Showcase {
+    friends?: UserPublic[];
+    followers?: UserPublic[];
+    following?: UserPublic[];
+    shouts?: Shout[];
+    photos?: Post[];
+    topPhotos?: Post[];
+    threads?: { id: ID; boardId: string; title: string; replyCount: number; upvotes: number; createdAt: ISODate }[];
 }

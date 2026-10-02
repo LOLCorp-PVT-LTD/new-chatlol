@@ -164,6 +164,15 @@ export function parseSpotify(input) {
   if (/^[A-Za-z0-9]{22}$/.test(s)) return { type: 'track', id: s };
   return null;
 }
+/** Apple Music preview clips only come from Apple's CDN — anything else is rejected. */
+export function isApplePreviewUrl(u) {
+  try {
+    const x = new URL(String(u));
+    return x.protocol === 'https:' && /(^|\.)(mzstatic\.com|itunes\.apple\.com|apple\.com)$/.test(x.hostname);
+  } catch {
+    return false;
+  }
+}
 export const spotifyEmbedUrl = (song) => `https://open.spotify.com/embed/${song.type}/${song.id}?utm_source=generator&theme=0`;
 export const spotifyOpenUrl = (song) => `https://open.spotify.com/${song.type}/${song.id}`;
 

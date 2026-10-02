@@ -5,6 +5,10 @@
 
 @layer base {
   html { @apply bg-surface; -webkit-tap-highlight-color: transparent; }
+  /* A profile page paints the member's background on the whole window (see ProfileView). */
+  html.has-profile-bg { background: var(--profile-bg) !important; background-attachment: fixed !important; min-height: 100%; }
+  html.has-profile-bg body { background: transparent !important; }
+  body.profile-editing [data-topbar] { display: none; }
   body { @apply bg-surface text-on-surface font-sans antialiased; font-weight: 500; overscroll-behavior-y: none; }
   ::selection { background: rgb(255 94 0 / 0.25); }
   button { -webkit-user-select: none; user-select: none; }

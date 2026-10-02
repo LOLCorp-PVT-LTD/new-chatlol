@@ -2,8 +2,10 @@ import React from 'react';
 import type { ProfileSong as Song } from '@chatlol/shared';
 import { spotifyEmbedUrl } from '@chatlol/shared';
 
-/** Web / desktop build: Spotify's embed in an iframe (browsers only start sound after a click, so no autoplay here). */
+/** Web / desktop build: Spotify's embed in an iframe, or an Apple preview in an audio player (browsers only start sound after a click, so no autoplay here). */
 export function ProfileSong({ song }: { song: Song; autoplay?: boolean }) {
+  if (song.source === 'apple')
+    return React.createElement('audio', { src: song.previewUrl ?? undefined, controls: true, loop: true, preload: 'none', style: { width: '100%' }, 'aria-label': song.title || 'Profile song' });
   return React.createElement('iframe', {
     src: spotifyEmbedUrl(song),
     title: song.title || 'Profile song',

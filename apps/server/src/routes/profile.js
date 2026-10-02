@@ -1,13 +1,26 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { PROFILE_BACKGROUNDS, PREMIUM_PLANS, WALL_MOODS, parseSpotify, premiumPlan, summarizeRatings, tierByScore } from '@chatlol/shared';
+import {
+  PROFILE_BACKGROUNDS,
+  PREMIUM_PLANS,
+  SHOWCASE_TYPES,
+  WALL_MOODS,
+  isApplePreviewUrl,
+  layoutText,
+  normalizeLayout,
+  parseSpotify,
+  premiumPlan,
+  summarizeRatings,
+  tierByScore,
+} from '@chatlol/shared';
 import { db, newId, now, today } from '../db.js';
 import { config } from '../config.js';
 import { optionalAuth, requireAuth, uid } from '../lib/auth.js';
 import { HttpError, parse, rateLimit } from '../lib/http.js';
 import { authorCache, invalidateStats, isPremium, serializePosts, teaserAvatar, userPrivate, DEFAULT_SETTINGS } from '../lib/serialize.js';
+import { serializeShout } from './shouts.js';
 import { emitWallet, notify } from '../lib/rewards.js';
-import { assertClean } from '../lib/moderation.js';
+import { assertClean, classify } from '../lib/moderation.js';
 import { assertCanPost } from '../lib/enforcement.js';
 import { screen } from '../lib/aiModeration.js';
 
@@ -46,29 +59,67 @@ async function spotifyAccessToken() {
   return spotifyToken.value;
 }
 
-profileRouter.get('/spotify/search', requireAuth, async (req, res) => {
-  await rateLimit(`spotify:${uid(req)}`, 30);
+/**
+ * In-app song search. Uses Spotify when SPOTIFY_CLIENT_ID/SECRET are set (full songs via the Spotify player);
+ * otherwise Apple Music's public search, which needs no keys (30-second previews).
+ */
+export async function searchSongs(q) {
+  if (config.spotify.clientId && config.spotify.clientSecret) {
+    const r = await fetch(`https://api.spotify.com/v1/search?type=track&limit=12&q=${encodeURIComponent(q)}`, {
+      headers: { Authorization: `Bearer ${await spotifyAccessToken()}` },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!r.ok) throw new HttpError(502, 'Spotify search failed');
+    const j = await r.json();
+    return {
+      source: 'spotify',
+      tracks: (j.tracks?.items ?? []).map((t) => ({
+        source: 'spotify',
+        type: 'track',
+        id: t.id,
+        title: t.name,
+        artist: t.artists.map((a) => a.name).join(', '),
+        artUrl: t.album?.images?.at(-1)?.url ?? t.album?.images?.[0]?.url ?? null,
+      })),
+    };
+  }
+  let r;
+  try {
+    r = await fetch(`https://itunes.apple.com/search?media=music&entity=song&limit=15&term=${encodeURIComponent(q)}`, {
+      signal: AbortSignal.timeout(8000),
+    });
+  } catch {
+    throw new HttpError(502, 'Song search is unavailable right now');
+  }
+  if (!r.ok) throw new HttpError(502, 'Song search is unavailable right now');
+  const j = await r.json();
+  return {
+    source: 'apple',
+    tracks: (j.results ?? [])
+      .filter((t) => t.trackId && isApplePreviewUrl(t.previewUrl))
+      .map((t) => ({
+        source: 'apple',
+        type: 'track',
+        id: String(t.trackId),
+        title: String(t.trackName ?? '').slice(0, 120),
+        artist: String(t.artistName ?? '').slice(0, 120),
+        artUrl: t.artworkUrl100 ? String(t.artworkUrl100).replace('100x100', '300x300') : null,
+        previewUrl: t.previewUrl,
+        linkUrl: t.trackViewUrl ?? null,
+      })),
+  };
+}
+
+async function songSearchRoute(req, res) {
+  await rateLimit(`songs:${uid(req)}`, 30);
   const q = String(req.query.q ?? '')
     .trim()
     .slice(0, 100);
-  if (!config.spotify.clientId || !config.spotify.clientSecret) return res.json({ enabled: false, tracks: [] });
-  if (!q) return res.json({ enabled: true, tracks: [] });
-  const r = await fetch(`https://api.spotify.com/v1/search?type=track&limit=12&q=${encodeURIComponent(q)}`, {
-    headers: { Authorization: `Bearer ${await spotifyAccessToken()}` },
-  });
-  if (!r.ok) throw new HttpError(502, 'Spotify search failed');
-  const j = await r.json();
-  res.json({
-    enabled: true,
-    tracks: (j.tracks?.items ?? []).map((t) => ({
-      type: 'track',
-      id: t.id,
-      title: t.name,
-      artist: t.artists.map((a) => a.name).join(', '),
-      artUrl: t.album?.images?.at(-1)?.url ?? t.album?.images?.[0]?.url ?? null,
-    })),
-  });
-});
+  if (!q) return res.json({ enabled: true, source: config.spotify.clientId ? 'spotify' : 'apple', tracks: [] });
+  res.json({ enabled: true, ...(await searchSongs(q)) });
+}
+profileRouter.get('/songs/search', requireAuth, songSearchRoute);
+profileRouter.get('/spotify/search', requireAuth, songSearchRoute); // older app builds
 
 profileRouter.get('/spotify/resolve', requireAuth, async (req, res) => {
   const song = await resolveSpotify(String(req.query.url ?? ''));
@@ -103,11 +154,14 @@ profileRouter.patch('/me/profile', requireAuth, async (req, res) => {
         .union([
           z.string().max(300),
           z.object({
+            source: z.enum(['spotify', 'apple']).optional(),
             type: z.string(),
-            id: z.string(),
+            id: z.string().max(40),
             title: z.string().max(120).optional(),
             artist: z.string().max(120).optional(),
-            artUrl: z.string().url().nullable().optional(),
+            artUrl: z.string().url().max(600).nullable().optional(),
+            previewUrl: z.string().url().max(600).nullable().optional(),
+            linkUrl: z.string().url().max(600).nullable().optional(),
           }),
           z.null(),
         ])
@@ -124,15 +178,141 @@ profileRouter.patch('/me/profile', requireAuth, async (req, res) => {
   if (b.background) set['profile.background'] = b.background;
   if (b.song !== undefined) {
     if (b.song === null) set['profile.song'] = null;
-    else {
+    else if (typeof b.song === 'object' && b.song.source === 'apple') {
+      if (!/^\d{1,20}$/.test(b.song.id) || !isApplePreviewUrl(b.song.previewUrl)) throw new HttpError(400, 'That song can’t be played');
+      const link = b.song.linkUrl && /^https:\/\/music\.apple\.com\//.test(b.song.linkUrl) ? b.song.linkUrl : null;
+      set['profile.song'] = {
+        source: 'apple',
+        type: 'track',
+        id: b.song.id,
+        title: b.song.title ?? '',
+        artist: b.song.artist ?? '',
+        artUrl: b.song.artUrl ?? null,
+        previewUrl: b.song.previewUrl,
+        linkUrl: link,
+      };
+    } else {
       const ref = typeof b.song === 'string' ? await resolveSpotify(b.song) : parseSpotify(`spotify:${b.song.type}:${b.song.id}`) && b.song;
       if (!ref) throw new HttpError(400, 'That isn’t a Spotify link');
-      set['profile.song'] = { type: ref.type, id: ref.id, title: ref.title ?? '', artist: ref.artist ?? '', artUrl: ref.artUrl ?? null };
+      set['profile.song'] = { source: 'spotify', type: ref.type, id: ref.id, title: ref.title ?? '', artist: ref.artist ?? '', artUrl: ref.artUrl ?? null };
     }
   }
   if (Object.keys(set).length) await db.users.updateOne({ _id: id }, { $set: set });
   invalidateStats(id);
   res.json({ user: await userPrivate(await db.users.findOne({ _id: id })) });
+});
+
+// ——— Profile page layout (the drag-and-drop builder) ———
+profileRouter.put('/me/profile/layout', requireAuth, async (req, res) => {
+  const id = uid(req);
+  await rateLimit(`layout:${id}`, 30);
+  if (!req.body || typeof req.body !== 'object' || !Array.isArray(req.body.sections)) throw new HttpError(400, 'Send a layout with sections');
+  const layout = normalizeLayout(req.body);
+  // Text boxes, quotes and links are public, so they get the full check (threats, scams, NemoGuard), not just the word list.
+  const text = layoutText(layout);
+  if (text) {
+    assertClean(text);
+    const verdict = await classify(text);
+    if (!verdict.safe || verdict.severe) throw new HttpError(422, 'SafeShield caught something on your page — keep it kind 🧡', 'moderation_layout');
+  }
+  await db.users.updateOne({ _id: id }, { $set: { 'profile.layout': layout } });
+  res.json({ user: await userPrivate(await db.users.findOne({ _id: id })), layout });
+});
+
+/**
+ * Everything the profile's list sections need, in one request: friends (mutual follows), followers,
+ * following, recent shouts, latest and top-rated photos, forum threads. `types` picks which; `limit` caps each.
+ */
+profileRouter.get('/users/:id/showcase', optionalAuth, async (req, res) => {
+  const profileId = String(req.params.id);
+  const types = String(req.query.types ?? '')
+    .split(',')
+    .filter((t) => SHOWCASE_TYPES.includes(t));
+  const limit = Math.min(24, Math.max(1, Number(req.query.limit) || 12));
+  const owner = await db.users.findOne({ _id: profileId, deletedAt: null }, { projection: { _id: 1 } });
+  if (!owner) throw new HttpError(404, 'User not found');
+  if (req.userId && (await db.blocks.findOne({ blockerId: profileId, blockedId: req.userId }))) throw new HttpError(404, 'User not found');
+  const author = authorCache(req.userId);
+  const people = async (ids) => (await Promise.all(ids.map(author))).filter((u) => u.handle !== 'deleted');
+  const out = {};
+  const want = (t) => types.includes(t);
+  const photoFilter = { authorId: profileId, hidden: false, mediaUrl: { $ne: null }, kind: { $in: ['photo', 'drop'] } };
+  await Promise.all([
+    want('followers') &&
+      db.follows
+        .find({ followeeId: profileId })
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .toArray()
+        .then(async (rows) => (out.followers = await people(rows.map((r) => r.followerId)))),
+    (want('following') || want('friends')) &&
+      (async () => {
+        const followees = await db.follows.distinct('followeeId', { followerId: profileId });
+        if (want('following')) {
+          const rows = await db.follows.find({ followerId: profileId }).sort({ createdAt: -1 }).limit(limit).toArray();
+          out.following = await people(rows.map((r) => r.followeeId));
+        }
+        if (want('friends')) {
+          const rows = followees.length
+            ? await db.follows
+                .find({ followerId: { $in: followees }, followeeId: profileId })
+                .sort({ createdAt: -1 })
+                .limit(limit)
+                .toArray()
+            : [];
+          out.friends = await people(rows.map((r) => r.followerId));
+        }
+      })(),
+    want('shouts') &&
+      db.shouts
+        .find({ authorId: profileId, hidden: { $ne: true } })
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .toArray()
+        .then(async (rows) => (out.shouts = await Promise.all(rows.map((r) => serializeShout(r, req.userId, author))))),
+    want('photos') &&
+      db.posts
+        .find(photoFilter)
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .toArray()
+        .then(async (rows) => (out.photos = await serializePosts(rows, req.userId))),
+    want('topPhotos') &&
+      db.posts
+        .aggregate([
+          { $match: { ...photoFilter, $expr: { $gt: [{ $add: ['$r1', '$r2', '$r3', '$r4', '$r5'] }, 0] } } },
+          {
+            $addFields: {
+              _n: { $add: ['$r1', '$r2', '$r3', '$r4', '$r5'] },
+              _sum: { $add: ['$r1', { $multiply: ['$r2', 2] }, { $multiply: ['$r3', 3] }, { $multiply: ['$r4', 4] }, { $multiply: ['$r5', 5] }] },
+            },
+          },
+          { $addFields: { _avg: { $divide: ['$_sum', '$_n'] } } },
+          { $sort: { _avg: -1, _n: -1, createdAt: -1 } },
+          { $limit: limit },
+          { $project: { _n: 0, _sum: 0, _avg: 0 } },
+        ])
+        .toArray()
+        .then(async (rows) => (out.topPhotos = await serializePosts(rows, req.userId))),
+    want('threads') &&
+      db.threads
+        .find({ authorId: profileId, hidden: { $ne: true } })
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .toArray()
+        .then(
+          (rows) =>
+            (out.threads = rows.map((t) => ({
+              id: t._id,
+              boardId: t.boardId,
+              title: t.title,
+              replyCount: t.replyCount ?? 0,
+              upvotes: t.upvotes ?? 0,
+              createdAt: t.createdAt,
+            }))),
+        ),
+  ]);
+  res.json(out);
 });
 
 // ——— Gallery ———

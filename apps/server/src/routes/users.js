@@ -4,7 +4,7 @@ import { db, now, newId, escapeRegex } from '../db.js';
 import { optionalAuth, requireAuth, uid } from '../lib/auth.js';
 import { HttpError, parse, rateLimit } from '../lib/http.js';
 import { reviewReport } from '../lib/aiModeration.js';
-import { userPublic, serializePosts, invalidateStats, DEFAULT_SETTINGS } from '../lib/serialize.js';
+import { userPublic, serializePosts, invalidateStats, withLayout, DEFAULT_SETTINGS } from '../lib/serialize.js';
 import { notify } from '../lib/rewards.js';
 import { presence } from '../lib/presence.js';
 import { profileRatingSummary, recordProfileView } from './profile.js';
@@ -75,7 +75,7 @@ usersRouter.get('/users/:handle', optionalAuth, async (req, res) => {
   ]);
   void recordProfileView(u._id, req.userId).catch(() => {});
   res.json({
-    user: await userPublic(u, req.userId),
+    user: withLayout(await userPublic(u, req.userId), u),
     posts: await serializePosts(posts, req.userId),
     profileRatings: ratings,
     wallCount,

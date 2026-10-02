@@ -111,7 +111,10 @@ export function createApi(opts) {
     postWall: (userId, b) => req('POST', `/users/${userId}/wall`, b),
     deleteWallNote: (id) => req('DELETE', `/wall/${id}`),
     insights: () => req('GET', '/me/insights'),
-    spotifySearch: (query) => req('GET', `/spotify/search${q({ q: query })}`),
+    spotifySearch: (query) => req('GET', `/songs/search${q({ q: query })}`),
+    songSearch: (query) => req('GET', `/songs/search${q({ q: query })}`),
+    updateLayout: (layout) => req('PUT', '/me/profile/layout', layout),
+    showcase: (userId, types, limit) => req('GET', `/users/${userId}/showcase${q({ types: types.join(','), limit })}`),
     spotifyResolve: (url) => req('GET', `/spotify/resolve${q({ url })}`),
 
     // premium

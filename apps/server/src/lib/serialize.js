@@ -1,4 +1,4 @@
-import { summarizeRatings, levelForXp, tierByScore, REWARDS, gemPriceFor } from '@chatlol/shared';
+import { summarizeRatings, levelForXp, tierByScore, REWARDS, gemPriceFor, normalizeLayout } from '@chatlol/shared';
 import { db, today } from '../db.js';
 import { presence } from './presence.js';
 
@@ -174,10 +174,15 @@ export function effectiveStreak(u) {
   return u.lastDropDay >= yesterday ? u.streakDays : 0;
 }
 
+/** Adds the profile page layout — only where a whole profile is shown, so feeds don't carry it on every author. */
+export function withLayout(pub, u) {
+  return { ...pub, profile: { ...pub.profile, layout: normalizeLayout(u.profile?.layout) } };
+}
+
 export async function userPrivate(u) {
   const done = (await db.dailyCounters.findOne({ _id: `${u._id}:${today()}:rate` }))?.n ?? 0;
   return {
-    ...(await userPublic(u)),
+    ...withLayout(await userPublic(u), u),
     online: true,
     email: u.email ?? '',
     emailVerified: !!u.emailVerifiedAt,

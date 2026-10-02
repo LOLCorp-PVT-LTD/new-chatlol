@@ -336,3 +336,119 @@ test('birthdays: one system post per year, a gift, follower alerts, wishes not r
   assert.ok(home.birthdays.some((b) => b.user.id === r.user.id));
   assert.ok(fan.id);
 });
+
+test('profile builder: layouts are cleaned, saved, moderated and shown to visitors', async () => {
+  const u = await signUp('lay');
+  const c = as('lay');
+  const fresh = await as('anon').user(u.handle);
+  assert.equal(fresh.user.profile.layout.header, 'cover', 'new profiles start from the default layout');
+  assert.ok(fresh.user.profile.layout.sections.some((s) => s.type === 'wall'));
+  const r = await c.updateLayout({
+    header: 'split',
+    width: 'wide',
+    gap: 'airy',
+    corners: 'round',
+    font: 'serif',
+    sections: [
+      { id: 'a1', type: 'about', size: 'third', style: 'glass', title: 'Me!', config: {} },
+      { id: 'a2', type: 'about', size: 'full' }, // duplicate single-use section → dropped
+      { id: 'v1', type: 'video', size: 'half', config: { videoId: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=1' } },
+      { id: 'l1', type: 'links', size: 'gigantic', config: { items: [{ label: 'x', url: 'javascript:alert(1)' }, { label: 'IG', url: 'https://instagram.com/lay' }] } },
+      { id: 'f1', type: 'friends', config: { limit: 999 } },
+      { id: 'z1', type: 'not-a-section' },
+    ],
+  });
+  const l = r.layout;
+  assert.deepEqual([l.header, l.width, l.gap, l.corners, l.font], ['split', 'wide', 'airy', 'round', 'serif']);
+  assert.deepEqual(
+    l.sections.map((s) => s.type),
+    ['about', 'video', 'links', 'friends'],
+  );
+  assert.equal(l.sections[0].style, 'glass');
+  assert.equal(l.sections[1].config.videoId, 'dQw4w9WgXcQ');
+  assert.equal(l.sections[2].size, 'third', 'an unknown size falls back to the section default');
+  assert.deepEqual(l.sections[2].config.items, [{ label: 'IG', url: 'https://instagram.com/lay' }]);
+  assert.equal(l.sections[3].config.limit, 24, 'limits are clamped');
+  const seen = await as('anon').user(u.handle);
+  assert.deepEqual(
+    seen.user.profile.layout.sections.map((s) => s.id),
+    ['a1', 'v1', 'l1', 'f1'],
+  );
+  // Authors embedded in feeds don't carry the layout.
+  await c.createPost({ body: 'hello', mediaUrl: 'https://picsum.photos/seed/lay/600/800' });
+  const feed = await c.feed({});
+  assert.equal(feed.items[0].author.profile.layout, undefined);
+  await assert.rejects(
+    c.updateLayout({ sections: [{ type: 'text', config: { body: 'I will kill you' } }] }),
+    (e) => e.status === 400 || e.status === 422,
+  );
+  await assert.rejects(c.updateLayout({ nope: true }), (e) => e.status === 400);
+});
+
+test('profile showcase: friends, followers, following, shouts and top photos', async () => {
+  const a = await signUp('sha');
+  const b = await signUp('shb');
+  const d = await signUp('shd');
+  await as('sha').follow(b.id);
+  await as('shb').follow(a.id); // a ↔ b: friends
+  await as('shd').follow(a.id); // d → a: follower only
+  await as('sha').shout({ body: 'showcase shout' });
+  const low = (await as('sha').createPost({ body: 'meh', mediaUrl: 'https://picsum.photos/seed/s1/600/800' })).post;
+  const high = (await as('sha').createPost({ body: 'yes', mediaUrl: 'https://picsum.photos/seed/s2/600/800' })).post;
+  await as('shb').rate(low.id, 1);
+  await as('shb').rate(high.id, 5);
+  const s = await as('shd').showcase(a.id, ['friends', 'followers', 'following', 'shouts', 'topPhotos', 'photos', 'threads'], 12);
+  // New members also follow a few personas at signup, so check membership rather than exact lists.
+  const ids = (list) => list.map((x) => x.id);
+  assert.ok(ids(s.friends).includes(b.id), 'mutual follow = friend');
+  assert.ok(!ids(s.friends).includes(d.id), 'a one-way follower is not a friend');
+  assert.ok(ids(s.followers).includes(b.id) && ids(s.followers).includes(d.id));
+  assert.equal(s.following[0].id, b.id, 'most recent follow first');
+  assert.ok(!ids(s.following).includes(d.id));
+  assert.equal(s.shouts[0].body, 'showcase shout');
+  assert.deepEqual(s.topPhotos.map((p) => p.id), [high.id, low.id], 'best rated first');
+  assert.equal(s.photos[0].id, high.id, 'latest first');
+  assert.deepEqual(s.threads, []);
+  const only = await as('anon').showcase(a.id, ['friends'], 5);
+  assert.deepEqual(Object.keys(only), ['friends'], 'only what was asked for');
+});
+
+test('song search works without Spotify keys (Apple Music previews) and only Apple clips are accepted', async () => {
+  await signUp('song');
+  const c = as('song');
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    if (String(url).startsWith('https://itunes.apple.com/search')) {
+      return new Response(
+        JSON.stringify({
+          results: [
+            {
+              trackId: 1488408568,
+              trackName: 'Blinding Lights',
+              artistName: 'The Weeknd',
+              artworkUrl100: 'https://is1-ssl.mzstatic.com/image/thumb/a/100x100bb.jpg',
+              previewUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview/x.m4a',
+              trackViewUrl: 'https://music.apple.com/us/album/blinding-lights/1488408555?i=1488408568',
+            },
+            { trackId: 2, trackName: 'Bad', artistName: 'X', previewUrl: 'https://evil.example/x.mp3' },
+          ],
+        }),
+        { headers: { 'content-type': 'application/json' } },
+      );
+    }
+    return realFetch(url, opts);
+  };
+  try {
+    const r = await c.songSearch('blinding lights');
+    assert.equal(r.source, 'apple');
+    assert.equal(r.tracks.length, 1, 'tracks without an Apple preview are left out');
+    const t = r.tracks[0];
+    assert.equal(t.artUrl, 'https://is1-ssl.mzstatic.com/image/thumb/a/300x300bb.jpg');
+    const saved = await c.updateProfile({ song: t });
+    assert.equal(saved.user.profile.song.source, 'apple');
+    assert.equal(saved.user.profile.song.previewUrl, t.previewUrl);
+    await assert.rejects(c.updateProfile({ song: { ...t, previewUrl: 'https://evil.example/x.mp3' } }), (e) => e.status === 400);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});

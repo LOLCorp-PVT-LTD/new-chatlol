@@ -6,3 +6,4 @@ export * from './realtime';
 export * from './rtc';
 export * from './profile';
 export * from './calendar';
+export * from './profileLayout';

@@ -13,10 +13,12 @@
     "@chatlol/shared": "*",
     "pinia": "^3.0.3",
     "socket.io-client": "^4.8.1",
+    "sortablejs": "^1.15.7",
     "vue": "^3.5.22",
     "vue-router": "^4.5.1"
   },
   "devDependencies": {
+    "@types/sortablejs": "^1.15.9",
     "@vitejs/plugin-vue": "^6.0.1",
     "autoprefixer": "^10.4.21",
     "postcss": "^8.5.6",

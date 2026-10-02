@@ -4,3 +4,4 @@ export * from './api.js';
 export * from './rtc.js';
 export * from './profile.js';
 export * from './calendar.js';
+export * from './profileLayout.js';

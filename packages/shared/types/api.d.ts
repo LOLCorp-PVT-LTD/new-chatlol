@@ -1,4 +1,4 @@
-import type { Shout, WallNote, ProfileRatings, Insights, HomeData, AdminUser, ProfileSong, AuthResponse, ChatMessage, Comment, Conversation, Drop, HotTake, LeaderboardEntry, LiveStream, Lounge, NotificationItem, Page, Post, ReactionKind, RewardEvent, RouletteCard, RouletteResult, ShoutReply, ShoutThread, StoreItem, UserPrivate, UserPublic, UserSettings, VibeScore, Cosmetics, ID, GemPack, IceConfig } from './types';
+import type { Showcase, Shout, WallNote, ProfileRatings, Insights, HomeData, AdminUser, ProfileSong, AuthResponse, ChatMessage, Comment, Conversation, Drop, HotTake, LeaderboardEntry, LiveStream, Lounge, NotificationItem, Page, Post, ReactionKind, RewardEvent, RouletteCard, RouletteResult, ShoutReply, ShoutThread, StoreItem, UserPrivate, UserPublic, UserSettings, VibeScore, Cosmetics, ID, GemPack, IceConfig } from './types';
 export declare class ApiError extends Error {
     status: number;
     code?: string | undefined;
@@ -313,7 +313,11 @@ export declare function createApi(opts: ApiClientOptions): {
     postWall: (userId: ID, b: { body: string; mood?: string | null }) => Promise<{ note: WallNote }>;
     deleteWallNote: (id: ID) => Promise<{ ok: true }>;
     insights: () => Promise<Insights>;
-    spotifySearch: (q: string) => Promise<{ enabled: boolean; tracks: ProfileSong[] }>;
+    spotifySearch: (q: string) => Promise<{ enabled: boolean; source?: 'spotify' | 'apple'; tracks: ProfileSong[] }>;
+    /** Spotify when the server has Spotify keys, otherwise Apple Music previews (no keys needed). */
+    songSearch: (q: string) => Promise<{ enabled: boolean; source: 'spotify' | 'apple'; tracks: ProfileSong[] }>;
+    updateLayout: (layout: import('./profileLayout').ProfileLayout) => Promise<{ user: UserPrivate; layout: import('./profileLayout').ProfileLayout }>;
+    showcase: (userId: ID, types: import('./profileLayout').SectionType[], limit?: number) => Promise<Showcase>;
     spotifyResolve: (url: string) => Promise<{ song: ProfileSong }>;
     premium: () => Promise<{ plans: import('./profile').PremiumPlan[]; premiumUntil: string | null; sparks: number; stripe: boolean; iap: boolean }>;
     buyPremium: (planId: string) => Promise<{ premiumUntil: string; user: UserPrivate }>;
