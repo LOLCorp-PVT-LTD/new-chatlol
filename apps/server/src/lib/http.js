@@ -1,4 +1,5 @@
 import { shared } from './shared.js';
+import { config } from '../config.js';
 
 import { ZodError } from 'zod';
 
@@ -30,5 +31,5 @@ export function errorHandler(err, _req, res, _next) {
 export async function rateLimit(key, perMinute) {
   const window = Math.floor(Date.now() / 60_000);
   const n = await shared().incr(`rl:${key}:${window}`, 70);
-  if (n > perMinute) throw new HttpError(429, 'Whoa, slow down a little!', 'rate_limited');
+  if (n > perMinute * config.rateLimitScale) throw new HttpError(429, 'Whoa, slow down a little!', 'rate_limited');
 }

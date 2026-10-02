@@ -13,6 +13,34 @@ export const DEFAULT_SETTINGS = {
   darkMode: 'system',
   breakReminderMins: 0,
   showAIPersonas: true,
+  // Privacy
+  whoCanComment: 'everyone', // everyone | following
+  wallFrom: 'everyone', // everyone | following | nobody
+  profileVisibility: 'everyone', // everyone | members (signed-in only)
+  showGender: true,
+  showCity: true,
+  showInRoulette: true,
+  ghostMode: false, // hide yourself from lounge presence
+  // Notifications by kind
+  notifyRatings: true,
+  notifyComments: true,
+  notifyFollows: true,
+  notifyDms: true,
+  notifyMentions: true,
+  notifyLive: true,
+  notifyArena: true,
+  // Experience
+  autoplayMusic: true, // play other people's profile songs automatically
+  reduceMotion: false,
+};
+
+/** Empty profile customisation. */
+export const DEFAULT_PROFILE = {
+  song: null,
+  background: { kind: 'preset', value: 'sunset' },
+  accent: '#ff5e00',
+  headline: '',
+  coverUrl: null,
 };
 
 /** A complete user document with defaults; pass the fields you know. */
@@ -36,6 +64,10 @@ export function newUser(fields) {
     settings: { ...DEFAULT_SETTINGS },
     isAi: false,
     personaId: null,
+    gender: null,
+    role: 'user', // user | mod | admin
+    profile: { ...DEFAULT_PROFILE },
+    moderation: { status: 'active', until: null, reason: null },
     emailVerifiedAt: null,
     deletedAt: null,
     ...fields,
@@ -93,6 +125,7 @@ const NO_COSMETICS = { frame: null, flair: null, theme: null, banner: null };
 export async function userPublic(u, viewerId) {
   const s = await stats(u._id);
   const settings = { ...DEFAULT_SETTINGS, ...u.settings };
+  const profile = { ...DEFAULT_PROFILE, ...u.profile };
   const out = {
     id: u._id,
     handle: u.handle,
@@ -100,7 +133,15 @@ export async function userPublic(u, viewerId) {
     avatarUrl: u.avatarUrl,
     bio: u.bio ?? '',
     pronouns: u.pronouns ?? '',
-    city: u.city ?? '',
+    city: settings.showCity ? (u.city ?? '') : '',
+    gender: settings.showGender ? (u.gender ?? null) : null,
+    profile: {
+      song: profile.song,
+      background: profile.background,
+      accent: profile.accent,
+      headline: profile.headline,
+      coverUrl: profile.coverUrl,
+    },
     interests: u.interests ?? [],
     level: levelForXp(u.xp),
     xp: u.xp,
@@ -116,6 +157,7 @@ export async function userPublic(u, viewerId) {
     badges: u.badges ?? [],
     cosmetics: { ...NO_COSMETICS, ...u.cosmetics },
     isAI: !!u.isAi,
+    premium: isPremium(u),
     createdAt: u.createdAt,
   };
   if (viewerId && viewerId !== u._id) {
@@ -143,6 +185,11 @@ export async function userPrivate(u) {
     dailyGoal: { done: Math.min(done, REWARDS.questDailyOracle.target), target: REWARDS.questDailyOracle.target },
     comboCount: u.comboCount ?? 0,
     settings: { ...DEFAULT_SETTINGS, ...u.settings },
+    gender: u.gender ?? null,
+    city: u.city ?? '',
+    role: u.role ?? 'user',
+    premiumUntil: isPremium(u) ? u.premium.until : null,
+    moderation: { status: 'active', until: null, reason: null, ...u.moderation },
   };
 }
 
@@ -220,6 +267,8 @@ export async function serializePost(p, viewerId, author = authorCache(viewerId))
     myReaction: mine[1]?.kind ?? null,
     myBattleVote: mine[2]?.optionId ?? null,
     soundtrack: p.soundtrack ?? null,
+    album: p.album ?? null,
+    inFeed: p.inFeed !== false,
     createdAt: p.createdAt,
   };
 }
@@ -295,14 +344,23 @@ export async function serializeReply(r, author = authorCache()) {
   };
 }
 
-export async function serializeNotification(n, author = authorCache()) {
+export const isPremium = (u) => !!u?.premium?.until && u.premium.until > new Date().toISOString();
+
+/** A stable, random-looking stranger photo for "Someone…" teasers (shown blurred by the clients). */
+export const teaserAvatar = (seed) =>
+  `https://i.pravatar.cc/120?img=${(Math.abs([...String(seed)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 7)) % 70) + 1}`;
+
+export async function serializeNotification(n, author = authorCache(), viewerPremium = true) {
+  const anonymous = !!n.anonTitle && !viewerPremium;
   return {
     id: n._id,
     kind: n.kind,
-    title: n.title,
+    title: anonymous ? n.anonTitle : n.title,
     body: n.body,
-    actor: n.actorId ? await author(n.actorId) : null,
-    link: n.link ?? null,
+    actor: n.actorId && !anonymous ? await author(n.actorId) : null,
+    anonymous,
+    teaserAvatar: anonymous ? teaserAvatar(n._id) : null,
+    link: anonymous && n.kind === 'profile_view' ? '/premium' : (n.link ?? null),
     read: !!n.read,
     createdAt: n.createdAt,
   };

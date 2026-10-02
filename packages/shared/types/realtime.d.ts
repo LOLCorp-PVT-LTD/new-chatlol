@@ -28,6 +28,10 @@ export interface ServerEvents {
         level: number;
     }) => void;
     'feed:new': (p: Post) => void;
+    'shout:new': (s: import('./types').Shout) => void;
+    'shout:reactions': (p: { id: ID; reactions: Record<import('./types').ReactionKind, number> }) => void;
+    'content:removed': (p: { type: string; id: ID }) => void;
+    moderation: (p: { action: string; until: string | null; reason: string | null }) => void;
     'ticker': (t: {
         id: ID;
         text: string;

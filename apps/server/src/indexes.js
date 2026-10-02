@@ -46,5 +46,16 @@ export async function ensureIndexes(db) {
     idx('emailTokens', { expiresAtDate: 1 }, { expireAfterSeconds: 7 * 86_400 }),
     idx('dailyCounters', { at: 1 }, { expireAfterSeconds: 14 * 86_400 }),
     idx('purchases', { userId: 1, createdAt: -1 }),
+    idx('shouts', { hidden: 1, createdAt: -1 }),
+    idx('shouts', { authorId: 1, createdAt: -1 }),
+    idx('shoutReactions', { shoutId: 1, userId: 1 }, { unique: true }),
+    idx('wallNotes', { profileId: 1, createdAt: -1 }),
+    idx('modEvents', { userId: 1, createdAt: -1 }),
+    idx('modFlags', { status: 1, priority: 1, createdAt: -1 }),
+    idx('reports', { status: 1, createdAt: -1 }),
+    idx('profileRatings', { profileId: 1, userId: 1 }, { unique: true }),
+    idx('profileViews', { profileId: 1, viewerId: 1, day: 1 }, { unique: true }),
+    idx('profileViews', { profileId: 1, at: -1 }),
+    idx('shouts', { mentions: 1, createdAt: -1 }),
   ]);
 }

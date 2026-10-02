@@ -1,6 +1,6 @@
 /** Little bits of juice: haptics, sounds, confetti. All respect user settings + reduced motion. */
 let ctx: AudioContext | null = null;
-export const fxPrefs = { sound: true, haptics: true };
+export const fxPrefs = { sound: true, haptics: true, motion: true };
 
 export function buzz(pattern: number | number[] = 12) {
   if (fxPrefs.haptics && 'vibrate' in navigator) navigator.vibrate?.(pattern);
@@ -28,6 +28,7 @@ export function ding(kind: 'reward' | 'match' | 'level' | 'tap' = 'reward') {
 }
 
 export function confetti(originX = window.innerWidth / 2, originY = window.innerHeight / 2, count = 36) {
+  if (!fxPrefs.motion) return;
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const colors = ['#ff9900', '#ff5e00', '#ff3366', '#ffd700', '#fe9800'];
   const layer = document.createElement('div');

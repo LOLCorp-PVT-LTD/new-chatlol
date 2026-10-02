@@ -8,6 +8,8 @@ import { HttpError, parse, rateLimit } from '../lib/http.js';
 import { serializePost, serializePosts, serializeComment, authorCache, invalidateStats, userPublic } from '../lib/serialize.js';
 import { grant, notify, progressRatingQuest, recordDropStreak, ticker } from '../lib/rewards.js';
 import { assertClean } from '../lib/moderation.js';
+import { assertCanPost } from '../lib/enforcement.js';
+import { screen } from '../lib/aiModeration.js';
 import { bus } from '../lib/events.js';
 import { io, room } from '../lib/io.js';
 import { ensureDrop } from '../lib/drops.js';
@@ -23,7 +25,6 @@ const WEIGHTED = {
   $add: ['$r1', { $multiply: [2, '$r2'] }, { $multiply: [3, '$r3'] }, { $multiply: [4, '$r4'] }, { $multiply: [5, '$r5'] }],
 };
 const HEAT = { $add: ['$r4', { $multiply: [2, '$r5'] }] };
-const ratingCount = (p) => p.r1 + p.r2 + p.r3 + p.r4 + p.r5;
 
 /** Author ids the viewer must not see: people they blocked and people who blocked them. */
 async function hiddenAuthors(viewerId) {
@@ -47,7 +48,8 @@ postsRouter.get('/feed', optionalAuth, async (req, res) => {
   const viewer = req.userId;
   const hidden = await hiddenAuthors(viewer);
   const cursor = p.cursor ?? '9999';
-  const base = { hidden: false, ...(p.tag ? { tags: p.tag.toLowerCase() } : {}) };
+  // Gallery-only photos (inFeed: false) live on profiles, not in the feed.
+  const base = { hidden: false, inFeed: { $ne: false }, ...(p.tag ? { tags: p.tag.toLowerCase() } : {}) };
   const notHidden = hidden.length ? { $nin: hidden } : undefined;
 
   if (p.tab === 'following' && viewer) {
@@ -96,35 +98,27 @@ postsRouter.get('/feed', optionalAuth, async (req, res) => {
     });
   }
 
-  // "For You": recency blended with engagement and a boost for people you follow.
-  const [candidates, followees] = await Promise.all([
-    db.posts
-      .find({ ...base, createdAt: { $lt: cursor }, ...(notHidden ? { authorId: notHidden } : {}) })
-      .sort({ createdAt: -1 })
-      .limit(80)
-      .toArray(),
-    viewer ? db.follows.distinct('followeeId', { followerId: viewer }) : [],
-  ]);
-  const followed = new Set(followees);
-  const t = Date.now();
-  const score = (r) => {
-    const ageH = (t - Date.parse(r.createdAt)) / 3_600_000;
-    const heat = r.r4 + 2 * r.r5;
-    return (1 + heat * 0.6 + ratingCount(r) * 0.2 + r.commentCount * 0.8 + (followed.has(r.authorId) ? 6 : 0)) / Math.pow(ageH + 2, 1.35);
-  };
-  const page = candidates
-    .slice(0, PAGE * 2)
-    .sort((a, b) => score(b) - score(a))
-    .slice(0, PAGE);
-  const oldest = page.reduce((m, r) => (r.createdAt < m ? r.createdAt : m), cursor);
-  res.json({ items: await serializePosts(page, viewer), nextCursor: candidates.length > PAGE ? oldest : null });
+  // "For You" / news feed: strictly newest first, so a new post is always at the top and pagination never skips any.
+  const rows = await db.posts
+    .find({ ...base, createdAt: { $lt: cursor }, ...(notHidden ? { authorId: notHidden } : {}) })
+    .sort({ createdAt: -1, _id: -1 })
+    .limit(PAGE + 1)
+    .toArray();
+  res.json({
+    items: await serializePosts(rows.slice(0, PAGE), viewer),
+    nextCursor: rows.length > PAGE ? rows[PAGE - 1].createdAt : null,
+  });
 });
 
 postsRouter.get('/posts/:id', optionalAuth, async (req, res) => {
   const post = await db.posts.findOne({ _id: String(req.params.id), hidden: false });
   if (!post) throw new HttpError(404, 'That post vanished');
   const author = authorCache(req.userId);
-  const comments = await db.comments.find({ postId: post._id }).sort({ createdAt: 1 }).limit(200).toArray();
+  const comments = await db.comments
+    .find({ postId: post._id, hidden: { $ne: true } })
+    .sort({ createdAt: 1 })
+    .limit(200)
+    .toArray();
   res.json({
     post: await serializePost(post, req.userId, author),
     comments: await Promise.all(comments.map((c) => serializeComment(c, author))),
@@ -142,6 +136,10 @@ const createSchema = z.object({
     .max(4)
     .optional(),
   soundtrack: z.string().max(80).nullable().optional(),
+  /** Gallery album on the author's profile (photos only). */
+  album: z.string().trim().max(30).nullable().optional(),
+  /** false = add to the profile gallery without posting to the news feed. */
+  inFeed: z.boolean().optional(),
 });
 
 export async function insertPost(authorId, b) {
@@ -157,6 +155,8 @@ export async function insertPost(authorId, b) {
     tags,
     dropId: b.dropId ?? null,
     soundtrack: b.soundtrack ?? null,
+    album: b.mediaUrl ? (b.album ?? null) : null,
+    inFeed: b.mediaUrl ? b.inFeed !== false : true,
     battle: b.battle ? b.battle.map((o) => ({ id: newId('bo'), label: o.label, mediaUrl: o.mediaUrl ?? null, votes: 0 })) : null,
     r1: 0,
     r2: 0,
@@ -168,9 +168,10 @@ export async function insertPost(authorId, b) {
     createdAt: now(),
   };
   await db.posts.insertOne(post);
-  io()
-    ?.to(room.global)
-    .emit('feed:new', await serializePost(post, null));
+  if (post.inFeed)
+    io()
+      ?.to(room.global)
+      .emit('feed:new', await serializePost(post, null));
   bus.emitEvent('post:created', { postId: post._id, authorId });
   return post;
 }
@@ -180,8 +181,11 @@ postsRouter.post('/posts', requireAuth, async (req, res) => {
   await rateLimit(`post:${me}`, 6);
   const b = parse(createSchema, req.body);
   if (!b.body.trim() && !b.mediaUrl && !b.battle) throw new HttpError(400, 'Say something or add a photo');
-  assertClean(b.body + ' ' + (b.battle?.map((o) => o.label).join(' ') ?? ''));
+  await assertCanPost(me);
+  const text = b.body + ' ' + (b.battle?.map((o) => o.label).join(' ') ?? '');
+  assertClean(text);
   const row = await insertPost(me, b);
+  screen({ userId: me, text, ref: { type: 'post', id: row._id } });
   const reward = await grant(me, REWARDS.post.sparks, REWARDS.post.xp, 'Posted a vibe ✨');
   res.status(201).json({ post: await serializePost(row, me), reward });
 });
@@ -232,6 +236,7 @@ export async function applyRating(postId, userId, score) {
       actorId: userId,
       link: `/p/${postId}`,
       title: `${rater.displayName} rated your ${post.kind === 'drop' ? 'drop' : 'photo'} ${t.label} ${t.emoji}`,
+      anonTitle: `Someone rated your ${post.kind === 'drop' ? 'drop' : 'photo'} ${t.label} ${t.emoji}`,
       body: post.body ? `“${post.body.slice(0, 80)}”` : 'Your vibe is climbing.',
     });
     if (score === 5) {
@@ -299,6 +304,20 @@ postsRouter.post('/posts/:id/battle', requireAuth, async (req, res) => {
 export async function insertComment(postId, authorId, body) {
   const post = await db.posts.findOne({ _id: postId, hidden: false });
   if (!post) throw new HttpError(404, 'That post vanished');
+  if (post.authorId !== authorId) {
+    const owner = await db.users.findOne({ _id: post.authorId }, { projection: { 'settings.whoCanComment': 1, handle: 1 } });
+    if (owner?.settings?.whoCanComment === 'following' && !(await db.follows.findOne({ followerId: post.authorId, followeeId: authorId })))
+      throw new HttpError(403, `Only people @${owner.handle} follows can comment`, 'comments_restricted');
+    if (
+      await db.blocks.findOne({
+        $or: [
+          { blockerId: post.authorId, blockedId: authorId },
+          { blockerId: authorId, blockedId: post.authorId },
+        ],
+      })
+    )
+      throw new HttpError(403, "You can't comment here");
+  }
   const comment = { _id: newId('c'), postId, authorId, body, createdAt: now() };
   await db.comments.insertOne(comment);
   await db.posts.updateOne({ _id: postId }, { $inc: { commentCount: 1 } });
@@ -320,8 +339,10 @@ postsRouter.post('/posts/:id/comments', requireAuth, async (req, res) => {
   const me = uid(req);
   await rateLimit(`comment:${me}`, 20);
   const { body } = parse(z.object({ body: z.string().trim().min(1).max(500) }), req.body);
+  await assertCanPost(me);
   assertClean(body);
   const row = await insertComment(String(req.params.id), me, body);
+  screen({ userId: me, text: body, ref: { type: 'comment', id: row._id } });
   const reward = await grant(me, REWARDS.comment.sparks, REWARDS.comment.xp, 'Dropped a comment');
   res.status(201).json({ comment: await serializeComment(row), reward });
 });
@@ -401,6 +422,7 @@ postsRouter.post('/drops/today', requireAuth, async (req, res) => {
   if (await db.posts.findOne({ dropId: d._id, authorId: me }))
     throw new HttpError(409, 'You already dropped today — come back tomorrow! 🌅');
   if (!b.mediaUrl) throw new HttpError(400, 'Drops need a photo');
+  await assertCanPost(me);
   assertClean(b.body);
   const row = await insertPost(me, {
     kind: 'photo',
@@ -427,10 +449,11 @@ postsRouter.get('/roulette/next', requireAuth, async (req, res) => {
   const me = uid(req);
   const since = new Date(Date.now() - 14 * 86_400_000).toISOString();
   // A rating is always newer than its post, so ratings since `since` cover every candidate this viewer rated.
-  const [hidden, rated, ratedIds] = await Promise.all([
+  const [hidden, rated, ratedIds, optedOut] = await Promise.all([
     hiddenAuthors(me),
     db.ratings.countDocuments({ userId: me }),
     db.ratings.distinct('postId', { userId: me, createdAt: { $gt: since } }),
+    db.users.distinct('_id', { 'settings.showInRoulette': false }),
   ]);
   const [row] = await db.posts
     .aggregate([
@@ -440,7 +463,7 @@ postsRouter.get('/roulette/next', requireAuth, async (req, res) => {
           hidden: false,
           kind: { $in: ['photo', 'drop'] },
           mediaUrl: { $ne: null },
-          authorId: { $nin: [me, ...hidden] },
+          authorId: { $nin: [me, ...hidden, ...optedOut] },
           createdAt: { $gt: since },
         },
       },

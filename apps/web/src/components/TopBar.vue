@@ -6,6 +6,7 @@ import { useSession } from '../stores/session';
 import Avatar from './Avatar.vue';
 import Icon from './Icon.vue';
 import Logo from './Logo.vue';
+import ThemeSwitch from './ThemeSwitch.vue';
 
 defineEmits<{ (e: 'menu'): void; (e: 'compose'): void; (e: 'notifications'): void }>();
 const s = useSession();
@@ -27,6 +28,7 @@ const search = () => q.value.trim() && router.push({ path: '/members', query: { 
       <RouterLink to="/roulette" class="hidden lg:flex items-center gap-2 rounded-full border border-sandstone bg-surface-container-lowest px-4 h-12 text-label-md hover:border-flame">
         <Icon name="casino" class="text-flame" :size="20" /> Rate & Meet <span class="text-flame">● Live Deck</span>
       </RouterLink>
+      <ThemeSwitch />
       <template v-if="s.user">
         <button class="btn-primary hidden sm:inline-flex" @click="$emit('compose')"><Icon name="add_a_photo" :size="20" /> Post Photo</button>
         <RouterLink to="/vault" class="flex items-center gap-1 bg-surface-container px-3 h-10 rounded-full shadow-warm" :title="`${s.user.sparks} Sparks`">
@@ -37,6 +39,7 @@ const search = () => q.value.trim() && router.push({ path: '/members', query: { 
           <span v-if="s.unreadDms" class="absolute top-1.5 right-1.5 min-w-4 h-4 px-1 rounded-full bg-coral text-white text-[10px] font-bold flex items-center justify-center">{{ s.unreadDms }}</span></RouterLink>
         <button class="btn-icon relative" aria-label="Notifications" @click="$emit('notifications')"><Icon name="notifications" />
           <span v-if="s.unread" class="absolute top-2 right-2 w-2.5 h-2.5 rounded-full bg-flame ring-2 ring-surface animate-pulse-ring" /></button>
+        <RouterLink v-if="s.user.role === 'admin' || s.user.role === 'mod'" to="/admin" class="btn-icon hidden md:inline-flex" aria-label="Admin panel" title="Admin panel"><Icon name="admin_panel_settings" /></RouterLink>
         <RouterLink to="/locker" aria-label="My profile"><Avatar :user="s.user" :size="36" :show-online="false" /></RouterLink>
       </template>
       <template v-else>

@@ -1,6 +1,7 @@
 import { db, newId, now, today, initDb } from './db.js';
 import { PERSONAS } from './ai/personas.js';
-import { newUser } from './lib/serialize.js';
+import { PROFILE_ACCENTS, PROFILE_BACKGROUNDS } from '@chatlol/shared';
+import { newUser, DEFAULT_SETTINGS, DEFAULT_PROFILE } from './lib/serialize.js';
 import { hashPassword } from './lib/auth.js';
 import { ensureDrop } from './lib/drops.js';
 
@@ -202,7 +203,10 @@ export async function seed(reset = false) {
 
   // AI personas as users — always flagged isAi (shown as an AI badge in every client).
   const personaIds = [];
-  const personas = PERSONAS.map((p) => {
+  // Personas get a gender from their pronouns, and a mix of DM settings: most are open, some only take DMs
+  // from people they follow, a couple don't take DMs at all (admins can change this in the admin panel).
+  const PERSONA_GENDER = { sora: 'female', rio: 'male' };
+  const personas = PERSONAS.map((p, i) => {
     const id = `ai_${p.id}`;
     personaIds.push(id);
     return newUser({
@@ -220,6 +224,14 @@ export async function seed(reset = false) {
       streakDays: Math.floor(3 + Math.random() * 40),
       lastDropDay: today(new Date(Date.now() - 86_400_000)),
       badges: ['ai_persona'],
+      gender: PERSONA_GENDER[p.id] ?? (p.pronouns.startsWith('she') ? 'female' : 'male'),
+      settings: { ...DEFAULT_SETTINGS, dmFrom: i % 7 === 6 ? 'nobody' : i % 3 === 2 ? 'following' : 'everyone' },
+      profile: {
+        ...DEFAULT_PROFILE,
+        background: { kind: 'preset', value: PROFILE_BACKGROUNDS[i % PROFILE_BACKGROUNDS.length].key },
+        accent: PROFILE_ACCENTS[i % PROFILE_ACCENTS.length],
+        headline: p.bio.split(/[.!]/)[0].slice(0, 80),
+      },
       isAi: true,
       personaId: p.id,
       lastSeenAt: t,
@@ -249,6 +261,11 @@ export async function seed(reset = false) {
       lastDropDay: today(new Date(Date.now() - 86_400_000)),
       badges: ['early_spark', 'streak_7', 'streak_14', 'streak_21'],
       cosmetics: { frame: 'frame_sunset', flair: 'flair_fire', theme: null, banner: null },
+      gender: 'male',
+      profile: {
+        ...DEFAULT_PROFILE,
+        headline: 'Golden hour chaser 📷 lo-fi on weekends',
+      },
       emailVerifiedAt: t,
       lastSeenAt: t,
       createdAt: ago(24 * 90),
@@ -440,6 +457,39 @@ export async function seed(reset = false) {
   if (dm)
     messages.push(message('dm', conv, 'ai_mia', 'your golden hour drop yesterday was so good 🧡 what film stock was that?', ago(0.5)));
   await db.messages.insertMany(messages);
+
+  // Shoutbox
+  const SHOUTS = [
+    ['hyped', 'golden hour in 20 mins who is going out to shoot?? 🌅'],
+    ['listening', 'new lo-fi tape on repeat, lounge #lofi-cafe come vibe 🎧'],
+    ['question', 'best budget film camera for a beginner? go'],
+    ['flex', 'hit a 21 day streak today 🔥🔥'],
+    ['chill', 'rainy sunday, tea, sketchbook. perfect day honestly'],
+    ['hyped', 'Hot Take Arena is wild today, the pineapple debate is back #hottakes'],
+    ['question', 'who has the cleanest desk setup? drop it in #setupwars'],
+    ['out', 'skatepark at sunset with the crew 🛹'],
+  ];
+  await db.shouts.insertMany(
+    SHOUTS.map(([mood, body], i) => ({
+      _id: newId('sh'),
+      authorId: pick(personaIds),
+      body,
+      mood,
+      replyToId: null,
+      mentions: [],
+      mentionHandles: [],
+      reactions: {
+        fire: Math.floor(Math.random() * 30),
+        heart: Math.floor(Math.random() * 20),
+        lol: Math.floor(Math.random() * 8),
+        wow: 0,
+        hundred: Math.floor(Math.random() * 10),
+      },
+      replyCount: 0,
+      hidden: false,
+      createdAt: ago((SHOUTS.length - i) * 0.3),
+    })),
+  );
 
   // Starter inventory for demo
   await db.inventory.bulkWrite(

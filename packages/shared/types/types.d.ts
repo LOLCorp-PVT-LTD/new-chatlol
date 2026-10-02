@@ -17,6 +17,9 @@ export interface UserPublic {
     bio: string;
     pronouns: string;
     city: string;
+    /** null when the member hides it (Settings → Privacy). */
+    gender: import('./profile').Gender | null;
+    profile: ProfileCustomization;
     interests: string[];
     level: number;
     xp: number;
@@ -33,6 +36,8 @@ export interface UserPublic {
     cosmetics: Cosmetics;
     /** AI personas are always disclosed to viewers via this flag. */
     isAI: boolean;
+    /** ChatLOL Premium member (crown badge). */
+    premium: boolean;
     isFollowing?: boolean;
     createdAt: ISODate;
 }
@@ -49,6 +54,23 @@ export interface UserPrivate extends UserPublic {
     };
     comboCount: number;
     settings: UserSettings;
+    role: 'user' | 'mod' | 'admin';
+    premiumUntil: ISODate | null;
+    moderation: { status: import('./profile').ModStatus; until: ISODate | null; reason: string | null };
+}
+export interface ProfileSong {
+    type: import('./profile').SpotifyKind;
+    id: string;
+    title: string;
+    artist: string;
+    artUrl: string | null;
+}
+export interface ProfileCustomization {
+    song: ProfileSong | null;
+    background: { kind: 'preset' | 'image' | 'color'; value: string };
+    accent: string;
+    headline: string;
+    coverUrl: string | null;
 }
 export interface UserSettings {
     pushEnabled: boolean;
@@ -61,6 +83,22 @@ export interface UserSettings {
     darkMode: 'system' | 'light' | 'dark';
     breakReminderMins: number;
     showAIPersonas: boolean;
+    whoCanComment: 'everyone' | 'following';
+    wallFrom: 'everyone' | 'following' | 'nobody';
+    profileVisibility: 'everyone' | 'members';
+    showGender: boolean;
+    showCity: boolean;
+    showInRoulette: boolean;
+    ghostMode: boolean;
+    notifyRatings: boolean;
+    notifyComments: boolean;
+    notifyFollows: boolean;
+    notifyDms: boolean;
+    notifyMentions: boolean;
+    notifyLive: boolean;
+    notifyArena: boolean;
+    autoplayMusic: boolean;
+    reduceMotion: boolean;
 }
 export type TierKey = 'meh' | 'chill' | 'drippy' | 'fire' | 'god';
 export interface RatingSummary {
@@ -93,6 +131,8 @@ export interface Post {
     myReaction: ReactionKind | null;
     myBattleVote: ID | null;
     soundtrack: string | null;
+    album: string | null;
+    inFeed: boolean;
     createdAt: ISODate;
 }
 export interface Comment {
@@ -182,10 +222,14 @@ export interface Conversation {
 }
 export interface NotificationItem {
     id: ID;
-    kind: 'rating' | 'gift' | 'invite' | 'consensus' | 'drop' | 'follow' | 'comment' | 'dm' | 'arena' | 'level' | 'system';
+    kind: 'rating' | 'gift' | 'invite' | 'consensus' | 'drop' | 'follow' | 'comment' | 'dm' | 'arena' | 'level' | 'system' | 'mention' | 'profile_view' | 'profile_rating' | 'wall';
     title: string;
     body: string;
     actor: UserPublic | null;
+    /** True when the actor is hidden from a non-Premium member ("Someone…"). */
+    anonymous: boolean;
+    /** Random stranger photo to show blurred in place of the hidden actor. */
+    teaserAvatar: string | null;
     link: string | null;
     read: boolean;
     createdAt: ISODate;
@@ -294,4 +338,67 @@ export interface RtcSignal {
         sdpMid?: string | null;
         sdpMLineIndex?: number | null;
     } | null;
+}
+
+export interface Shout {
+    id: ID;
+    author: UserPublic;
+    body: string;
+    mood: import('./profile').ShoutMood | null;
+    mentions: string[];
+    replyTo: { id: ID; author: UserPublic; body: string } | null;
+    replyCount: number;
+    reactions: Record<ReactionKind, number>;
+    myReaction: ReactionKind | null;
+    createdAt: ISODate;
+}
+export interface WallNote {
+    id: ID;
+    profileId: ID;
+    author: UserPublic;
+    body: string;
+    mood: import('./profile').WallMood | null;
+    createdAt: ISODate;
+}
+export interface ProfileRatings extends RatingSummary {
+    myRating: VibeScore | null;
+}
+/** Someone who did something; `user` is null (with a blurred teaser photo) for non-Premium members. */
+export interface InsightActor {
+    user: UserPublic | null;
+    teaserAvatar: string | null;
+}
+export interface Insights {
+    premium: boolean;
+    viewCount: number;
+    ratings: ProfileRatings;
+    views: (InsightActor & { at: ISODate })[];
+    raters: (InsightActor & { score: VibeScore; at: ISODate })[];
+    mentions: (InsightActor & { shoutId: ID; body: string | null; at: ISODate })[];
+}
+export interface HomeData {
+    stats: { members: number; online: number };
+    popularMembers: UserPublic[];
+    rate: Post | null;
+    forums: ShoutThread[];
+    streams: LiveStream[];
+    hallOfFame: LeaderboardEntry[];
+    shouts: Shout[];
+    drop: { id: ID; prompt: string; emoji: string; endsAt: ISODate; entries: Post[] };
+    arena: HotTake[];
+    lounges: Lounge[];
+    newMembers: UserPublic[];
+}
+export interface AdminUser extends UserPublic {
+    email: string | null;
+    emailVerified: boolean;
+    role: 'user' | 'mod' | 'admin';
+    birthdate: string;
+    sparks: number;
+    gems: number;
+    premiumUntil: ISODate | null;
+    standing: { status: import('./profile').ModStatus; until: ISODate | null; reason: string | null };
+    strikes30d: number;
+    reportsAgainst: number;
+    deleted: boolean;
 }

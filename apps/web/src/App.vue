@@ -15,6 +15,7 @@ import Drawer from './components/Drawer.vue';
 import Modal from './components/Modal.vue';
 import VerifyBanner from './components/VerifyBanner.vue';
 import { themeMode } from './stores/theme';
+import { COPYRIGHT } from '@chatlol/shared';
 
 const route = useRoute();
 const s = useSession();
@@ -25,6 +26,9 @@ const breakDue = ref(false);
 const bare = computed(() => route.meta.layout === 'bare');
 const rails = computed(() => route.meta.rails !== false);
 const posted = ref<Post | null>(null);
+// Remount a view only when its route changes, not its params: /messages → /messages/:id keeps the inbox
+// (and its loaded messages) mounted. Pages that show a different entity per param opt in with meta.remount.
+const viewKey = computed(() => (route.meta.remount ? route.path : (route.matched[0]?.path ?? route.path)));
 
 // Sync theme with account preference.
 watch(() => s.user?.settings.darkMode, (m) => { if (m) themeMode.value = m; }, { immediate: true });
@@ -46,16 +50,20 @@ function onPosted(p: Post) { posted.value = p; }
   <RouterView v-if="bare" />
   <template v-else>
     <TopBar @menu="drawer = true" @compose="composing = true" @notifications="showNotifs = !showNotifs" />
-    <div class="max-w-[1320px] mx-auto px-4 lg:px-10 py-5 lg:py-8 flex gap-6 pb-32 lg:pb-10">
+    <div class="max-w-[1320px] mx-auto px-4 lg:px-10 py-5 lg:py-8 flex gap-6 pb-8 lg:pb-10">
       <Sidebar class="hidden xl:block sticky top-28 self-start max-h-[calc(100dvh-8rem)] overflow-y-auto scrollbar-none" />
       <main class="flex-1 min-w-0">
         <VerifyBanner />
         <RouterView v-slot="{ Component }">
-          <Transition name="fade" mode="out-in"><component :is="Component" :key="route.path" :new-post="posted" @compose="composing = true" /></Transition>
+          <Transition name="fade" mode="out-in"><component :is="Component" :key="viewKey" :new-post="posted" @compose="composing = true" /></Transition>
         </RouterView>
       </main>
       <RightRail v-if="rails" class="hidden xl:block sticky top-28 self-start" />
     </div>
+    <footer class="max-w-[1320px] mx-auto px-4 lg:px-10 pb-36 lg:pb-10 flex flex-col sm:flex-row items-center justify-between gap-3 text-body-sm text-on-surface-variant">
+      <p class="flex items-center gap-2"><img src="/brand/mascot.webp" alt="" class="h-6 w-auto" /> {{ COPYRIGHT }}</p>
+      <nav class="flex gap-4" aria-label="Footer"><RouterLink to="/settings#safety" class="hover:text-primary">Community Guidelines</RouterLink><RouterLink to="/settings#privacy" class="hover:text-primary">Privacy</RouterLink><RouterLink to="/premium" class="hover:text-primary">Premium</RouterLink></nav>
+    </footer>
     <TabBar @compose="composing = true" />
     <button v-if="s.user && rails" class="lg:hidden fixed right-5 bottom-28 z-30 w-14 h-14 rounded-full bg-sunset text-white shadow-float flex items-center justify-center active:scale-95" aria-label="New post" @click="composing = true">
       <span class="icon">add</span>

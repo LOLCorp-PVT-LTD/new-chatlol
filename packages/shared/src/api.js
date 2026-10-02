@@ -84,13 +84,57 @@ export function createApi(opts) {
     stake: (id, side, amount) => req('POST', `/arena/${id}/stake`, { side, amount }),
     proposeTake: (b) => req('POST', '/arena', b),
 
-    // shouts / forums
-    boards: () => req('GET', '/shouts/boards'),
-    threads: (p = {}) => req('GET', `/shouts${q(p)}`),
-    thread: (id) => req('GET', `/shouts/${id}`),
-    createThread: (b) => req('POST', '/shouts', b),
-    replyThread: (id, body) => req('POST', `/shouts/${id}/replies`, { body }),
-    voteThread: (id, v) => req('POST', `/shouts/${id}/vote`, { v }),
+    // forums
+    boards: () => req('GET', '/forums/boards'),
+    threads: (p = {}) => req('GET', `/forums${q(p)}`),
+    thread: (id) => req('GET', `/forums/${id}`),
+    createThread: (b) => req('POST', '/forums', b),
+    replyThread: (id, body) => req('POST', `/forums/${id}/replies`, { body }),
+    voteThread: (id, v) => req('POST', `/forums/${id}/vote`, { v }),
+
+    // shoutbox (global live notice board)
+    shouts: (p = {}) => req('GET', `/shouts${q(p)}`),
+    shout: (b) => req('POST', '/shouts', b),
+    reactShout: (id, kind) => req('POST', `/shouts/${id}/react`, { kind }),
+    deleteShout: (id) => req('DELETE', `/shouts/${id}`),
+    shoutTrends: () => req('GET', '/shouts/trending'),
+
+    // home dashboard
+    home: () => req('GET', '/home'),
+
+    // profiles
+    updateProfile: (b) => req('PATCH', '/me/profile', b),
+    changeEmail: (email, password) => req('POST', '/me/email', { email, password }),
+    gallery: (userId, album) => req('GET', `/users/${userId}/gallery${q({ album })}`),
+    rateProfile: (userId, score) => req('POST', `/users/${userId}/rate`, { score }),
+    wall: (userId) => req('GET', `/users/${userId}/wall`),
+    postWall: (userId, b) => req('POST', `/users/${userId}/wall`, b),
+    deleteWallNote: (id) => req('DELETE', `/wall/${id}`),
+    insights: () => req('GET', '/me/insights'),
+    spotifySearch: (query) => req('GET', `/spotify/search${q({ q: query })}`),
+    spotifyResolve: (url) => req('GET', `/spotify/resolve${q({ url })}`),
+
+    // premium
+    premium: () => req('GET', '/premium'),
+    buyPremium: (planId) => req('POST', '/premium/buy', { planId }),
+
+    // admin panel
+    admin: {
+      overview: () => req('GET', '/admin/overview'),
+      users: (p = {}) => req('GET', `/admin/users${q(p)}`),
+      user: (id) => req('GET', `/admin/users/${id}`),
+      action: (id, b) => req('POST', `/admin/users/${id}/action`, b),
+      setRole: (id, role) => req('POST', `/admin/users/${id}/role`, { role }),
+      grantPremium: (id, days) => req('POST', `/admin/users/${id}/premium`, { days }),
+      reports: (status) => req('GET', `/admin/reports${q({ status })}`),
+      resolveReport: (id, b) => req('POST', `/admin/reports/${id}`, b),
+      flags: (status) => req('GET', `/admin/flags${q({ status })}`),
+      resolveFlag: (id, status) => req('POST', `/admin/flags/${id}`, { status }),
+      removeContent: (type, id) => req('POST', '/admin/content/remove', { type, id }),
+      modlog: () => req('GET', '/admin/modlog'),
+      personas: () => req('GET', '/admin/personas'),
+      updatePersona: (id, b) => req('PATCH', `/admin/personas/${id}`, b),
+    },
 
     // lounges
     lounges: () => req('GET', '/lounges'),

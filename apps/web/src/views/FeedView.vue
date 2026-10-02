@@ -44,22 +44,25 @@ function showFresh() {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+const onRemoved = (r: { type: string; id: string }) => { if (r.type === 'post') posts.value = posts.value.filter((p) => p.id !== r.id); };
 const onNew = (p: Post) => { if (p.author.id !== s.user?.id && !posts.value.some((x) => x.id === p.id)) fresh.value = [p, ...fresh.value].slice(0, 20); };
 
 onMounted(async () => {
   void load(true);
   drop.value = (await api.drop()).drop;
   s.socket().on('feed:new', onNew);
+  s.socket().on('content:removed', onRemoved);
   obs = new IntersectionObserver((e) => e[0]?.isIntersecting && load(), { rootMargin: '800px' });
   if (sentinel.value) obs.observe(sentinel.value);
 });
-onUnmounted(() => { obs?.disconnect(); s.socket().off('feed:new', onNew); });
+onUnmounted(() => { obs?.disconnect(); s.socket().off('feed:new', onNew); s.socket().off('content:removed', onRemoved); });
 watch([tab, () => route.query.tag], () => load(true));
 watch(() => props.newPost, (p) => { if (p) posts.value.unshift(p); });
 </script>
 
 <template>
   <div class="space-y-5 max-w-[640px] mx-auto">
+    <h1 class="text-headline-xl flex items-center gap-2"><Icon name="dynamic_feed" class="text-flame" /> News Feed</h1>
     <!-- Drop banner -->
     <RouterLink v-if="drop" to="/drops" class="block rounded-lg bg-sunset text-white p-5 shadow-float relative overflow-hidden group">
       <div class="absolute right-4 top-1/2 -translate-y-1/2 text-7xl opacity-30 group-hover:scale-110 transition">{{ drop.emoji }}</div>
@@ -76,8 +79,8 @@ watch(() => props.newPost, (p) => { if (p) posts.value.unshift(p); });
     </div>
 
     <div class="flex items-center gap-2 overflow-x-auto scrollbar-none">
-      <button v-for="t in ([['foryou', 'For You'], ['following', 'Following'], ['top', 'Top Rated']] as const)" :key="t[0]" class="chip" :class="{ 'chip-active': tab === t[0] }" @click="tab = t[0]">{{ t[1] }}</button>
-      <span v-if="route.query.tag" class="chip border-flame text-flame">#{{ route.query.tag }} <button aria-label="Clear tag" @click="router.replace('/')"><Icon name="close" :size="16" /></button></span>
+      <button v-for="t in ([['foryou', 'Latest'], ['following', 'Following'], ['top', 'Top Rated']] as const)" :key="t[0]" class="chip" :class="{ 'chip-active': tab === t[0] }" @click="tab = t[0]">{{ t[1] }}</button>
+      <span v-if="route.query.tag" class="chip border-flame text-flame">#{{ route.query.tag }} <button aria-label="Clear tag" @click="router.replace('/feed')"><Icon name="close" :size="16" /></button></span>
     </div>
 
     <button v-if="fresh.length" class="sticky top-24 z-20 mx-auto flex btn-primary h-10 shadow-float animate-pop" @click="showFresh">

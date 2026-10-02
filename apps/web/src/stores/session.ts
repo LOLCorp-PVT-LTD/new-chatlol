@@ -52,6 +52,7 @@ export const useSession = defineStore('session', () => {
     user.value = u;
     fxPrefs.sound = u.settings.soundEnabled;
     fxPrefs.haptics = u.settings.hapticsEnabled;
+    fxPrefs.motion = !u.settings.reduceMotion;
   }
 
   function wireSocket() {
@@ -79,6 +80,16 @@ export const useSession = defineStore('session', () => {
     });
     socket.on('dm:typing', ({ conversationId, userId, typing: t }) => { typing.value = { ...typing.value, [conversationId]: t ? userId : null }; });
     socket.on('ticker', (t) => { ticker.value = [t, ...ticker.value].slice(0, 12); });
+    // SafeShield / moderator actions take effect immediately.
+    socket.on('moderation', (m) => {
+      if (m.action === 'suspend' || m.action === 'ban') {
+        toast({ kind: 'error', title: m.action === 'ban' ? 'Your account was terminated' : 'Your account was suspended', body: m.reason ?? undefined }, 8000);
+        logout();
+        return;
+      }
+      if (m.action === 'mute') toast({ kind: 'error', title: '🔇 You’ve been muted', body: m.reason ?? undefined }, 6000);
+      void refresh();
+    });
   }
 
   function onDm(fn: (m: ChatMessage) => void) {

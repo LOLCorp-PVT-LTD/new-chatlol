@@ -47,9 +47,9 @@ onMounted(async () => { tags.value = (await api.trending()).tags.slice(0, 6); })
     <nav class="card p-3" aria-label="Main">
       <p class="label px-3 pt-1 pb-2">Navigation Sparks</p>
       <RouterLink v-for="n in NAV" :key="n.to" :to="n.to" custom v-slot="{ href, navigate, isExactActive, isActive }">
-        <a :href="href" @click="navigate" class="flex items-center gap-3 px-3 py-2.5 rounded-full text-label-lg transition-colors"
+        <a :href="href" @click="navigate" class="flex items-center gap-3 px-3 py-1.5 rounded-full text-label-lg transition-colors"
           :class="(n.to === '/' ? isExactActive : isActive) ? 'bg-sunlit text-on-surface ring-1 ring-flame/20' : 'hover:bg-surface-container-low text-on-surface-variant'">
-          <span class="w-9 h-9 rounded-full flex items-center justify-center" :class="(n.to === '/' ? isExactActive : isActive) ? 'bg-sunset text-white shadow-glow' : 'bg-surface-container-low'">
+          <span class="w-8 h-8 rounded-full flex items-center justify-center" :class="(n.to === '/' ? isExactActive : isActive) ? 'bg-sunset text-white shadow-glow' : 'bg-surface-container-low'">
             <Icon :name="n.icon" :size="20" :fill="(n.to === '/' ? isExactActive : isActive)" />
           </span>
           <span class="flex-1">{{ n.label }}</span>
@@ -62,7 +62,7 @@ onMounted(async () => { tags.value = (await api.trending()).tags.slice(0, 6); })
     <div class="card p-4">
       <div class="flex items-center justify-between px-1 mb-3"><p class="label">Hot Vibe Tags</p><Icon name="trending_up" class="text-flame" :size="18" /></div>
       <div class="flex flex-wrap gap-2">
-        <RouterLink v-for="t in tags" :key="t.tag" :to="`/?tag=${t.tag}`" class="chip h-8 hover:border-flame">#{{ t.tag }} <span class="text-on-surface-variant font-medium">{{ compact(t.count) }}</span></RouterLink>
+        <RouterLink v-for="t in tags" :key="t.tag" :to="`/feed?tag=${t.tag}`" class="chip h-8 hover:border-flame">#{{ t.tag }} <span class="text-on-surface-variant font-medium">{{ compact(t.count) }}</span></RouterLink>
       </div>
     </div>
     <p class="text-body-sm text-on-surface-variant px-3">ChatLOL is moderated in real time by SafeShield 🛡️ • <RouterLink to="/settings" class="underline">Settings</RouterLink></p>

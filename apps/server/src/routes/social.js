@@ -13,9 +13,12 @@ import {
   authorCache,
   userPublic,
   DEFAULT_SETTINGS,
+  isPremium,
 } from '../lib/serialize.js';
 import { grant, notify } from '../lib/rewards.js';
 import { assertClean } from '../lib/moderation.js';
+import { assertCanPost } from '../lib/enforcement.js';
+import { screen } from '../lib/aiModeration.js';
 import { bus } from '../lib/events.js';
 import { io, room } from '../lib/io.js';
 import { presence } from '../lib/presence.js';
@@ -23,23 +26,23 @@ import { shared } from '../lib/shared.js';
 
 export const socialRouter = Router();
 
-// ——— Shouts / Forums ———
-socialRouter.get('/shouts/boards', async (_req, res) => {
+// ——— Forums ———
+socialRouter.get('/forums/boards', async (_req, res) => {
   const [boards, counts] = await Promise.all([
     db.boards.find({}).sort({ position: 1 }).toArray(),
-    db.threads.aggregate([{ $group: { _id: '$boardId', n: { $sum: 1 } } }]).toArray(),
+    db.threads.aggregate([{ $match: { hidden: { $ne: true } } }, { $group: { _id: '$boardId', n: { $sum: 1 } } }]).toArray(),
   ]);
   const n = new Map(counts.map((c) => [c._id, c.n]));
   res.json({ boards: boards.map((b) => ({ id: b._id, name: b.name, emoji: b.emoji, threads: n.get(b._id) ?? 0 })) });
 });
 
-socialRouter.get('/shouts', optionalAuth, async (req, res) => {
+socialRouter.get('/forums', optionalAuth, async (req, res) => {
   const p = parse(
     z.object({ board: z.string().optional(), sort: z.enum(['hot', 'new', 'top']).default('hot'), cursor: z.coerce.number().optional() }),
     req.query,
   );
   const offset = p.cursor ?? 0;
-  const filter = p.board ? { boardId: p.board } : {};
+  const filter = { hidden: { $ne: true }, ...(p.board ? { boardId: p.board } : {}) };
   let rows;
   if (p.sort === 'hot') {
     // Hot = (votes + 2×replies) decayed by hours since last activity; scored in JS over recent candidates.
@@ -62,11 +65,15 @@ socialRouter.get('/shouts', optionalAuth, async (req, res) => {
   });
 });
 
-socialRouter.get('/shouts/:id', optionalAuth, async (req, res) => {
-  const t = await db.threads.findOne({ _id: String(req.params.id) });
+socialRouter.get('/forums/:id', optionalAuth, async (req, res) => {
+  const t = await db.threads.findOne({ _id: String(req.params.id), hidden: { $ne: true } });
   if (!t) throw new HttpError(404, 'Thread not found');
   const author = authorCache(req.userId);
-  const replies = await db.replies.find({ threadId: t._id }).sort({ createdAt: 1 }).limit(300).toArray();
+  const replies = await db.replies
+    .find({ threadId: t._id, hidden: { $ne: true } })
+    .sort({ createdAt: 1 })
+    .limit(300)
+    .toArray();
   res.json({
     thread: await serializeThread(t, req.userId, author),
     replies: await Promise.all(replies.map((r) => serializeReply(r, author))),
@@ -104,8 +111,8 @@ export async function insertReply(threadId, authorId, body) {
     await notify(t.authorId, {
       kind: 'comment',
       actorId: authorId,
-      link: `/shouts/${threadId}`,
-      title: `${a.displayName} replied to your shout`,
+      link: `/forums/${threadId}`,
+      title: `${a.displayName} replied to your thread`,
       body: body.slice(0, 120),
     });
   }
@@ -113,30 +120,34 @@ export async function insertReply(threadId, authorId, body) {
   return reply;
 }
 
-socialRouter.post('/shouts', requireAuth, async (req, res) => {
+socialRouter.post('/forums', requireAuth, async (req, res) => {
   const me = uid(req);
   await rateLimit(`thread:${me}`, 3);
   const b = parse(
     z.object({ board: z.string(), title: z.string().trim().min(4).max(120), body: z.string().trim().min(1).max(4000) }),
     req.body,
   );
+  await assertCanPost(me);
   assertClean(`${b.title} ${b.body}`);
   const row = await insertThread(me, b.board, b.title, b.body);
-  const reward = await grant(me, REWARDS.post.sparks, REWARDS.post.xp, 'Started a shout 📣');
+  screen({ userId: me, text: `${b.title}\n${b.body}`, ref: { type: 'thread', id: row._id } });
+  const reward = await grant(me, REWARDS.post.sparks, REWARDS.post.xp, 'Started a forum thread 📣');
   res.status(201).json({ thread: await serializeThread(row, me), reward });
 });
 
-socialRouter.post('/shouts/:id/replies', requireAuth, async (req, res) => {
+socialRouter.post('/forums/:id/replies', requireAuth, async (req, res) => {
   const me = uid(req);
   await rateLimit(`reply:${me}`, 20);
   const { body } = parse(z.object({ body: z.string().trim().min(1).max(2000) }), req.body);
+  await assertCanPost(me);
   assertClean(body);
   const row = await insertReply(String(req.params.id), me, body);
-  await grant(me, REWARDS.comment.sparks, REWARDS.comment.xp, 'Replied to a shout');
+  screen({ userId: me, text: body, ref: { type: 'reply', id: row._id } });
+  await grant(me, REWARDS.comment.sparks, REWARDS.comment.xp, 'Replied in the forums');
   res.status(201).json({ reply: await serializeReply(row) });
 });
 
-socialRouter.post('/shouts/:id/vote', requireAuth, async (req, res) => {
+socialRouter.post('/forums/:id/vote', requireAuth, async (req, res) => {
   const me = uid(req);
   const threadId = String(req.params.id);
   const { v } = parse(z.object({ v: z.union([z.literal(1), z.literal(-1), z.literal(0)]) }), req.body);
@@ -357,7 +368,7 @@ socialRouter.post('/conversations/:id/messages', requireAuth, async (req, res) =
   const me = uid(req);
   const convId = String(req.params.id);
   await rateLimit(`dm:${me}`, 40);
-  await memberConversation(convId, me);
+  const conv = await memberConversation(convId, me);
   const b = parse(
     z.object({
       body: z.string().max(2000).default(''),
@@ -367,10 +378,22 @@ socialRouter.post('/conversations/:id/messages', requireAuth, async (req, res) =
     req.body,
   );
   if (!b.body.trim() && !b.mediaUrl) throw new HttpError(400, 'Empty message');
+  await assertCanPost(me);
   assertClean(b.body);
-  res.status(201).json({
-    message: await insertDm(convId, me, b.body, b.mediaUrl ? (b.kind === 'text' ? 'image' : b.kind) : 'text', b.mediaUrl ?? null),
-  });
+  const otherId = conv.members.find((m) => m.userId !== me)?.userId ?? null;
+  if (
+    otherId &&
+    (await db.blocks.findOne({
+      $or: [
+        { blockerId: me, blockedId: otherId },
+        { blockerId: otherId, blockedId: me },
+      ],
+    }))
+  )
+    throw new HttpError(403, "You can't message this person");
+  const message = await insertDm(convId, me, b.body, b.mediaUrl ? (b.kind === 'text' ? 'image' : b.kind) : 'text', b.mediaUrl ?? null);
+  screen({ userId: me, text: b.body, ref: { type: 'message', id: message.id }, targetId: otherId });
+  res.status(201).json({ message });
 });
 
 // ——— Notifications ———
@@ -381,7 +404,8 @@ socialRouter.get('/notifications', requireAuth, async (req, res) => {
     db.notifications.find({ userId: me }).sort({ createdAt: -1 }).limit(60).toArray(),
     db.notifications.countDocuments({ userId: me, read: false }),
   ]);
-  res.json({ items: await Promise.all(rows.map((n) => serializeNotification(n, author))), unread });
+  const premium = isPremium(await db.users.findOne({ _id: me }, { projection: { premium: 1 } }));
+  res.json({ items: await Promise.all(rows.map((n) => serializeNotification(n, author, premium))), unread });
 });
 
 socialRouter.post('/notifications/read', requireAuth, async (req, res) => {

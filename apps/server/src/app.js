@@ -10,6 +10,10 @@ import { socialRouter } from './routes/social.js';
 import { storeRouter } from './routes/store.js';
 import { liveRouter } from './routes/live.js';
 import { paymentsRouter } from './routes/payments.js';
+import { profileRouter } from './routes/profile.js';
+import { shoutsRouter } from './routes/shouts.js';
+import { homeRouter } from './routes/home.js';
+import { adminRouter } from './routes/admin.js';
 import { presence } from './lib/presence.js';
 import { db } from './db.js';
 
@@ -40,7 +44,20 @@ export function createApp() {
       turn: config.rtc.turnUrls.length > 0,
     });
   });
-  for (const r of [authRouter, usersRouter, postsRouter, arenaRouter, socialRouter, storeRouter, liveRouter, paymentsRouter])
+  for (const r of [
+    authRouter,
+    usersRouter,
+    profileRouter,
+    shoutsRouter,
+    homeRouter,
+    adminRouter,
+    postsRouter,
+    arenaRouter,
+    socialRouter,
+    storeRouter,
+    liveRouter,
+    paymentsRouter,
+  ])
     app.use('/api', r);
   app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
   app.use(errorHandler);

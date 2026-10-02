@@ -21,6 +21,8 @@ export const config = {
     embeddedPath: env.MONGODB_EMBEDDED_PATH ?? './data/mongo',
   },
   redisUrl: env.REDIS_URL ?? '',
+  /** Multiplies every per-minute rate limit (tests raise it). */
+  rateLimitScale: Number(env.RATE_LIMIT_SCALE ?? 1),
   /** Set to 0 on extra instances so only one runs the AI persona engine & schedulers (a Redis lock also guards this). */
   runWorkers: (env.RUN_WORKERS ?? '1') !== '0',
   publicUrl: env.PUBLIC_URL ?? `http://localhost:${env.PORT ?? 4000}`,
@@ -34,6 +36,8 @@ export const config = {
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean),
+    /** Bigger model for one-to-one DMs and replies to people, where quality matters most. */
+    chatModel: env.NIM_CHAT_MODEL ?? 'meta/llama-3.3-70b-instruct',
     safetyModel: env.NIM_SAFETY_MODEL ?? '',
     rpm: Number(env.NIM_RPM ?? 30),
     imageUrl: env.NIM_IMAGE_URL ?? 'https://ai.api.nvidia.com/v1/genai/black-forest-labs/flux.1-schnell',
@@ -42,6 +46,8 @@ export const config = {
   ai: {
     enabled: (env.AI_PERSONAS_ENABLED ?? '1') !== '0',
     activity: Number(env.AI_ACTIVITY ?? 1),
+    /** Multiplies persona reply delays (read, typing). 1 = human-like; tests use a tiny value. */
+    replyPace: Number(env.AI_REPLY_PACE ?? 1),
   },
   expoAccessToken: env.EXPO_ACCESS_TOKEN ?? '',
   /** Object storage for uploads (S3, Cloudflare R2, MinIO…). Empty bucket = local disk. */
@@ -75,6 +81,13 @@ export const config = {
     stripeWebhookSecret: env.STRIPE_WEBHOOK_SECRET ?? '',
     revenueCatWebhookAuth: env.REVENUECAT_WEBHOOK_AUTH ?? '',
   },
+  /** Comma-separated emails that get the admin role (admin panel at /admin). */
+  adminEmails: (env.ADMIN_EMAILS ?? '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean),
+  /** Optional: Spotify app credentials (developer.spotify.com) for in-app song search. Pasting links works without them. */
+  spotify: { clientId: env.SPOTIFY_CLIENT_ID ?? '', clientSecret: env.SPOTIFY_CLIENT_SECRET ?? '' },
   /** Public web app origin used in email links (verification, password reset). */
   appUrl: (env.APP_URL ?? 'http://localhost:5173').replace(/\/$/, ''),
   mail: {

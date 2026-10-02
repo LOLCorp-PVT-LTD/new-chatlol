@@ -126,7 +126,7 @@ async function remove() {
 
     <p v-if="post.body" class="px-5 pb-3 text-body-lg whitespace-pre-line break-words">
       <template v-for="(part, i) in post.body.split(/(#[\p{L}\p{N}_]+)/u)" :key="i">
-        <RouterLink v-if="part.startsWith('#')" :to="`/?tag=${part.slice(1).toLowerCase()}`" class="text-primary font-bold hover:underline">{{ part }}</RouterLink>
+        <RouterLink v-if="part.startsWith('#')" :to="`/feed?tag=${part.slice(1).toLowerCase()}`" class="text-primary font-bold hover:underline">{{ part }}</RouterLink>
         <template v-else>{{ part }}</template>
       </template>
     </p>

@@ -8,7 +8,7 @@
     "start": "node --env-file-if-exists=.env src/index.js",
     "check": "node ../../scripts/check-syntax.mjs src",
     "seed": "node src/seed.js --reset",
-    "test": "node --test --test-concurrency=1 src/api.test.js src/ai.test.js src/cluster.test.js"
+    "test": "node --test --test-concurrency=1 src/api.test.js src/ai.test.js src/cluster.test.js src/features.test.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1144.0",

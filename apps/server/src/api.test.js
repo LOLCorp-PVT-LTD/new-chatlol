@@ -61,7 +61,14 @@ after(async () => {
 test('rejects under-18 signups', async () => {
   const minor = new Date(Date.now() - 17 * 365.25 * 86_400_000).toISOString().slice(0, 10);
   await assert.rejects(
-    client.register({ email: 'kid@example.com', password: 'password123', handle: 'kiddo', displayName: 'Kid', birthdate: minor }),
+    client.register({
+      email: 'kid@example.com',
+      password: 'password123',
+      handle: 'kiddo',
+      displayName: 'Kid',
+      birthdate: minor,
+      gender: 'female',
+    }),
     (e) => e.status === 403 && e.code === 'underage',
   );
 });
@@ -73,6 +80,7 @@ test('register → verification email → me → daily bonus', async () => {
     handle: 'sam_sunset',
     displayName: 'Sam',
     birthdate: '1998-04-01',
+    gender: 'male',
     interests: ['lofi'],
   });
   token = r.token;
@@ -89,6 +97,7 @@ test('register → verification email → me → daily bonus', async () => {
       handle: 'SAM_SUNSET',
       displayName: 'x',
       birthdate: '1990-01-01',
+      gender: 'male',
     }),
     (e) => e.code === 'handle_taken',
   );
@@ -282,6 +291,7 @@ test('live video: TURN creds, verified-only go-live, mesh signalling relay with 
     handle: 'hostess',
     displayName: 'Host',
     birthdate: '1995-01-01',
+    gender: 'male',
   });
   const hostApi = createApi({ baseUrl: base, getToken: () => host.token });
   await assert.rejects(hostApi.goLive({ title: 'sunset session', category: 'Music' }), (e) => e.code === 'email_unverified');
@@ -302,6 +312,7 @@ test('live video: TURN creds, verified-only go-live, mesh signalling relay with 
     handle: 'viewer2',
     displayName: 'V2',
     birthdate: '1995-01-01',
+    gender: 'male',
   });
   const v2 = await connect(third.token);
   const ack = (s, ev, arg) => new Promise((r) => s.emit(ev, arg, r));

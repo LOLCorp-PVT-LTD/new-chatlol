@@ -63,3 +63,19 @@ export async function sendPasswordReset(user) {
     }),
   });
 }
+
+/** Tells the old address that the account email changed (so a hijack can't go unnoticed). */
+export async function sendEmailChangedNotice(user, newEmail) {
+  const masked = newEmail.replace(/^(.).*(@.*)$/, '$1•••$2');
+  await sendMail({
+    to: user.email,
+    subject: 'Your ChatLOL email was changed',
+    ...template({
+      title: 'Your email was changed',
+      intro: `Hi ${user.displayName}, the email on your ChatLOL account was just changed to ${masked}.`,
+      cta: 'Reset my password',
+      url: `${config.appUrl}/forgot`,
+      outro: 'If this was you, you can ignore this. If not, reset your password right away and contact support.',
+    }),
+  });
+}

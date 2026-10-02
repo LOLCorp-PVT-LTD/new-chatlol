@@ -2,7 +2,7 @@
 import { onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { UserPublic } from '@chatlol/shared';
-import { tierByKey, toTen } from '@chatlol/shared';
+import { tierByKey, toTen, INTERESTS, GENDERS, type Gender } from '@chatlol/shared';
 import { api } from '../lib/api';
 import { useSession } from '../stores/session';
 import Avatar from '../components/Avatar.vue';
@@ -16,19 +16,19 @@ const s = useSession();
 const q = ref((route.query.q as string) ?? '');
 const interest = ref<string | undefined>();
 const onlineOnly = ref(false);
-const sort = ref<'vibe' | 'new' | 'streak'>('vibe');
+const sort = ref<'vibe' | 'new' | 'streak'>((['vibe', 'new', 'streak'] as const).find((x) => x === route.query.sort) ?? 'vibe');
+const gender = ref<Gender | undefined>();
 const users = ref<UserPublic[]>([]);
 const loading = ref(false);
-const INTERESTS = ['photography', 'music', 'lofi', 'gaming', 'fashion', 'food', 'fitness', 'travel', 'art', 'tech'];
 let t: ReturnType<typeof setTimeout>;
 
 async function load() {
   loading.value = true;
-  users.value = (await api.members({ q: q.value || undefined, interest: interest.value, online: onlineOnly.value ? 1 : undefined, sort: sort.value })).items;
+  users.value = (await api.members({ q: q.value || undefined, interest: interest.value, online: onlineOnly.value ? 1 : undefined, gender: gender.value, sort: sort.value })).items;
   loading.value = false;
 }
 onMounted(load);
-watch([interest, onlineOnly, sort], load);
+watch([interest, onlineOnly, sort, gender], load);
 watch(q, () => { clearTimeout(t); t = setTimeout(load, 250); });
 
 async function follow(u: UserPublic) {
@@ -49,6 +49,8 @@ async function dm(u: UserPublic) {
     <div class="flex gap-2 overflow-x-auto scrollbar-none pb-1">
       <button class="chip" :class="{ 'chip-active': onlineOnly }" @click="onlineOnly = !onlineOnly"><span class="w-2 h-2 rounded-full bg-online" /> Online now</button>
       <button v-for="x in (['vibe', 'new', 'streak'] as const)" :key="x" class="chip capitalize" :class="{ 'chip-active': sort === x }" @click="sort = x">{{ x === 'vibe' ? '⭐ Top vibe' : x === 'new' ? '✨ New' : '🔥 Streak' }}</button>
+      <span class="w-px bg-sandstone mx-1" />
+      <button v-for="g in GENDERS" :key="g.key" class="chip" :class="{ 'chip-active': gender === g.key }" @click="gender = gender === g.key ? undefined : g.key">{{ g.emoji }} {{ g.label }}</button>
       <span class="w-px bg-sandstone mx-1" />
       <button v-for="i in INTERESTS" :key="i" class="chip" :class="{ 'chip-active': interest === i }" @click="interest = interest === i ? undefined : i">#{{ i }}</button>
     </div>

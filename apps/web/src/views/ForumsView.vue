@@ -32,7 +32,7 @@ async function create() {
   try {
     const r = await api.createThread(draft.value);
     s.reward(r.reward);
-    router.push(`/shouts/${r.thread.id}`);
+    router.push(`/forums/${r.thread.id}`);
   } catch (e) { s.toast({ kind: 'error', title: (e as Error).message }); }
 }
 </script>
@@ -56,7 +56,7 @@ async function create() {
         <span class="text-label-lg tabular-nums">{{ compact(t.upvotes) }}</span>
         <button class="btn-icon w-8 h-8" :class="{ 'text-tertiary': t.myVote === -1 }" aria-label="Downvote" @click="vote(t, -1)"><Icon name="arrow_downward" /></button>
       </div>
-      <RouterLink :to="`/shouts/${t.id}`" class="min-w-0 flex-1">
+      <RouterLink :to="`/forums/${t.id}`" class="min-w-0 flex-1">
         <div class="flex items-center gap-2 text-body-sm text-on-surface-variant">
           <span v-if="t.pinned" class="text-flame font-bold">📌 Pinned</span>
           <span class="bg-surface-container rounded-full px-2 py-0.5 text-label-sm">{{ boards.find((b) => b.id === t.board)?.emoji }} {{ boards.find((b) => b.id === t.board)?.name }}</span>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { COPYRIGHT } from '@chatlol/shared';
 import Logo from '../components/Logo.vue';
 import Icon from '../components/Icon.vue';
 const collage = [
@@ -33,7 +34,7 @@ const features = [
         <p class="mt-5 text-body-lg text-on-surface-variant max-w-md">Remember when the internet was fun? ChatLOL brings back the golden era — rate vibes, drop daily photos, hang out in live lounges and make actual friends. 18+.</p>
         <div class="mt-8 flex flex-wrap gap-3">
           <RouterLink to="/join" class="btn-primary h-14 px-8 text-body-lg">Get started — it’s free <Icon name="arrow_forward" /></RouterLink>
-          <RouterLink to="/?tag=goldenhour" class="btn-secondary h-14 px-6">Peek at the feed</RouterLink>
+          <RouterLink to="/feed?tag=goldenhour" class="btn-secondary h-14 px-6">Peek at the feed</RouterLink>
         </div>
         <p class="mt-6 text-body-sm text-on-surface-variant flex items-center gap-2"><Icon name="shield" :size="18" class="text-flame" /> SafeShield AI moderation 24/7 • Some members are ✦ AI personas, always labeled</p>
       </div>
@@ -58,7 +59,7 @@ const features = [
     </section>
 
     <footer class="border-t border-sandstone py-8 text-center text-body-sm text-on-surface-variant">
-      © {{ new Date().getFullYear() }} ChatLOL • Keep the vibe alive • Community Guidelines • Privacy • Terms
+      {{ COPYRIGHT }} • Community Guidelines • Privacy • Terms
     </footer>
   </div>
 </template>

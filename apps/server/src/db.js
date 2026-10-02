@@ -47,6 +47,13 @@ export const COLLECTIONS = [
   'emailTokens',
   'purchases',
   'locks',
+  'shouts',
+  'shoutReactions',
+  'wallNotes',
+  'modEvents',
+  'modFlags',
+  'profileRatings',
+  'profileViews',
 ];
 
 const txStore = new AsyncLocalStorage();

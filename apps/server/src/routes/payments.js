@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
-import { GEM_PACKS, gemPack } from '@chatlol/shared';
+import { GEM_PACKS, PREMIUM_PLANS, gemPack, premiumPlan } from '@chatlol/shared';
+import { extendPremium } from './profile.js';
 import { db, now } from '../db.js';
 import { requireAuth, uid } from '../lib/auth.js';
 import { HttpError, parse, rateLimit } from '../lib/http.js';
@@ -18,13 +19,20 @@ import { config } from '../config.js';
 export const paymentsRouter = Router();
 
 paymentsRouter.get('/payments/packs', (_req, res) => {
-  res.json({ packs: GEM_PACKS, stripe: !!config.payments.stripeSecretKey, iap: !!config.payments.revenueCatWebhookAuth });
+  res.json({
+    packs: GEM_PACKS,
+    premiumPlans: PREMIUM_PLANS,
+    stripe: !!config.payments.stripeSecretKey,
+    iap: !!config.payments.revenueCatWebhookAuth,
+  });
 });
 
 export async function creditPurchase(p) {
   const pack = gemPack(p.productId);
-  if (!pack) throw new HttpError(400, `Unknown product ${p.productId}`);
-  const gems = pack.gems + pack.bonus;
+  const plan = premiumPlan(p.productId);
+  if (!pack && !plan) throw new HttpError(400, `Unknown product ${p.productId}`);
+  const gems = pack ? pack.gems + pack.bonus : 0;
+  let premiumUntil = null;
   const credited = await db.tx(async () => {
     if (!(await db.users.findOne({ _id: p.userId }, { projection: { _id: 1 } }))) return false;
     // The provider's transaction id is the purchase _id, so a retried webhook can't credit twice.
@@ -35,6 +43,7 @@ export async function creditPurchase(p) {
         provider: p.provider,
         productId: p.productId,
         gems,
+        premiumDays: plan?.days ?? 0,
         amountCents: p.amountCents ?? null,
         currency: p.currency ?? null,
         status: 'completed',
@@ -42,28 +51,38 @@ export async function creditPurchase(p) {
       },
     );
     if (!fresh) return false;
-    await db.users.updateOne({ _id: p.userId }, { $inc: { gems } });
+    if (pack) await db.users.updateOne({ _id: p.userId }, { $inc: { gems } });
+    if (plan) premiumUntil = await extendPremium(p.userId, plan.days);
     return true;
   });
   if (credited) {
     await notify(p.userId, {
       kind: 'system',
-      title: `+${gems} Gems landed 💎`,
-      body: `${pack.label} — thanks for supporting ChatLOL!`,
-      link: '/vault',
+      title: pack ? `+${gems} Gems landed 💎` : 'Welcome to Premium 👑',
+      body: pack
+        ? `${pack.label} — thanks for supporting ChatLOL!`
+        : `${plan.label} active until ${new Date(premiumUntil).toDateString()}.`,
+      link: pack ? '/vault' : '/insights',
     });
     await emitWallet(p.userId);
   }
   return credited;
 }
 
-/** Refunds claw the Gems back (never below zero) and mark the purchase. */
+/** Refunds claw the Gems back (never below zero) or take the Premium days back, and mark the purchase. */
 export async function refundPurchase(id) {
   const done = await db.tx(async () => {
     // Flipping the status is the claim: only one refund event can win it.
     const p = await db.purchases.findOneAndUpdate({ _id: id, status: 'completed' }, { $set: { status: 'refunded' } });
     if (!p) return null;
-    await db.users.updateOne({ _id: p.userId }, [{ $set: { gems: { $max: [0, { $subtract: ['$gems', p.gems] }] } } }]);
+    if (p.gems) await db.users.updateOne({ _id: p.userId }, [{ $set: { gems: { $max: [0, { $subtract: ['$gems', p.gems] }] } } }]);
+    if (p.premiumDays) {
+      const u = await db.users.findOne({ _id: p.userId }, { projection: { premium: 1 } });
+      if (u?.premium?.until) {
+        const until = new Date(Date.parse(u.premium.until) - p.premiumDays * 86_400_000).toISOString();
+        await db.users.updateOne({ _id: p.userId }, { $set: { 'premium.until': until } });
+      }
+    }
     return p.userId;
   });
   if (done) await emitWallet(done);
@@ -108,7 +127,10 @@ paymentsRouter.post('/payments/stripe/checkout', requireAuth, async (req, res) =
   if (!config.payments.stripeSecretKey) throw new HttpError(503, 'Card payments are not enabled yet');
   const { packId, returnUrl } = parse(z.object({ packId: z.string(), returnUrl: z.string().url().optional() }), req.body);
   const pack = gemPack(packId);
-  if (!pack) throw new HttpError(404, 'Unknown pack');
+  const plan = premiumPlan(packId);
+  if (!pack && !plan) throw new HttpError(404, 'Unknown pack');
+  const usd = pack?.usd ?? plan.usd;
+  const name = pack ? `${pack.gems + pack.bonus} Gems — ${pack.label}` : `ChatLOL Premium — ${plan.label} (${plan.days} days)`;
   const u = await db.users.findOne({ _id: me }, { projection: { email: 1, emailVerifiedAt: 1 } });
   if (!u.emailVerifiedAt) throw new HttpError(403, 'Verify your email before buying Gems', 'email_unverified');
   // Only return to our own web origin. Desktop checkouts land on the web Vault, which hands off to chatlol://.
@@ -119,11 +141,11 @@ paymentsRouter.post('/payments/stripe/checkout', requireAuth, async (req, res) =
     client_reference_id: me,
     customer_email: u.email,
     'metadata[user_id]': me,
-    'metadata[pack_id]': pack.id,
+    'metadata[pack_id]': packId,
     'line_items[0][quantity]': '1',
     'line_items[0][price_data][currency]': 'usd',
-    'line_items[0][price_data][unit_amount]': String(Math.round(pack.usd * 100)),
-    'line_items[0][price_data][product_data][name]': `${pack.gems + pack.bonus} Gems — ${pack.label}`,
+    'line_items[0][price_data][unit_amount]': String(Math.round(usd * 100)),
+    'line_items[0][price_data][product_data][name]': name,
     success_url: `${base}${base.includes('?') ? '&' : '?'}purchase=success`,
     cancel_url: `${base}${base.includes('?') ? '&' : '?'}purchase=cancelled`,
   });

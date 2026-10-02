@@ -5,6 +5,8 @@ import { setIo, room } from './lib/io.js';
 import { presence } from './lib/presence.js';
 import { serializeMessage } from './lib/serialize.js';
 import { localCheck } from './lib/moderation.js';
+import { canPost } from './lib/enforcement.js';
+import { screen } from './lib/aiModeration.js';
 import { insertLoungeMessage, loungeKey, markRead, recentMessages } from './routes/social.js';
 import { streamKeys, endStream, insertStreamMessage } from './routes/live.js';
 import { bus } from './lib/events.js';
@@ -68,7 +70,9 @@ export async function attachRealtime(server) {
         if (typeof loungeId !== 'string' || !(await db.lounges.findOne({ _id: loungeId }))) return;
         socket.join(room.lounge(loungeId));
         joinedLounges.add(loungeId);
-        if (userId) {
+        // Ghost mode (Settings → Privacy): read the room without showing up in its presence list.
+        const ghost = userId && (await db.users.findOne({ _id: userId }, { projection: { 'settings.ghostMode': 1 } }))?.settings?.ghostMode;
+        if (userId && !ghost) {
           await shared().sadd(loungeKey(loungeId), userId);
           io.to(room.lounge(loungeId)).emit('lounge:presence', { loungeId, onlineCount: await shared().scard(loungeKey(loungeId)) });
         }
@@ -98,8 +102,9 @@ export async function attachRealtime(server) {
         const text = String(body ?? '')
           .trim()
           .slice(0, 500);
-        if (!text || !localCheck(text).ok) return;
-        await insertLoungeMessage(loungeId, userId, text, replyToId ?? null);
+        if (!text || !localCheck(text).ok || !(await canPost(userId))) return;
+        const msg = await insertLoungeMessage(loungeId, userId, text, replyToId ?? null);
+        screen({ userId, text, ref: { type: 'message', id: msg.id } });
       }),
     );
 
@@ -162,8 +167,9 @@ export async function attachRealtime(server) {
         const text = String(body ?? '')
           .trim()
           .slice(0, 300);
-        if (!text || !localCheck(text).ok) return;
+        if (!text || !localCheck(text).ok || !(await canPost(userId))) return;
         const msg = await insertStreamMessage(streamId, userId, text);
+        screen({ userId, text, ref: { type: 'message', id: msg.id } });
         io.to(room.stream(streamId)).emit('stream:chat', msg);
         bus.emitEvent('stream:chat', { streamId, messageId: msg.id, authorId: userId });
       }),

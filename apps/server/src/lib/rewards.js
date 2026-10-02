@@ -2,7 +2,7 @@ import { levelForXp, levelTitle, REWARDS, STREAK_MILESTONES } from '@chatlol/sha
 import { db, newId, now, today } from '../db.js';
 import { io, room } from './io.js';
 import { sendPush } from './push.js';
-import { serializeNotification, DEFAULT_SETTINGS, userPublic } from './serialize.js';
+import { serializeNotification, DEFAULT_SETTINGS, userPublic, isPremium } from './serialize.js';
 import { presence } from './presence.js';
 
 export async function bumpCounter(userId, key, by = 1) {
@@ -79,15 +79,38 @@ export async function recordDropStreak(userId) {
   return { streak, milestone };
 }
 
+/** Which setting switches each notification kind off. Kinds not listed (system, level, gift…) always arrive. */
+const KIND_SETTING = {
+  rating: 'notifyRatings',
+  profile_rating: 'notifyRatings',
+  profile_view: 'notifyRatings',
+  comment: 'notifyComments',
+  wall: 'notifyComments',
+  follow: 'notifyFollows',
+  dm: 'notifyDms',
+  mention: 'notifyMentions',
+  invite: 'notifyLive',
+  arena: 'notifyArena',
+};
+
+/**
+ * Sends an in-app notification (+ push when offline).
+ * `anonTitle`: the wording free members see ("Someone rated your photo…"). Premium members see who it was.
+ * Actions by AI personas are never anonymised, so the "who was it?" teaser is only ever about real people.
+ */
 export async function notify(userId, n) {
-  const target = await db.users.findOne({ _id: userId }, { projection: { isAi: 1, settings: 1 } });
+  const target = await db.users.findOne({ _id: userId }, { projection: { isAi: 1, settings: 1, premium: 1 } });
   if (!target || target.isAi) return;
+  const settings = { ...DEFAULT_SETTINGS, ...target.settings };
+  if (KIND_SETTING[n.kind] && settings[KIND_SETTING[n.kind]] === false) return;
   if (n.actorId && (await db.blocks.findOne({ blockerId: userId, blockedId: n.actorId }))) return;
+  const actorIsAi = n.actorId ? !!(await db.users.findOne({ _id: n.actorId }, { projection: { isAi: 1 } }))?.isAi : false;
   const doc = {
     _id: newId('ntf'),
     userId,
     kind: n.kind,
     title: n.title,
+    anonTitle: actorIsAi ? null : (n.anonTitle ?? null),
     body: n.body,
     actorId: n.actorId ?? null,
     link: n.link ?? null,
@@ -95,13 +118,13 @@ export async function notify(userId, n) {
     createdAt: now(),
   };
   await db.notifications.insertOne(doc);
+  const premium = isPremium(target);
   io()
     ?.to(room.user(userId))
-    .emit('notification', await serializeNotification(doc));
-  const settings = { ...DEFAULT_SETTINGS, ...target.settings };
+    .emit('notification', await serializeNotification(doc, undefined, premium));
   // Only push when the user isn't connected anywhere, so we never double-notify.
   if (settings.pushEnabled && !(await presence.isConnectedAnywhere(userId))) {
-    void sendPush(userId, n.title, n.body, { link: n.link });
+    void sendPush(userId, doc.anonTitle && !premium ? doc.anonTitle : n.title, n.body, { link: n.link });
   }
 }
 

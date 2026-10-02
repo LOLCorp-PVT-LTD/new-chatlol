@@ -4,6 +4,7 @@ import { promisify } from 'node:util';
 import { config } from '../config.js';
 import { db, now } from '../db.js';
 import { HttpError } from './http.js';
+import { assertNotBanned, standing } from './enforcement.js';
 
 const scrypt = promisify(_scrypt);
 
@@ -53,14 +54,20 @@ export function verifyToken(token) {
 /** Short fingerprint of the password hash; changes whenever the password changes. */
 export const passwordVersion = (hash) => (hash ? createHmac('sha256', config.jwtSecret).update(hash).digest('base64url').slice(0, 10) : '');
 
-/** Resolves a bearer token to an active user id (checks deletion + password version). */
-export async function authenticate(token) {
+/** Resolves a bearer token to its user (checks deletion + password version), or null. */
+async function tokenUser(token) {
   const t = verifyToken(token);
   if (!t) return null;
-  const u = await db.users.findOne({ _id: t.sub, deletedAt: null }, { projection: { passwordHash: 1, isAi: 1 } });
+  const u = await db.users.findOne({ _id: t.sub, deletedAt: null }, { projection: { passwordHash: 1, isAi: 1, moderation: 1, role: 1 } });
   if (!u || u.isAi) return null;
   if (t.pv && t.pv !== passwordVersion(u.passwordHash)) return null;
-  return t.sub;
+  return u;
+}
+
+/** Resolves a bearer token to a user id in good standing (suspended and terminated accounts get null). */
+export async function authenticate(token) {
+  const u = await tokenUser(token);
+  return u && standing(u).status !== 'suspended' && standing(u).status !== 'banned' ? u._id : null;
 }
 
 function bearer(req) {
@@ -80,9 +87,12 @@ export async function optionalAuth(req, _res, next) {
 
 export async function requireAuth(req, _res, next) {
   try {
-    const uid = await authenticate(bearer(req));
-    if (!uid) return next(new HttpError(401, 'Sign in to keep the vibe going'));
+    const u = await tokenUser(bearer(req));
+    if (!u) return next(new HttpError(401, 'Sign in to keep the vibe going'));
+    assertNotBanned(u);
+    const uid = u._id;
     req.userId = uid;
+    req.userRole = u.role ?? 'user';
     void db.users.updateOne({ _id: uid }, { $set: { lastSeenAt: now() } }).catch(() => {});
     next();
   } catch (e) {
@@ -94,3 +104,9 @@ export const uid = (req) => {
   if (!req.userId) throw new HttpError(401, 'Not signed in');
   return req.userId;
 };
+
+/** Admin panel guard: role must be admin (or mod, when `allowMods`). Use after requireAuth. */
+export const requireRole =
+  (...roles) =>
+  (req, _res, next) =>
+    roles.includes(req.userRole) ? next() : next(new HttpError(403, 'Admins only'));

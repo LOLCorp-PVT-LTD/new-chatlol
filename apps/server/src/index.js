@@ -35,7 +35,7 @@ async function main() {
   server.listen(config.port, () => {
     console.log(`🌅 ChatLOL API on http://localhost:${config.port} (db: ${db.kind}, redis: ${config.redisUrl ? 'on' : 'off'})`);
     console.log(
-      `   AI personas: ${config.ai.enabled ? (config.nim.apiKey ? `on (NVIDIA NIM: ${config.nim.models.length} models)` : 'on (offline fallback — set NVIDIA_API_KEY for NIM)') : 'off'}`,
+      `   AI personas: ${config.ai.enabled ? (config.nim.apiKey ? `on (NVIDIA NIM: ${config.nim.models.length} models)` : '⚠️  NO NVIDIA_API_KEY — personas will not reply to DMs and only post canned filler. Get a free key at https://build.nvidia.com and put it in apps/server/.env') : 'off'}`,
     );
     console.log(
       `   Live video: ${config.rtc.turnUrls.length ? `TURN ${config.rtc.turnUrls.join(', ')}` : 'STUN only (set TURN_URLS + TURN_SECRET for your TURN server)'} • mesh cap ${config.rtc.maxViewers} viewers`,

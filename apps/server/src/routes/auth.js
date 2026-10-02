@@ -7,7 +7,9 @@ import { HttpError, parse, rateLimit } from '../lib/http.js';
 import { userPrivate, invalidateStats, newUser } from '../lib/serialize.js';
 import { grant, notify } from '../lib/rewards.js';
 import { assertClean } from '../lib/moderation.js';
-import { consumeToken, sendPasswordReset, sendVerification } from '../lib/emailTokens.js';
+import { consumeToken, sendPasswordReset, sendVerification, sendEmailChangedNotice } from '../lib/emailTokens.js';
+import { config } from '../config.js';
+import { assertNotBanned } from '../lib/enforcement.js';
 
 export const authRouter = Router();
 
@@ -24,7 +26,8 @@ authRouter.post('/auth/register', async (req, res) => {
       handle: z.string().regex(handleRe, '3–20 letters, numbers, _ or .'),
       displayName: z.string().trim().min(1).max(40),
       birthdate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-      interests: z.array(z.string().max(30)).max(12).optional(),
+      gender: z.enum(['male', 'female'], { message: 'pick Male or Female' }),
+      interests: z.array(z.string().max(30)).max(20).optional(),
     }),
     req.body,
   );
@@ -43,6 +46,8 @@ authRouter.post('/auth/register', async (req, res) => {
     displayName: b.displayName,
     avatarUrl: `https://api.dicebear.com/9.x/notionists/png?size=256&backgroundColor=ffdbce,ffdcbd,ffd9dc&seed=${encodeURIComponent(b.handle)}`,
     birthdate: b.birthdate,
+    gender: b.gender,
+    role: config.adminEmails.includes(email) ? 'admin' : 'user',
     interests: b.interests ?? [],
     badges: ['early_spark'],
     lastSeenAt: t,
@@ -83,6 +88,12 @@ authRouter.post('/auth/login', async (req, res) => {
   const login = b.login.toLowerCase();
   const u = await db.users.findOne({ $or: [{ email: login }, { handleLower: login }], deletedAt: null, isAi: false });
   if (!u || !(await verifyPassword(b.password, u.passwordHash))) throw new HttpError(401, 'Wrong login or password');
+  assertNotBanned(u);
+  // Addresses in ADMIN_EMAILS are promoted on login, so existing accounts can become admins.
+  if (u.email && config.adminEmails.includes(u.email) && u.role !== 'admin') {
+    await db.users.updateOne({ _id: u._id }, { $set: { role: 'admin' } });
+    u.role = 'admin';
+  }
   res.json({ token: session(u), user: await userPrivate(u) });
 });
 
@@ -195,6 +206,22 @@ authRouter.patch('/me/settings', requireAuth, async (req, res) => {
         darkMode: z.enum(['system', 'light', 'dark']),
         breakReminderMins: z.number().int().min(0).max(240),
         showAIPersonas: z.boolean(),
+        whoCanComment: z.enum(['everyone', 'following']),
+        wallFrom: z.enum(['everyone', 'following', 'nobody']),
+        profileVisibility: z.enum(['everyone', 'members']),
+        showGender: z.boolean(),
+        showCity: z.boolean(),
+        showInRoulette: z.boolean(),
+        ghostMode: z.boolean(),
+        notifyRatings: z.boolean(),
+        notifyComments: z.boolean(),
+        notifyFollows: z.boolean(),
+        notifyDms: z.boolean(),
+        notifyMentions: z.boolean(),
+        notifyLive: z.boolean(),
+        notifyArena: z.boolean(),
+        autoplayMusic: z.boolean(),
+        reduceMotion: z.boolean(),
       })
       .partial(),
     req.body,
@@ -227,6 +254,28 @@ authRouter.post('/me/push-token', requireAuth, async (req, res) => {
   const b = parse(z.object({ token: z.string().min(10).max(300), platform: z.enum(['ios', 'android', 'web', 'desktop']) }), req.body);
   await db.pushTokens.updateOne({ _id: b.token }, { $set: { userId: uid(req), platform: b.platform, createdAt: now() } }, { upsert: true });
   res.json({ ok: true });
+});
+
+/** Changing email needs the current password; the new address must be verified again and the old one is told. */
+authRouter.post('/me/email', requireAuth, async (req, res) => {
+  const id = uid(req);
+  await rateLimit(`email-change:${id}`, 3);
+  const b = parse(z.object({ email: z.string().email().max(200), password: z.string().min(1).max(200) }), req.body);
+  const u = await db.users.findOne({ _id: id });
+  if (!(await verifyPassword(b.password, u.passwordHash))) throw new HttpError(403, 'Password is wrong');
+  const email = b.email.toLowerCase();
+  if (email === u.email) return res.json({ user: await userPrivate(u) });
+  if (await db.users.findOne({ email })) throw new HttpError(409, 'That email already has an account', 'email_taken');
+  let updated;
+  try {
+    updated = await db.users.findOneAndUpdate({ _id: id }, { $set: { email, emailVerifiedAt: null } }, { returnDocument: 'after' });
+  } catch (e) {
+    if (isDuplicateKey(e)) throw new HttpError(409, 'That email already has an account', 'email_taken');
+    throw e;
+  }
+  if (u.email) await sendEmailChangedNotice(u, email);
+  await sendVerification(updated);
+  res.json({ user: await userPrivate(updated) });
 });
 
 /** Account deletion (required by App Store guideline 5.1.1(v)). Soft-deletes and scrubs PII. */

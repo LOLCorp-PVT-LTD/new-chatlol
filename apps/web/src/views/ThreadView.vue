@@ -32,7 +32,7 @@ async function send() {
 </script>
 <template>
   <div v-if="thread" class="max-w-[720px] mx-auto space-y-4">
-    <RouterLink to="/shouts" class="btn-ghost -ml-3"><Icon name="arrow_back" /> Shouts</RouterLink>
+    <RouterLink to="/forums" class="btn-ghost -ml-3"><Icon name="arrow_back" /> Forums</RouterLink>
     <article class="card p-6">
       <div class="flex items-center gap-3"><Avatar :user="thread.author" :size="44" /><div><UserName :user="thread.author" /><p class="text-body-sm text-on-surface-variant">{{ timeAgo(thread.createdAt) }} ago</p></div></div>
       <h1 class="text-headline-lg mt-4">{{ thread.title }}</h1>

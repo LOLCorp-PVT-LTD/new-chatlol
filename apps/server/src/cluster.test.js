@@ -86,6 +86,7 @@ test('socket on instance A receives a DM sent via instance B (Redis adapter)', {
     handle: `c${Date.now() % 1e8}`,
     displayName: 'Cluster',
     birthdate: '1990-01-01',
+    gender: 'male',
   });
   const sock = ioClient('http://127.0.0.1:4711', { auth: { token: login.token }, transports: ['websocket'] });
   await new Promise((r) => sock.on('connect', () => r()));

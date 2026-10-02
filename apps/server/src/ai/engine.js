@@ -11,9 +11,10 @@ import { applyRating, insertComment, insertPost } from '../routes/posts.js';
 import { insertDm, insertLoungeMessage, insertReply, insertThread, loungeKey, markRead, recentMessages } from '../routes/social.js';
 import { placeStake, newTake } from '../routes/arena.js';
 import { insertStreamMessage } from '../routes/live.js';
+import { insertShout, reactToShout } from '../routes/shouts.js';
 import { ensureDrop } from '../lib/drops.js';
-import { personaById, systemPrompt } from './personas.js';
-import { nimChat, nimImage, nimVision } from './nim.js';
+import { personaById, systemPrompt, chatPrompt } from './personas.js';
+import { nimChat, nimImage, nimVision, nimEnabled } from './nim.js';
 import { fallback } from './fallback.js';
 
 /**
@@ -72,14 +73,14 @@ async function withHandles(items) {
   return items.map((i) => ({ ...i, handle: h.get(i.authorId) ?? 'someone' }));
 }
 
-async function say(p, context, prompt, history = [], maxTokens = 90) {
+async function say(p, context, prompt, history = [], maxTokens = 90, model = p.model) {
   const text = await nimChat([{ role: 'system', content: systemPrompt(p, context) }, ...history, { role: 'user', content: prompt }], {
-    model: p.model,
+    model,
     maxTokens,
   });
   if (!text) return null;
   if (!localCheck(text).ok || !(await deepCheck(text))) return null;
-  return text;
+  return text.replace(/\n+/g, ' '); // posts, comments and lounge lines are single messages
 }
 
 function simulateTyping(convId, aiUserId, humanIds, ms) {
@@ -238,7 +239,14 @@ async function loungeLine(r, loungeId, mention) {
     : history.length
       ? 'Say the next message in the chat — react to what people said or start a light new topic.'
       : 'Say something to kick off the chat.';
-  const text = (await say(r.persona, ctx, prompt, msgs.slice(-10), 70)) ?? fallback.lounge();
+  let text = await say(r.persona, ctx, prompt, msgs.slice(-10), 80, mention ? config.nim.chatModel : undefined);
+  if (!text) {
+    // Talking to a person needs a real reply; canned lines are only ambient filler, and never repeated in the room.
+    if (mention) return;
+    const recent = new Set(history.map((h) => h.body));
+    text = [0, 1, 2, 3, 4].map(() => fallback.lounge()).find((l) => !recent.has(l));
+    if (!text) return;
+  }
   await insertLoungeMessage(loungeId, r.userId, text);
 }
 
@@ -334,6 +342,60 @@ async function actArena(r) {
   }
 }
 
+// ——— Shoutbox ———
+async function actShoutbox(r) {
+  const recent = await db.shouts
+    .find({ hidden: { $ne: true } })
+    .sort({ createdAt: -1 })
+    .limit(12)
+    .toArray();
+  if (recent[0]?.authorId === r.userId) return;
+  // React to a couple of recent shouts.
+  for (const s of recent.filter((x) => x.authorId !== r.userId).slice(0, 3)) {
+    if (Math.random() < 0.5) await reactToShout(s._id, r.userId, pick(['fire', 'heart', 'lol', 'hundred'])).catch(() => {});
+  }
+  if ((await shared().get(`shout:cd:${r.userId}`)) || Math.random() < 0.4) return;
+  const others = (await withHandles(recent.slice(0, 8))).reverse();
+  const board = others.map((x) => `@${x.handle}: ${x.body}`).join('\n') || '(quiet right now)';
+  const text = await say(
+    r.persona,
+    `You're posting on ChatLOL's public Shoutbox, a live notice board everyone sees. Recent shouts:\n${board}`,
+    'Write one short shout (under 120 characters) — something happening in your day, a question for everyone, or a reaction to the board. No hashtags unless natural.',
+    [],
+    60,
+  );
+  if (!text) return;
+  await shared().setNx(`shout:cd:${r.userId}`, '1', 45_000);
+  await insertShout(r.userId, { body: text.slice(0, 140), mood: pick(['hyped', 'chill', 'listening', 'question', 'flex']) });
+}
+
+/** Replies (as a shout) when a person tags a persona or replies to a persona's shout; sometimes joins in on its own. */
+async function onShout({ shoutId, authorId, mentions = [], replyToAuthorId }) {
+  if (isAi(authorId)) return;
+  const tagged = roster.find((r) => mentions.includes(r.userId)) ?? (replyToAuthorId ? byUserId(replyToAuthorId) : null);
+  const r = tagged ?? (chance(0.35) ? pick(awake().length ? awake() : roster) : null);
+  if (!r) return;
+  later(rand(8_000, 40_000), async () => {
+    const s = await db.shouts.findOne({ _id: shoutId, hidden: { $ne: true } });
+    if (!s) return;
+    await reactToShout(shoutId, r.userId, pick(['fire', 'heart', 'lol', 'hundred'])).catch(() => {});
+    if (!tagged && Math.random() < 0.5) return;
+    const human = await db.users.findOne({ _id: authorId }, { projection: { handle: 1 } });
+    const text = await say(
+      r.persona,
+      `On ChatLOL's public Shoutbox, @${human.handle} shouted: "${s.body}"${tagged ? ' — and tagged you.' : ''}`,
+      `Write a short public reply shout to @${human.handle} (under 120 characters). Start with @${human.handle}. React to what they actually said.`,
+      [],
+      60,
+      config.nim.chatModel,
+    );
+    if (!text) return; // no canned replies to people
+    const body = text.toLowerCase().startsWith(`@${human.handle.toLowerCase()}`) ? text : `@${human.handle} ${text}`;
+    await shared().setNx(`shout:cd:${r.userId}`, '1', 45_000);
+    await insertShout(r.userId, { body: body.slice(0, 140), replyToId: shoutId });
+  });
+}
+
 async function actFollowBack(r) {
   const following = await db.follows.distinct('followeeId', { followerId: r.userId });
   const fans = await db.follows
@@ -355,7 +417,8 @@ async function tick() {
   else if (roll < 0.72) await actPost(r);
   else if (roll < 0.8) await actShout(r);
   else if (roll < 0.88) await actArena(r);
-  else if (roll < 0.94) await actDrop(r);
+  else if (roll < 0.91) await actDrop(r);
+  else if (roll < 0.97) await actShoutbox(r);
   else await actFollowBack(r);
 }
 
@@ -380,37 +443,115 @@ function onHumanPost({ postId, authorId }) {
   }
 }
 
+// ——— DMs: reply like a person texting ———
+const dmTimers = new Map(); // conversationId → pending reply timer (debounces bursts of texts)
+const dmBusy = new Set();
+let warnedNoNim = false;
+
 async function onDm({ conversationId, authorId }) {
   if (isAi(authorId)) return;
   const c = await db.conversations.findOne({ _id: conversationId }, { projection: { members: 1 } });
-  const aiMember = (c?.members ?? [])
+  const ai = (c?.members ?? [])
     .filter((m) => m.userId !== authorId)
     .map((m) => byUserId(m.userId))
     .find(Boolean);
-  if (!aiMember) return;
-  // One reply at a time per conversation, cluster-wide.
-  if (!(await shared().setNx(`ai:dm-busy:${conversationId}`, '1', 30_000))) return;
-  later(rand(1_500, 6_000), async () => {
-    try {
-      await markRead(conversationId, aiMember.userId);
-      io()?.to(room.user(authorId)).emit('dm:read', { conversationId, userId: aiMember.userId, at: now() });
-      const human = await db.users.findOne({ _id: authorId }, { projection: { displayName: 1, handle: 1, city: 1, interests: 1 } });
-      const hist = (await recentMessages('dm', conversationId, 16)).reverse();
-      const msgs = hist.map((m) => ({
-        role: m.authorId === aiMember.userId ? 'assistant' : 'user',
-        content: m.kind === 'image' ? '[sent a photo]' : m.body,
-      }));
-      const ctx = `Private DM with ${human.displayName} (@${human.handle}${human.city ? `, ${human.city}` : ''}; interests: ${(human.interests ?? []).join(', ') || 'unknown'}). Keep the conversation going like a friendly mutual — ask a question back sometimes.`;
-      const last = msgs.pop();
-      const reply = (await say(aiMember.persona, ctx, last?.content ?? 'hey', msgs, 110)) ?? fallback.dm();
-      const typingMs = Math.min(9_000, 1_200 + reply.length * 45);
-      simulateTyping(conversationId, aiMember.userId, [authorId], typingMs);
-      await sleep(typingMs);
-      await insertDm(conversationId, aiMember.userId, reply);
-    } finally {
-      await shared().del(`ai:dm-busy:${conversationId}`);
+  if (!ai) return;
+  if (!nimEnabled()) {
+    // Canned lines read as obviously fake in a 1:1 chat, so without a model personas simply don't answer.
+    if (!warnedNoNim) console.warn('[ai] DM to a persona ignored: set NVIDIA_API_KEY so personas can reply.');
+    warnedNoNim = true;
+    return;
+  }
+  // People often send several texts in a row: wait until they pause, then answer all of them at once.
+  clearTimeout(dmTimers.get(conversationId));
+  const asleep = !awakeIds.has(ai.userId);
+  const delay = (asleep ? rand(60_000, 4 * 60_000) : rand(4_000, 12_000)) * config.ai.replyPace;
+  dmTimers.set(
+    conversationId,
+    later(delay, () => replyInDm(conversationId, ai, authorId)),
+  );
+}
+
+async function replyInDm(conversationId, ai, humanId) {
+  dmTimers.delete(conversationId);
+  if (dmBusy.has(conversationId) || !(await shared().setNx(`ai:dm-busy:${conversationId}`, '1', 120_000))) return;
+  dmBusy.add(conversationId);
+  const startedAt = now();
+  try {
+    await markRead(conversationId, ai.userId);
+    io()?.to(room.user(humanId)).emit('dm:read', { conversationId, userId: ai.userId, at: now() });
+    const [human, conv, hist] = await Promise.all([
+      db.users.findOne({ _id: humanId }, { projection: { displayName: 1, handle: 1, city: 1, interests: 1 } }),
+      db.conversations.findOne({ _id: conversationId }, { projection: { aiNotes: 1 } }),
+      recentMessages('dm', conversationId, 40),
+    ]);
+    if (!human) return;
+    // Chronological, with consecutive texts from the same side merged into one turn.
+    const turns = [];
+    for (const m of hist.reverse()) {
+      const role = m.authorId === ai.userId ? 'assistant' : 'user';
+      const content = m.kind === 'image' ? '[sent a photo]' : m.body;
+      const prev = turns[turns.length - 1];
+      if (prev?.role === role) prev.content += `\n${content}`;
+      else turns.push({ role, content });
     }
-  });
+    if (turns[turns.length - 1]?.role !== 'user') return; // nothing new to answer
+    const notes = conv?.aiNotes?.[ai.userId] ?? '';
+    const raw = await nimChat([{ role: 'system', content: chatPrompt(ai.persona, human, notes) }, ...turns.slice(-24)], {
+      model: config.nim.chatModel,
+      maxTokens: 180,
+      temperature: 0.85,
+      retries: 2,
+    });
+    if (!raw || !localCheck(raw).ok || !(await deepCheck(raw))) return;
+    const bubbles = raw
+      .split(/\n+/)
+      .map((b) => b.trim())
+      .filter(Boolean)
+      .slice(0, 3);
+    for (const [i, text] of bubbles.entries()) {
+      const typingMs = Math.min(8_000, 900 + text.length * 55 + (i ? rand(300, 1_200) : 0)) * config.ai.replyPace;
+      simulateTyping(conversationId, ai.userId, [humanId], typingMs);
+      await sleep(typingMs);
+      await insertDm(conversationId, ai.userId, text);
+    }
+    void rememberAbout(conversationId, ai, human, notes, turns);
+  } finally {
+    dmBusy.delete(conversationId);
+    await shared().del(`ai:dm-busy:${conversationId}`);
+  }
+  // They kept texting while we were typing: answer those too.
+  const newer = await db.messages.findOne({ roomType: 'dm', roomId: conversationId, authorId: humanId, createdAt: { $gt: startedAt } });
+  if (newer && !dmTimers.has(conversationId))
+    dmTimers.set(
+      conversationId,
+      later(rand(2_000, 5_000) * config.ai.replyPace, () => replyInDm(conversationId, ai, humanId)),
+    );
+}
+
+/** Every few exchanges, the persona updates short private notes about the person so later chats feel continuous. */
+async function rememberAbout(conversationId, ai, human, notes, turns) {
+  const userTurns = turns.filter((t) => t.role === 'user').length;
+  if (userTurns % 4 !== 0) return;
+  const transcript = turns
+    .slice(-16)
+    .map((t) => `${t.role === 'user' ? human.displayName : ai.persona.displayName}: ${t.content}`)
+    .join('\n');
+  const updated = await nimChat(
+    [
+      {
+        role: 'system',
+        content:
+          'You keep short private memory notes for a chat. Merge the old notes with anything new from the transcript about the other person: name they go by, plans, likes, events in their life, running jokes, topics you discussed. Max 60 words, plain text, no preamble.',
+      },
+      {
+        role: 'user',
+        content: `Old notes: ${notes || '(none)'}\n\nTranscript:\n${transcript}\n\nUpdated notes about ${human.displayName}:`,
+      },
+    ],
+    { model: config.nim.chatModel, maxTokens: 120, temperature: 0.3 },
+  );
+  if (updated) await db.conversations.updateOne({ _id: conversationId }, { $set: { [`aiNotes.${ai.userId}`]: updated.slice(0, 600) } });
 }
 
 async function onLoungeMessage({ loungeId, messageId, authorId }) {
@@ -472,7 +613,14 @@ export async function startPersonaEngine(leader = async () => true) {
   await loadRoster();
   if (!roster.length) return;
   await refreshAwake();
-  setInterval(() => void refreshAwake().catch(() => {}), 5 * 60_000).unref();
+  // Re-read the roster too, so personas switched off in the admin panel stop acting.
+  setInterval(
+    () =>
+      void loadRoster()
+        .then(refreshAwake)
+        .catch(() => {}),
+    5 * 60_000,
+  ).unref();
   const loop = () => {
     tick()
       .catch((e) => console.warn('[ai] tick', e.message))
@@ -485,5 +633,6 @@ export async function startPersonaEngine(leader = async () => true) {
   bus.onEvent('lounge:sent', guard(onLoungeMessage));
   bus.onEvent('thread:created', guard(onThread));
   bus.onEvent('stream:started', guard(onStreamStarted));
+  bus.onEvent('shout:created', guard(onShout));
   console.log(`   ${roster.length} AI personas loaded (${awake().length} awake)`);
 }

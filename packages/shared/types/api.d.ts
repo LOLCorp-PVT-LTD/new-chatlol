@@ -1,4 +1,4 @@
-import type { AuthResponse, ChatMessage, Comment, Conversation, Drop, HotTake, LeaderboardEntry, LiveStream, Lounge, NotificationItem, Page, Post, ReactionKind, RewardEvent, RouletteCard, RouletteResult, ShoutReply, ShoutThread, StoreItem, UserPrivate, UserPublic, UserSettings, VibeScore, Cosmetics, ID, GemPack, IceConfig } from './types';
+import type { Shout, WallNote, ProfileRatings, Insights, HomeData, AdminUser, ProfileSong, AuthResponse, ChatMessage, Comment, Conversation, Drop, HotTake, LeaderboardEntry, LiveStream, Lounge, NotificationItem, Page, Post, ReactionKind, RewardEvent, RouletteCard, RouletteResult, ShoutReply, ShoutThread, StoreItem, UserPrivate, UserPublic, UserSettings, VibeScore, Cosmetics, ID, GemPack, IceConfig } from './types';
 export declare class ApiError extends Error {
     status: number;
     code?: string | undefined;
@@ -21,6 +21,7 @@ export declare function createApi(opts: ApiClientOptions): {
         handle: string;
         displayName: string;
         birthdate: string;
+        gender: import('./profile').Gender;
         interests?: string[];
     }) => Promise<AuthResponse>;
     login: (b: {
@@ -66,11 +67,15 @@ export declare function createApi(opts: ApiClientOptions): {
     user: (handle: string) => Promise<{
         user: UserPublic;
         posts: Post[];
+        profileRatings: ProfileRatings;
+        wallCount: number;
+        photoCount: number;
     }>;
     members: (p?: {
         q?: string;
         interest?: string;
         online?: 1 | 0;
+        gender?: 'male' | 'female';
         sort?: string;
         cursor?: string;
     }) => Promise<Page<UserPublic>>;
@@ -107,6 +112,8 @@ export declare function createApi(opts: ApiClientOptions): {
         }[];
         dropId?: ID | null;
         soundtrack?: string | null;
+        album?: string | null;
+        inFeed?: boolean;
     }) => Promise<WithReward<{
         post: Post;
     }>>;
@@ -263,6 +270,7 @@ export declare function createApi(opts: ApiClientOptions): {
     }>;
     gemPacks: () => Promise<{
         packs: GemPack[];
+        premiumPlans: import('./profile').PremiumPlan[];
         stripe: boolean;
         iap: boolean;
     }>;
@@ -284,5 +292,59 @@ export declare function createApi(opts: ApiClientOptions): {
     leaderboard: (kind?: "vibe" | "streak" | "xp") => Promise<{
         entries: LeaderboardEntry[];
     }>;
+    shouts: (p?: { before?: string; mood?: string; replyTo?: ID }) => Promise<{ items: Shout[]; nextCursor: string | null; nextShoutAt: string | null }>;
+    shout: (b: { body: string; mood?: string | null; replyToId?: ID | null }) => Promise<WithReward<{ shout: Shout; nextShoutAt: string }>>;
+    reactShout: (id: ID, kind: ReactionKind | null) => Promise<{ shout: Shout }>;
+    deleteShout: (id: ID) => Promise<{ ok: true }>;
+    shoutTrends: () => Promise<{ tags: { tag: string; count: number }[]; top: { rank: number; user: UserPublic; shouts: number; reps: number }[] }>;
+    home: () => Promise<HomeData>;
+    updateProfile: (b: {
+        gender?: import('./profile').Gender;
+        headline?: string;
+        accent?: string;
+        coverUrl?: string | null;
+        background?: { kind: 'preset' | 'image' | 'color'; value: string };
+        song?: string | ProfileSong | null;
+    }) => Promise<{ user: UserPrivate }>;
+    changeEmail: (email: string, password: string) => Promise<{ user: UserPrivate }>;
+    gallery: (userId: ID, album?: string) => Promise<{ albums: string[]; photos: Post[] }>;
+    rateProfile: (userId: ID, score: VibeScore) => Promise<{ ratings: ProfileRatings }>;
+    wall: (userId: ID) => Promise<{ notes: WallNote[] }>;
+    postWall: (userId: ID, b: { body: string; mood?: string | null }) => Promise<{ note: WallNote }>;
+    deleteWallNote: (id: ID) => Promise<{ ok: true }>;
+    insights: () => Promise<Insights>;
+    spotifySearch: (q: string) => Promise<{ enabled: boolean; tracks: ProfileSong[] }>;
+    spotifyResolve: (url: string) => Promise<{ song: ProfileSong }>;
+    premium: () => Promise<{ plans: import('./profile').PremiumPlan[]; premiumUntil: string | null; sparks: number; stripe: boolean; iap: boolean }>;
+    buyPremium: (planId: string) => Promise<{ premiumUntil: string; user: UserPrivate }>;
+    admin: {
+        overview: () => Promise<{
+            counts: Record<'users' | 'newToday' | 'ai' | 'online' | 'postsToday' | 'shoutsToday' | 'openReports' | 'openFlags' | 'premium' | 'banned' | 'suspended', number>;
+            revenue30d: { currency: string; cents: number; purchases: number }[];
+            integrations: Record<string, boolean | string | null>;
+        }>;
+        users: (p?: { q?: string; status?: string; role?: string; ai?: '0' | '1'; cursor?: string }) => Promise<Page<AdminUser>>;
+        user: (id: ID) => Promise<{
+            user: AdminUser;
+            events: { id: ID; kind: string; reason: string; category: string | null; until: string | null; by: string; severe: boolean; cleared: boolean; createdAt: string }[];
+            reports: { id: ID; targetType: string; targetId: ID; reason: string; status: string; against: boolean; createdAt: string }[];
+            recent: { type: string; id: ID; text: string; mediaUrl?: string | null; room?: string; hidden: boolean; createdAt: string }[];
+        }>;
+        action: (id: ID, b: { action: string; minutes?: number; reason: string }) => Promise<{ user: AdminUser }>;
+        setRole: (id: ID, role: 'user' | 'mod' | 'admin') => Promise<{ user: AdminUser }>;
+        grantPremium: (id: ID, days: number) => Promise<{ user: AdminUser }>;
+        reports: (status?: 'open' | 'closed' | 'all') => Promise<{
+            items: { id: ID; targetType: string; targetId: ID; reason: string; status: string; resolvedBy: string | null; reporter: UserPublic; target: UserPublic | null; content: { text: string; mediaUrl: string | null; removed: boolean } | null; createdAt: string }[];
+        }>;
+        resolveReport: (id: ID, b: { status: 'actioned' | 'dismissed'; removeContent?: boolean }) => Promise<{ ok: true }>;
+        flags: (status?: 'open' | 'all') => Promise<{
+            items: { id: ID; user: UserPublic; reason: string; category: string | null; priority: string; status: string; excerpt: string | null; ref: { type: string; id: ID } | null; createdAt: string }[];
+        }>;
+        resolveFlag: (id: ID, status: 'resolved' | 'dismissed') => Promise<{ ok: true }>;
+        removeContent: (type: string, id: ID) => Promise<{ ok: true }>;
+        modlog: () => Promise<{ items: { id: ID; user: UserPublic; kind: string; reason: string; until: string | null; by: string; createdAt: string }[] }>;
+        personas: () => Promise<{ items: { id: ID; handle: string; displayName: string; avatarUrl: string; dmFrom: 'everyone' | 'following' | 'nobody'; active: boolean }[] }>;
+        updatePersona: (id: ID, b: { dmFrom?: 'everyone' | 'following' | 'nobody'; active?: boolean }) => Promise<{ ok: true }>;
+    };
 };
 export type Api = ReturnType<typeof createApi>;

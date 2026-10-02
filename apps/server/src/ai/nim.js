@@ -51,13 +51,25 @@ export const nimEnabled = () => !!config.nim.apiKey;
 
 function pickModel(preferred) {
   const healthy = config.nim.models.filter((m) => (failures.get(m) ?? 0) < Date.now());
-  if (preferred && healthy.includes(preferred)) return preferred;
+  if (preferred && (failures.get(preferred) ?? 0) < Date.now()) return preferred;
   return healthy[Math.floor(Math.random() * healthy.length)] ?? config.nim.models[0];
 }
 
+/** Chat completion. On a failed or empty answer it retries on other healthy models (`opts.retries`, default 1). */
 export async function nimChat(messages, opts = {}) {
   if (!nimEnabled()) return null;
-  const model = pickModel(opts.model);
+  const tried = new Set();
+  for (let attempt = 0; attempt <= (opts.retries ?? 1); attempt++) {
+    const model = attempt === 0 ? pickModel(opts.model) : pickModel(config.nim.models.find((m) => !tried.has(m)));
+    if (tried.has(model)) break;
+    tried.add(model);
+    const out = await chatOnce(model, messages, opts);
+    if (out) return out;
+  }
+  return null;
+}
+
+async function chatOnce(model, messages, opts) {
   try {
     await limiter.take();
     const res = await fetch(`${config.nim.baseUrl}/chat/completions`, {
@@ -156,7 +168,8 @@ export function cleanText(s) {
     .replace(/<think>[\s\S]*?<\/think>/g, '')
     .replace(/^\s*(["'“])(.*)\1\s*$/s, '$2')
     .replace(/^\s*@?[\w.]+:\s*/, '')
-    .replace(/\s+/g, ' ')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\s*\n\s*/g, '\n') // keep line breaks: DMs send each line as its own text bubble
     .trim()
     .slice(0, 400);
 }
