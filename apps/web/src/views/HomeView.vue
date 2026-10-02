@@ -5,6 +5,7 @@ import { compact, tierByKey, toTen, timeAgo } from '@chatlol/shared';
 import { api } from '../lib/api';
 import { useSession } from '../stores/session';
 import SectionHead from '../components/SectionHead.vue';
+import Masonry from '../components/Masonry.vue';
 import ShoutItem from '../components/ShoutItem.vue';
 import ShoutComposer from '../components/ShoutComposer.vue';
 import Avatar from '../components/Avatar.vue';
@@ -89,7 +90,8 @@ async function nextRate() {
       </div>
     </section>
 
-    <div class="grid md:grid-cols-2 gap-6">
+    <!-- Cards settle into two columns by height (masonry), so nothing leaves an empty gap below it -->
+    <Masonry>
       <!-- Rate & Meet -->
       <section class="card p-5">
         <SectionHead title="Rate & Meet" icon="star" to="/roulette" hint="Pick a vibe tier, see if you match the crowd" />
@@ -118,9 +120,7 @@ async function nextRate() {
           <ShoutItem v-for="sh in shouts" :key="sh.id" :shout="sh" compact @update="(x) => (shouts = shouts.map((y) => (y.id === x.id ? x : y)))" @reply="$router.push(`/shouts?focus=${sh.id}`)" />
         </div>
       </section>
-    </div>
 
-    <div class="grid md:grid-cols-2 gap-6">
       <!-- Forums -->
       <section class="card p-5">
         <SectionHead title="Forums" icon="groups" to="/forums" hint="Hot discussions right now" />
@@ -141,22 +141,8 @@ async function nextRate() {
           <span class="text-label-lg text-flame">{{ e.score }}/10</span>
         </RouterLink>
       </section>
-    </div>
 
-    <!-- Live streams -->
-    <section class="card p-5">
-      <SectionHead title="Popular Streams" icon="live_tv" to="/live" :hint="h.streams.length ? `${h.streams.length} live now` : 'Nobody’s live — be the first'" />
-      <div v-if="h.streams.length" class="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <RouterLink v-for="st in h.streams" :key="st.id" :to="`/live/${st.id}`" class="rounded-md overflow-hidden relative aspect-[3/4] group">
-          <img :src="st.coverUrl" alt="" class="w-full h-full object-cover group-hover:scale-105 transition" />
-          <span class="absolute top-2 left-2 bg-coral text-white rounded-full px-2 py-0.5 text-label-sm">● LIVE {{ st.viewers }}</span>
-          <div class="absolute bottom-0 inset-x-0 p-2 bg-gradient-to-t from-black/75 to-transparent text-white"><p class="text-label-md truncate">{{ st.title }}</p><p class="text-body-sm opacity-80 truncate">{{ st.host.displayName }}</p></div>
-        </RouterLink>
-      </div>
-      <RouterLink v-else to="/live" class="btn-secondary w-full"><Icon name="videocam" /> Go live</RouterLink>
-    </section>
 
-    <div class="grid md:grid-cols-2 gap-6">
       <!-- Today's drop -->
       <section class="card p-5">
         <SectionHead title="Today’s Sunset Drop" icon="wb_twilight" to="/drops" />
@@ -176,7 +162,20 @@ async function nextRate() {
           <p class="text-body-sm text-on-surface-variant mt-1">{{ t.agreeCount }} agree • {{ t.disagreeCount }} disagree • ⚡{{ compact(t.agreePool + t.disagreePool) }}</p>
         </RouterLink>
       </section>
-    </div>
+    </Masonry>
+
+    <!-- Live streams -->
+    <section class="card p-5">
+      <SectionHead title="Popular Streams" icon="live_tv" to="/live" :hint="h.streams.length ? `${h.streams.length} live now` : 'Nobody’s live — be the first'" />
+      <div v-if="h.streams.length" class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <RouterLink v-for="st in h.streams" :key="st.id" :to="`/live/${st.id}`" class="rounded-md overflow-hidden relative aspect-[3/4] group">
+          <img :src="st.coverUrl" alt="" class="w-full h-full object-cover group-hover:scale-105 transition" />
+          <span class="absolute top-2 left-2 bg-coral text-white rounded-full px-2 py-0.5 text-label-sm">● LIVE {{ st.viewers }}</span>
+          <div class="absolute bottom-0 inset-x-0 p-2 bg-gradient-to-t from-black/75 to-transparent text-white"><p class="text-label-md truncate">{{ st.title }}</p><p class="text-body-sm opacity-80 truncate">{{ st.host.displayName }}</p></div>
+        </RouterLink>
+      </div>
+      <RouterLink v-else to="/live" class="btn-secondary w-full"><Icon name="videocam" /> Go live</RouterLink>
+    </section>
 
     <!-- Lounges -->
     <section class="card p-5">
