@@ -110,7 +110,8 @@ export const config = {
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean),
-    turnUrls: (env.TURN_URLS ?? '')
+    // TURN_URL (singular) is accepted too, as people often write it that way.
+    turnUrls: (env.TURN_URLS ?? env.TURN_URL ?? '')
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean),
