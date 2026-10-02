@@ -4,7 +4,7 @@
 @tailwind utilities;
 
 @layer base {
-  html { -webkit-tap-highlight-color: transparent; }
+  html { @apply bg-surface; -webkit-tap-highlight-color: transparent; }
   body { @apply bg-surface text-on-surface font-sans antialiased; font-weight: 500; overscroll-behavior-y: none; }
   ::selection { background: rgb(255 94 0 / 0.25); }
   button { -webkit-user-select: none; user-select: none; }

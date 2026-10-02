@@ -25,10 +25,10 @@ const s = useSession();
 .toast-reward { background: linear-gradient(135deg, #ff9900, #ff5e00); color: #fff; }
 .toast-error { background: rgb(var(--c-error)); color: #fff; }
 /* Dark theme: toasts flip to light cards so they stand out against the dark UI. */
-:global([data-theme='dark']) .toast-info,
-:global([data-theme='dark']) .toast-level,
-:global([data-theme='dark']) .toast-reward { background: #ffffff; color: #251911; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45); }
-:global([data-theme='dark']) .toast-reward .text-label-lg:last-child,
-:global([data-theme='dark']) .toast-reward p:first-child { color: inherit; }
-:global([data-theme='dark']) .toast-reward { border: 1px solid #ffdbce; }
+[data-theme='dark'] .toast-info,
+[data-theme='dark'] .toast-level,
+[data-theme='dark'] .toast-reward { background: #ffffff; color: #251911; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45); }
+[data-theme='dark'] .toast-reward .text-label-lg:last-child,
+[data-theme='dark'] .toast-reward p:first-child { color: inherit; }
+[data-theme='dark'] .toast-reward { border: 1px solid #ffdbce; }
 </style>
