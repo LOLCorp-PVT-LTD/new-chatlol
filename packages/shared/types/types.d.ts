@@ -38,6 +38,8 @@ export interface UserPublic {
     isAI: boolean;
     /** ChatLOL Premium member (crown badge). */
     premium: boolean;
+    /** Featured by staff: shown first in Browse Members and more often in Rate & Meet. */
+    boosted?: boolean;
     isFollowing?: boolean;
     /** How you stand with them (only on other people). */
     friendship?: Friendship | null;
@@ -57,6 +59,8 @@ export interface UserPrivate extends UserPublic {
     comboCount: number;
     settings: UserSettings;
     role: 'user' | 'mod' | 'admin';
+    /** Staff permissions (role defaults + grants). Empty for members. */
+    perms: import('./permissions').Permission[];
     premiumUntil: ISODate | null;
     moderation: { status: import('./profile').ModStatus; until: ISODate | null; reason: string | null };
 }
@@ -419,6 +423,25 @@ export interface AdminUser extends UserPublic {
     strikes30d: number;
     reportsAgainst: number;
     deleted: boolean;
+    /** Permissions granted on top of the role. */
+    perms: import('./permissions').Permission[];
+    /** Everything they can do (role defaults + grants). */
+    allPerms: import('./permissions').Permission[];
+    boostUntil: ISODate | null;
+}
+
+export interface AdminPayment {
+    id: ID;
+    user: UserPublic;
+    provider: string;
+    productId: string;
+    gems: number;
+    premiumDays: number;
+    amountCents: number | null;
+    currency: string | null;
+    status: 'completed' | 'refunded' | 'pending' | 'failed';
+    providerTxId: string | null;
+    createdAt: ISODate;
 }
 
 /** Data for a profile's list sections (GET /users/:id/showcase). Only the requested kinds are present. */

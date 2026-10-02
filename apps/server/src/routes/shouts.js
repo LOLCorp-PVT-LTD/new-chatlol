@@ -193,7 +193,7 @@ shoutsRouter.post('/shouts/:id/react', requireAuth, async (req, res) => {
 
 shoutsRouter.delete('/shouts/:id', requireAuth, async (req, res) => {
   const me = uid(req);
-  const isMod = req.userRole === 'admin' || req.userRole === 'mod';
+  const isMod = !!req.userPerms?.includes('reports');
   const r = await db.shouts.updateOne({ _id: String(req.params.id), ...(isMod ? {} : { authorId: me }) }, { $set: { hidden: true } });
   if (!r.matchedCount) throw new HttpError(404, 'Not your shout');
   io()

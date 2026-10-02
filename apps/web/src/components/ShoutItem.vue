@@ -4,7 +4,7 @@ import RichText from './RichText.vue';
 import StickerView from './StickerView.vue';
 import { computed } from 'vue';
 import type { Shout, ReactionKind } from '@chatlol/shared';
-import { REACTIONS, SHOUT_MOODS, timeAgo } from '@chatlol/shared';
+import { REACTIONS, SHOUT_MOODS, timeAgo, can } from '@chatlol/shared';
 import { api } from '../lib/api';
 import { useSession } from '../stores/session';
 import Avatar from './Avatar.vue';
@@ -16,7 +16,7 @@ const emit = defineEmits<{ (e: 'reply', s: Shout): void; (e: 'update', s: Shout)
 const s = useSession();
 const mood = computed(() => SHOUT_MOODS.find((m) => m.key === props.shout.mood));
 const mine = computed(() => s.user?.id === props.shout.author.id);
-const canDelete = computed(() => mine.value || s.user?.role === 'admin' || s.user?.role === 'mod');
+const canDelete = computed(() => mine.value || can(s.user, 'reports'));
 /** Splits text so @mentions and #tags render as links. */
 
 async function react(kind: ReactionKind) {

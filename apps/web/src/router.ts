@@ -1,3 +1,4 @@
+import { isStaff } from '@chatlol/shared';
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
 import { useSession } from './stores/session';
 
@@ -49,7 +50,7 @@ router.beforeEach(async (to) => {
   const s = useSession();
   if (!s.ready) await s.boot();
   if (to.path === '/' && !s.isAuthed) return '/welcome';
-  if (to.path.startsWith('/admin') && s.user && s.user.role !== 'admin' && s.user.role !== 'mod') return '/';
+  if (to.path.startsWith('/admin') && s.user && !isStaff(s.user)) return '/';
   if (to.meta.auth && !s.isAuthed) return { path: '/login', query: { next: to.fullPath } };
   if ((to.path === '/login' || to.path === '/join' || to.path === '/welcome') && s.isAuthed) return '/';
 });

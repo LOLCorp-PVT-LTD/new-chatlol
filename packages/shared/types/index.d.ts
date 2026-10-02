@@ -8,3 +8,4 @@ export * from './profile';
 export * from './calendar';
 export * from './profileLayout';
 export * from './stickers';
+export * from './permissions';

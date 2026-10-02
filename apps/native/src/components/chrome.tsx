@@ -1,5 +1,5 @@
 import React from 'react';
-import { Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Linking, Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
@@ -12,6 +12,7 @@ import { haptic } from '../lib/native';
 import { gradients, shadow, useColors, useIsDark } from '../lib/theme';
 import { Avatar } from './people';
 import { actionSheet } from '../lib/dialog';
+import { isStaff } from '@chatlol/shared';
 import { logout } from '../lib/actions';
 import { Gradient, Icon, IconButton, Row, Tap, Text, type IconName } from './ui';
 
@@ -62,6 +63,7 @@ export function TopBar() {
               { label: 'Sparks Vault', icon: 'local-fire-department', onPress: () => router.push('/vault') },
               { label: 'Premium', icon: 'workspace-premium', onPress: () => router.push('/premium') },
               { label: 'Settings', icon: 'settings', onPress: () => router.push('/settings') },
+              ...(isStaff(user) ? [{ label: 'Admin panel', icon: 'admin-panel-settings' as const, onPress: () => void Linking.openURL('https://chatlol.app/admin') }] : []),
               { label: 'Log out', icon: 'logout', danger: true, onPress: () => void logout() },
             ])} accessibilityLabel="Account menu: profile, friends, settings"><Avatar user={user} size={34} showOnline={false} /></Tap>
           </>

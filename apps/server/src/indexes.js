@@ -8,6 +8,7 @@ export async function ensureIndexes(db) {
     idx('users', { email: 1 }, { unique: true, partialFilterExpression: { email: { $type: 'string' } } }),
     idx('users', { handleLower: 1 }, { unique: true }),
     idx('users', { isAi: 1, deletedAt: 1 }),
+    idx('users', { 'boost.until': 1 }, { sparse: true }),
     idx('users', { xp: -1 }),
     idx('users', { streakDays: -1 }),
     idx('follows', { followerId: 1, followeeId: 1 }, { unique: true }),

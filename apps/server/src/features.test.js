@@ -278,6 +278,79 @@ test('admin panel: admins only; mute, unmute, ban and persona DM controls', asyn
   await as('boss').admin.updatePersona(MIA, { dmFrom: 'everyone' });
 });
 
+test('staff powers: roles, permissions, Sparks/Gems, items, Premium, boost, payments, refunds, termination', async () => {
+  const mod = await signUp('modguy');
+  const member = await signUp('member');
+  const other = await signUp('other');
+  // Admins make moderators; moderators get the moderation basics only.
+  let m = (await as('boss').admin.setRole(mod.id, 'mod')).user;
+  assert.deepEqual(m.allPerms.sort(), ['mute', 'overview', 'reports']);
+  assert.ok((await as('modguy').me()).user.perms.includes('reports'));
+  await assert.rejects(as('modguy').admin.wallet(member.id, { sparks: 100 }), (e) => e.status === 403);
+  await assert.rejects(as('modguy').admin.payments(), (e) => e.status === 403);
+  await assert.rejects(as('modguy').admin.action(member.id, { action: 'ban', reason: 'nope nope' }), (e) => e.status === 403);
+  await as('modguy').admin.action(member.id, { action: 'warn', reason: 'be nice' });
+  // An admin hands the mod extra powers; the mod can pass on only what they hold, and can't make admins.
+  m = (await as('boss').admin.setPerms(mod.id, ['wallet', 'staff'])).user;
+  assert.ok(m.allPerms.includes('wallet'));
+  await as('modguy').admin.setPerms(other.id, ['wallet']);
+  await assert.rejects(as('modguy').admin.setPerms(other.id, ['payments']), (e) => e.status === 403);
+  await assert.rejects(as('modguy').admin.setRole(other.id, 'admin'), (e) => e.status === 403);
+  await assert.rejects(as('modguy').admin.action(mod.id, { action: 'mute', minutes: 5, reason: 'self' }), (e) => e.status === 400);
+  // Sparks and Gems, never below zero.
+  const before = (await as('member').me()).user;
+  let u = (await as('modguy').admin.wallet(member.id, { sparks: 5000, gems: 40, reason: 'contest winner' })).user;
+  assert.equal(u.sparks, before.sparks + 5000);
+  assert.equal(u.gems, before.gems + 40);
+  u = (await as('boss').admin.wallet(member.id, { gems: -1000 })).user;
+  assert.equal(u.gems, 0);
+  // Premium, items, boost.
+  u = (await as('boss').admin.grantPremium(member.id, 30)).user;
+  assert.ok(u.premiumUntil);
+  const { items } = await as('boss').admin.items();
+  const pack = items.find((i) => i.kind === 'stickers');
+  await as('boss').admin.giveItem(member.id, pack.key);
+  assert.ok((await as('member').stickers()).owned.includes(pack.key));
+  u = (await as('boss').admin.boost(member.id, 24)).user;
+  assert.ok(u.boostUntil > new Date().toISOString());
+  const browse = await as('other').members({ sort: 'new' });
+  assert.equal(browse.items[0].id, member.id, 'boosted member leads Browse Members');
+  assert.equal(browse.items[0].boosted, true);
+  // Payments: who paid what, and refunds take back what was credited.
+  const { creditPurchase } = await import('./routes/payments.js');
+  await creditPurchase({
+    id: 'rc:test-tx-1',
+    userId: member.id,
+    provider: 'app_store',
+    productId: 'gems_450',
+    amountCents: 499,
+    currency: 'usd',
+  });
+  const pay = await as('boss').admin.payments({ user: member.handle });
+  assert.equal(pay.items.length, 1);
+  assert.equal(pay.items[0].user.id, member.id);
+  assert.equal(pay.items[0].amountCents, 499);
+  assert.ok(pay.totals.some((t) => t.status === 'completed' && t.cents === 499));
+  const gemsAfterBuy = (await as('member').me()).user.gems;
+  assert.ok(gemsAfterBuy >= 450);
+  const r = await as('boss').admin.refund(pay.items[0].id);
+  assert.equal(r.moneyBack, false);
+  assert.equal((await as('boss').admin.payments({ user: member.handle, status: 'refunded' })).items.length, 1);
+  assert.ok((await as('member').me()).user.gems < gemsAfterBuy);
+  // Terminate closes the account for good.
+  await assert.rejects(as('modguy').admin.terminate(member.id, 'spam ring'), (e) => e.status === 403);
+  u = (await as('boss').admin.terminate(member.id, 'spam ring')).user;
+  assert.equal(u.deleted, true);
+  assert.equal(u.standing.status, 'banned');
+  await assert.rejects(as('member').me(), (e) => e.status === 401 || e.status === 403);
+  const log = await as('boss').admin.user(member.id);
+  for (const k of ['terminate', 'refund', 'boost', 'item', 'premium', 'wallet', 'warn'])
+    assert.ok(
+      log.events.some((e) => e.kind === k),
+      k,
+    );
+});
+
 test('home dashboard has every section', async () => {
   const h = await as('anon').home();
   for (const k of ['popularMembers', 'forums', 'streams', 'hallOfFame', 'shouts', 'drop', 'arena', 'lounges', 'newMembers'])
@@ -355,7 +428,17 @@ test('profile builder: layouts are cleaned, saved, moderated and shown to visito
       { id: 'a1', type: 'about', size: 'third', style: 'glass', title: 'Me!', config: {} },
       { id: 'a2', type: 'about', size: 'full' }, // duplicate single-use section → dropped
       { id: 'v1', type: 'video', size: 'half', config: { videoId: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=1' } },
-      { id: 'l1', type: 'links', size: 'gigantic', config: { items: [{ label: 'x', url: 'javascript:alert(1)' }, { label: 'IG', url: 'https://instagram.com/lay' }] } },
+      {
+        id: 'l1',
+        type: 'links',
+        size: 'gigantic',
+        config: {
+          items: [
+            { label: 'x', url: 'javascript:alert(1)' },
+            { label: 'IG', url: 'https://instagram.com/lay' },
+          ],
+        },
+      },
       { id: 'f1', type: 'friends', config: { limit: 999 } },
       { id: 'z1', type: 'not-a-section' },
     ],
@@ -391,8 +474,8 @@ test('profile showcase: friends, followers, following, shouts and top photos', a
   const a = await signUp('sha');
   const b = await signUp('shb');
   const d = await signUp('shd');
-  await as('sha').follow(b.id);
-  await as('shb').follow(a.id); // a ↔ b: friends
+  await as('sha').addFriend(b.id);
+  await as('shb').acceptFriend(a.id); // a ↔ b: friends (and following each other)
   await as('shd').follow(a.id); // d → a: follower only
   await as('sha').shout({ body: 'showcase shout' });
   const low = (await as('sha').createPost({ body: 'meh', mediaUrl: 'https://picsum.photos/seed/s1/600/800' })).post;
@@ -408,7 +491,11 @@ test('profile showcase: friends, followers, following, shouts and top photos', a
   assert.equal(s.following[0].id, b.id, 'most recent follow first');
   assert.ok(!ids(s.following).includes(d.id));
   assert.equal(s.shouts[0].body, 'showcase shout');
-  assert.deepEqual(s.topPhotos.map((p) => p.id), [high.id, low.id], 'best rated first');
+  assert.deepEqual(
+    s.topPhotos.map((p) => p.id),
+    [high.id, low.id],
+    'best rated first',
+  );
   assert.equal(s.photos[0].id, high.id, 'latest first');
   assert.deepEqual(s.threads, []);
   const only = await as('anon').showcase(a.id, ['friends'], 5);
@@ -508,7 +595,10 @@ test('custom emoji and stickers: free starter packs, paid packs locked until bou
   // Paid ones are refused until unlocked.
   await assertLocked(c.comment(post.id, 'so :rizz:'), 'emoji_locked');
   await assertLocked(c.comment(post.id, '', { kind: 'noto', id: 'stickers_party/confetti' }), 'sticker_locked');
-  await assertLocked(c.postWall(u.id, { body: '', sticker: { kind: 'giphy', id: 'abc123', url: 'https://media1.giphy.com/media/abc123/200.webp' } }), 'giphy_locked');
+  await assertLocked(
+    c.postWall(u.id, { body: '', sticker: { kind: 'giphy', id: 'abc123', url: 'https://media1.giphy.com/media/abc123/200.webp' } }),
+    'giphy_locked',
+  );
   // Sparks only — packs can't be bought with Gems.
   await assert.rejects(c.buy('emoji_slang', 'gems'), (e) => e.status === 400);
   const before = (await db.users.findOne({ _id: u.id })).sparks;
@@ -545,13 +635,19 @@ test('friend requests: send, accept, decline, cancel, unfriend, privacy setting,
   assert.equal((await A.addFriend(b.id)).friendship, 'outgoing');
   assert.equal((await B.user(a.handle)).user.friendship, 'incoming');
   const reqs = await B.friendRequests();
-  assert.deepEqual(reqs.incoming.map((r) => r.user.id), [a.id]);
+  assert.deepEqual(
+    reqs.incoming.map((r) => r.user.id),
+    [a.id],
+  );
   assert.ok((await B.notifications()).items.some((n) => n.kind === 'friend_request' && n.link === '/friends'));
   assert.equal((await B.acceptFriend(a.id)).friendship, 'friends');
   assert.equal((await A.user(b.handle)).user.friendship, 'friends');
   assert.ok((await A.notifications()).items.some((n) => n.kind === 'friend_accepted'));
   assert.equal((await A.user(b.handle)).user.isFollowing, true, 'friends follow each other');
-  assert.deepEqual((await A.friends()).items.map((f) => f.user.id).filter((id) => id === b.id), [b.id]);
+  assert.deepEqual(
+    (await A.friends()).items.map((f) => f.user.id).filter((id) => id === b.id),
+    [b.id],
+  );
   assert.equal((await A.user(a.handle)).user.friendsCount >= 1, true);
   // Following back alone no longer makes friends; mutual requests do.
   await as('frd').follow(a.id);
@@ -578,6 +674,14 @@ test('friend requests: send, accept, decline, cancel, unfriend, privacy setting,
   assert.ok(sc.friends.some((f) => f.id === d.id) && !sc.friends.some((f) => f.id === b.id));
   // Personas answer requests (most accept) after a short while.
   await A.addFriend(MIA);
-  const mia = await until(async () => ((await A.user('mia.goldenhour').catch(() => null))?.user.friendship === 'friends' ? true : (await db.friendRequests.findOne({ fromId: a.id, toId: MIA }))?.status !== 'pending' ? true : null), 8000).catch(() => false);
+  const mia = await until(
+    async () =>
+      (await A.user('mia.goldenhour').catch(() => null))?.user.friendship === 'friends'
+        ? true
+        : (await db.friendRequests.findOne({ fromId: a.id, toId: MIA }))?.status !== 'pending'
+          ? true
+          : null,
+    8000,
+  ).catch(() => false);
   assert.ok(mia, 'the persona responded to the request');
 });

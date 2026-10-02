@@ -461,22 +461,27 @@ postsRouter.get('/roulette/next', requireAuth, async (req, res) => {
     db.ratings.distinct('postId', { userId: me, createdAt: { $gt: since } }),
     db.users.distinct('_id', { 'settings.showInRoulette': false }),
   ]);
-  const [row] = await db.posts
-    .aggregate([
-      {
-        $match: {
-          _id: { $nin: ratedIds },
-          hidden: false,
-          kind: { $in: ['photo', 'drop'] },
-          mediaUrl: { $ne: null },
-          authorId: { $nin: [me, ...hidden, ...optedOut] },
-          createdAt: { $gt: since },
+  const pick = (authorIn) =>
+    db.posts
+      .aggregate([
+        {
+          $match: {
+            _id: { $nin: ratedIds },
+            hidden: false,
+            kind: { $in: ['photo', 'drop'] },
+            mediaUrl: { $ne: null },
+            authorId: { $nin: [me, ...hidden, ...optedOut], ...(authorIn ? { $in: authorIn } : {}) },
+            createdAt: { $gt: since },
+          },
         },
-      },
-      { $match: { $expr: { $gte: [TOTAL, 2] } } },
-      { $sample: { size: 1 } },
-    ])
-    .toArray();
+        { $match: { $expr: { $gte: [TOTAL, 2] } } },
+        { $sample: { size: 1 } },
+      ])
+      .toArray();
+  // Boosted members (staff-granted) come up about half the time while they have photos left to rate.
+  const boosted = Math.random() < 0.5 ? await db.users.distinct('_id', { 'boost.until': { $gt: now() } }) : [];
+  let [row] = boosted.length ? await pick(boosted) : [];
+  if (!row) [row] = await pick(null);
   if (!row) return res.json(null);
   const post = await serializePost(row, me);
   // Blind: hide the consensus until the vote is locked in.

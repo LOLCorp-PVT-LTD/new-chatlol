@@ -110,6 +110,10 @@ paymentsRouter.get('/payments/history', requireAuth, async (req, res) => {
 });
 
 // ——— Stripe (web + desktop) ———
+export async function stripeRefund(paymentIntent) {
+  return stripe('refunds', { payment_intent: paymentIntent });
+}
+
 async function stripe(path, form) {
   const res = await fetch(`https://api.stripe.com/v1/${path}`, {
     method: 'POST',

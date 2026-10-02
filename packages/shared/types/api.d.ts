@@ -1,4 +1,4 @@
-import type { Friendship, Showcase, Shout, WallNote, ProfileRatings, Insights, HomeData, AdminUser, ProfileSong, AuthResponse, ChatMessage, Comment, Conversation, Drop, HotTake, LeaderboardEntry, LiveStream, Lounge, NotificationItem, Page, Post, ReactionKind, RewardEvent, RouletteCard, RouletteResult, ShoutReply, ShoutThread, StoreItem, UserPrivate, UserPublic, UserSettings, VibeScore, Cosmetics, ID, GemPack, IceConfig } from './types';
+import type { Friendship, Showcase, Shout, WallNote, ProfileRatings, Insights, HomeData, AdminUser, AdminPayment, ProfileSong, AuthResponse, ChatMessage, Comment, Conversation, Drop, HotTake, LeaderboardEntry, LiveStream, Lounge, NotificationItem, Page, Post, ReactionKind, RewardEvent, RouletteCard, RouletteResult, ShoutReply, ShoutThread, StoreItem, UserPrivate, UserPublic, UserSettings, VibeScore, Cosmetics, ID, GemPack, IceConfig } from './types';
 export declare class ApiError extends Error {
     status: number;
     code?: string | undefined;
@@ -336,7 +336,7 @@ export declare function createApi(opts: ApiClientOptions): {
             revenue30d: { currency: string; cents: number; purchases: number }[];
             integrations: Record<string, boolean | string | null>;
         }>;
-        users: (p?: { q?: string; status?: string; role?: string; ai?: '0' | '1'; cursor?: string }) => Promise<Page<AdminUser>>;
+        users: (p?: { q?: string; status?: string; role?: string; ai?: '0' | '1'; staff?: '1'; cursor?: string }) => Promise<Page<AdminUser>>;
         user: (id: ID) => Promise<{
             user: AdminUser;
             events: { id: ID; kind: string; reason: string; category: string | null; until: string | null; by: string; severe: boolean; cleared: boolean; createdAt: string }[];
@@ -358,6 +358,19 @@ export declare function createApi(opts: ApiClientOptions): {
         modlog: () => Promise<{ items: { id: ID; user: UserPublic; kind: string; reason: string; until: string | null; by: string; createdAt: string }[] }>;
         personas: () => Promise<{ items: { id: ID; handle: string; displayName: string; avatarUrl: string; dmFrom: 'everyone' | 'following' | 'nobody'; active: boolean }[] }>;
         updatePersona: (id: ID, b: { dmFrom?: 'everyone' | 'following' | 'nobody'; active?: boolean }) => Promise<{ ok: true }>;
+        setPerms: (id: ID, perms: import('./permissions').Permission[]) => Promise<{ user: AdminUser }>;
+        wallet: (id: ID, b: { sparks?: number; gems?: number; reason?: string }) => Promise<{ user: AdminUser }>;
+        items: () => Promise<{ items: { key: string; name: string; kind: string; emoji: string | null; rarity: string | null; price: number }[] }>;
+        giveItem: (id: ID, key: string, qty?: number) => Promise<{ ok: true }>;
+        boost: (id: ID, hours: number) => Promise<{ user: AdminUser }>;
+        terminate: (id: ID, reason: string) => Promise<{ user: AdminUser }>;
+        payments: (p?: { status?: string; provider?: string; user?: string; days?: number; cursor?: string }) => Promise<{
+            items: AdminPayment[];
+            totals: { currency: string; status: string; cents: number; count: number }[];
+            byProduct: { productId: string; cents: number; count: number }[];
+            nextCursor: string | null;
+        }>;
+        refund: (id: ID) => Promise<{ ok: true; moneyBack: boolean }>;
     };
 };
 export type Api = ReturnType<typeof createApi>;

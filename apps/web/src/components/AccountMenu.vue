@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
+import { isStaff } from '@chatlol/shared';
 import { useSession } from '../stores/session';
 import Avatar from './Avatar.vue';
 import Icon from './Icon.vue';
@@ -45,6 +46,9 @@ const items = [
         <div class="h-px bg-outline-variant/40 my-1.5" />
         <RouterLink v-for="i in items" :key="i[0]" :to="i[0]" role="menuitem" class="flex items-center gap-3 rounded-md px-3 h-10 text-label-lg hover:bg-surface-container-low" :class="{ 'is-on': route.path === i[0] }">
           <Icon :name="i[1]" :size="20" class="text-on-surface-variant" /> {{ i[2] }}
+        </RouterLink>
+        <RouterLink v-if="isStaff(s.user)" to="/admin" role="menuitem" class="flex items-center gap-3 rounded-md px-3 h-10 text-label-lg hover:bg-surface-container-low" :class="{ 'is-on': route.path.startsWith('/admin') }">
+          <Icon name="admin_panel_settings" :size="20" class="text-on-surface-variant" /> Admin panel
         </RouterLink>
         <div class="h-px bg-outline-variant/40 my-1.5" />
         <button role="menuitem" class="w-full flex items-center gap-3 rounded-md px-3 h-10 text-label-lg text-error hover:bg-surface-container-low" @click="close(); s.logout()"><Icon name="logout" :size="20" /> Log out</button>

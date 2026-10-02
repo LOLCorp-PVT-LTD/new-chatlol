@@ -5,7 +5,7 @@ import { StickerView } from './emoji/StickerView';
 import { actionSheet, confirmDialog, reportDialog } from '../lib/dialog';
 import { router } from 'expo-router';
 import type { ReactionKind, Shout } from '@chatlol/shared';
-import { REACTIONS, SHOUT_MOODS, timeAgo } from '@chatlol/shared';
+import { REACTIONS, SHOUT_MOODS, timeAgo, can } from '@chatlol/shared';
 import { api } from '../lib/api';
 import { errorToast, toast } from '../lib/actions';
 import { haptic } from '../lib/native';
@@ -20,7 +20,7 @@ export function ShoutCard({ shout, onUpdate, onReply, onRemoved, flat }: { shout
   const me = useSession((s) => s.user);
   const sel = useSelectedColors();
   const mood = SHOUT_MOODS.find((m) => m.key === shout.mood);
-  const canDelete = me && (me.id === shout.author.id || me.role === 'admin' || me.role === 'mod');
+  const canDelete = me && (me.id === shout.author.id || can(me, 'reports'));
 
   async function react(kind: ReactionKind) {
     if (!me) return toast({ kind: 'info', title: 'Sign in to react' });

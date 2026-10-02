@@ -11,6 +11,7 @@ import { itemIdFor } from '../lib/ids.js';
 import { vapidKeys } from '../lib/push.js';
 import { consumeToken, sendPasswordReset, sendVerification, sendEmailChangedNotice } from '../lib/emailTokens.js';
 import { config } from '../config.js';
+import { closeAccount } from '../lib/accounts.js';
 import { assertNotBanned } from '../lib/enforcement.js';
 
 export const authRouter = Router();
@@ -312,26 +313,6 @@ authRouter.post('/me/email', requireAuth, async (req, res) => {
 
 /** Account deletion (required by App Store guideline 5.1.1(v)). Soft-deletes and scrubs PII. */
 authRouter.delete('/me', requireAuth, async (req, res) => {
-  const id = uid(req);
-  await db.tx(async () => {
-    await db.users.updateOne(
-      { _id: id },
-      {
-        $set: {
-          deletedAt: now(),
-          email: null,
-          passwordHash: null,
-          handle: `deleted_${id}`,
-          handleLower: `deleted_${id}`,
-          displayName: 'Deleted user',
-          bio: '',
-          avatarUrl: '',
-        },
-      },
-    );
-    await db.pushTokens.deleteMany({ userId: id });
-    await db.posts.updateMany({ authorId: id }, { $set: { hidden: true } });
-    await db.follows.deleteMany({ $or: [{ followerId: id }, { followeeId: id }] });
-  });
+  await closeAccount(uid(req));
   res.json({ ok: true });
 });

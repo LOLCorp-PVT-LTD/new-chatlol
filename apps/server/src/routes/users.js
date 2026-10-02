@@ -51,8 +51,19 @@ usersRouter.get('/users', optionalAuth, async (req, res) => {
     const flags = await Promise.all(rows.map((r) => presence.isOnline(r._id)));
     rows = rows.filter((_, i) => flags[i]);
   }
-  const items = await Promise.all(rows.slice(0, 24).map((r) => userPublic(r, req.userId)));
+  let items = await Promise.all(rows.slice(0, 24).map((r) => userPublic(r, req.userId)));
   if (p.sort === 'vibe' || !p.sort) items.sort((a, b) => b.vibeAvg - a.vibeAvg || b.xp - a.xp);
+  // Boosted members (staff-granted) lead the first page of any search they match.
+  if (!offset) {
+    const boosted = await db.users
+      .find({ ...filter, 'boost.until': { $gt: now() } })
+      .sort({ 'boost.until': -1 })
+      .limit(6)
+      .toArray();
+    const top = await Promise.all(boosted.map((r) => userPublic(r, req.userId)));
+    const ids = new Set(top.map((u) => u.id));
+    items = [...top, ...items.filter((u) => !ids.has(u.id))].slice(0, 24);
+  }
   res.json({ items, nextCursor: rows.length > 24 && !p.online ? String(offset + 24) : null });
 });
 

@@ -16,7 +16,7 @@ import { ensureDrop } from '../lib/drops.js';
 import { personaById, systemPrompt, chatPrompt } from './personas.js';
 import { nimChat, nimImage, nimVision, nimEnabled } from './nim.js';
 import { fallback } from './fallback.js';
-import { acceptFriendRequest } from '../lib/friends.js';
+import { acceptFriendRequest, declineFriendRequest } from '../lib/friends.js';
 
 /**
  * The persona engine: a light scheduler that makes AI personas behave like regulars —
@@ -359,6 +359,7 @@ function onFriendRequest({ fromId, toId }) {
   if (!r || isAi(fromId)) return;
   later(rand(20_000, 8 * 60_000) * config.ai.replyPace, async () => {
     if (Math.random() < 0.85) await acceptFriendRequest(r.userId, fromId).catch(() => {});
+    else await declineFriendRequest(r.userId, fromId).catch(() => {});
   });
 }
 

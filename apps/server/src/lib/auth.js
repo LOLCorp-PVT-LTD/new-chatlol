@@ -1,3 +1,4 @@
+import { permissionsOf } from '@chatlol/shared';
 import { createHmac, randomBytes, scrypt as _scrypt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 
@@ -60,7 +61,7 @@ async function tokenUser(token) {
   if (!t) return null;
   // Tokens issued before the ObjectId migration carry the old string id; the migration kept it as legacyId.
   const who = isObjectIdHex(t.sub) ? { _id: t.sub } : { legacyId: t.sub };
-  const u = await db.users.findOne({ ...who, deletedAt: null }, { projection: { passwordHash: 1, isAi: 1, moderation: 1, role: 1 } });
+  const u = await db.users.findOne({ ...who, deletedAt: null }, { projection: { passwordHash: 1, isAi: 1, moderation: 1, role: 1, perms: 1 } });
   if (!u || u.isAi) return null;
   if (t.pv && t.pv !== passwordVersion(u.passwordHash)) return null;
   return u;
@@ -95,6 +96,7 @@ export async function requireAuth(req, _res, next) {
     const uid = u._id;
     req.userId = uid;
     req.userRole = u.role ?? 'user';
+    req.userPerms = permissionsOf(u);
     void db.users.updateOne({ _id: uid }, { $set: { lastSeenAt: now() } }).catch(() => {});
     next();
   } catch (e) {
@@ -112,3 +114,9 @@ export const requireRole =
   (...roles) =>
   (req, _res, next) =>
     roles.includes(req.userRole) ? next() : next(new HttpError(403, 'Admins only'));
+
+/** Staff guard: the signed-in person must hold at least one of these permissions. Use after requireAuth. */
+export const requirePerm =
+  (...perms) =>
+  (req, _res, next) =>
+    perms.some((p) => req.userPerms?.includes(p)) ? next() : next(new HttpError(403, 'You don’t have permission to do that'));

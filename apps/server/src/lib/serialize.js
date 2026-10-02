@@ -1,6 +1,6 @@
 import { friendshipStatus } from './friends.js';
-import { summarizeRatings, levelForXp, tierByScore, REWARDS, gemPriceFor, normalizeLayout } from '@chatlol/shared';
-import { db, today } from '../db.js';
+import { summarizeRatings, levelForXp, tierByScore, REWARDS, gemPriceFor, normalizeLayout, permissionsOf } from '@chatlol/shared';
+import { db, now, today } from '../db.js';
 import { presence } from './presence.js';
 
 export const DEFAULT_SETTINGS = {
@@ -161,6 +161,7 @@ export async function userPublic(u, viewerId) {
     cosmetics: { ...NO_COSMETICS, ...u.cosmetics },
     isAI: !!u.isAi,
     premium: isPremium(u),
+    boosted: !!(u.boost?.until && u.boost.until > now()),
     createdAt: u.createdAt,
   };
   if (viewerId && viewerId !== u._id) {
@@ -197,6 +198,7 @@ export async function userPrivate(u) {
     gender: u.gender ?? null,
     city: u.city ?? '',
     role: u.role ?? 'user',
+    perms: permissionsOf(u),
     premiumUntil: isPremium(u) ? u.premium.until : null,
     moderation: { status: 'active', until: null, reason: null, ...u.moderation },
   };

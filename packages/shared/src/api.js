@@ -149,6 +149,14 @@ export function createApi(opts) {
       modlog: () => req('GET', '/admin/modlog'),
       personas: () => req('GET', '/admin/personas'),
       updatePersona: (id, b) => req('PATCH', `/admin/personas/${id}`, b),
+      setPerms: (id, perms) => req('POST', `/admin/users/${id}/perms`, { perms }),
+      wallet: (id, b) => req('POST', `/admin/users/${id}/wallet`, b),
+      items: () => req('GET', '/admin/items'),
+      giveItem: (id, key, qty = 1) => req('POST', `/admin/users/${id}/items`, { key, qty }),
+      boost: (id, hours) => req('POST', `/admin/users/${id}/boost`, { hours }),
+      terminate: (id, reason) => req('POST', `/admin/users/${id}/terminate`, { reason }),
+      payments: (p = {}) => req('GET', `/admin/payments${q(p)}`),
+      refund: (id) => req('POST', `/admin/payments/${id}/refund`),
     },
 
     // lounges
