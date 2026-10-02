@@ -65,6 +65,18 @@ async function nextRate() {
       </div>
     </section>
 
+    <!-- Birthdays today -->
+    <section v-if="h.birthdays.length" class="card p-5 bg-[linear-gradient(135deg,rgba(255,94,0,.08),rgba(255,209,102,.18))]">
+      <SectionHead title="Birthdays today 🎂" icon="cake" hint="Send them a wish!" />
+      <div class="flex gap-4 overflow-x-auto scrollbar-none">
+        <RouterLink v-for="b in h.birthdays" :key="b.user.id" :to="`/p/${b.postId}`" class="w-24 shrink-0 text-center group">
+          <div class="relative mx-auto w-fit"><Avatar :user="b.user" :size="72" class="group-hover:scale-105 transition" /><span class="absolute -top-2 -right-1 text-2xl">🎈</span></div>
+          <p class="text-label-md mt-2 truncate">{{ b.user.displayName }}</p>
+          <p class="text-label-sm text-flame">Wish them 🎉</p>
+        </RouterLink>
+      </div>
+    </section>
+
     <!-- Popular members -->
     <section class="card p-5">
       <SectionHead title="Popular Members" icon="local_fire_department" to="/members" hint="Best-rated this week" />

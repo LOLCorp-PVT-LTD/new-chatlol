@@ -87,6 +87,7 @@ const KIND_SETTING = {
   comment: 'notifyComments',
   wall: 'notifyComments',
   follow: 'notifyFollows',
+  birthday: 'notifyFollows',
   dm: 'notifyDms',
   mention: 'notifyMentions',
   invite: 'notifyLive',

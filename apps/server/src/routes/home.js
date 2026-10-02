@@ -7,6 +7,7 @@ import { ensureDrop } from '../lib/drops.js';
 import { serializeStream } from './live.js';
 import { serializeLounge } from './social.js';
 import { serializeShout } from './shouts.js';
+import { birthdaysToday } from '../lib/birthdays.js';
 
 /** The home dashboard: one request with a slice of every section (each links to its full page in the clients). */
 export const homeRouter = Router();
@@ -47,7 +48,8 @@ homeRouter.get('/home', optionalAuth, async (req, res) => {
   const blocked = viewer ? await db.blocks.distinct('blockedId', { blockerId: viewer }) : [];
   const optedOut = await db.users.distinct('_id', { 'settings.showInRoulette': false });
 
-  const [popular, fame, threads, streams, shouts, drop, takes, lounges, newest, rateCandidates, members] = await Promise.all([
+  const [birthdays, popular, fame, threads, streams, shouts, drop, takes, lounges, newest, rateCandidates, members] = await Promise.all([
+    birthdaysToday(),
     topRated(week, 3, 12),
     topRated(null, 5, 5),
     db.threads
@@ -120,5 +122,10 @@ homeRouter.get('/home', optionalAuth, async (req, res) => {
     arena: await Promise.all(takes.map((t) => serializeTake(t, viewer, author))),
     lounges: loungeCards.sort((a, b) => b.onlineCount - a.onlineCount).slice(0, 4),
     newMembers: await Promise.all(newest.map((u) => author(u._id))),
+    birthdays: await Promise.all(
+      birthdays
+        .filter((u) => !blocked.includes(u._id))
+        .map(async (u) => ({ user: await author(u._id), postId: `bday_${u._id}_${new Date().toISOString().slice(0, 4)}` })),
+    ),
   });
 });

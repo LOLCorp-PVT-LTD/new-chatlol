@@ -32,6 +32,7 @@ export const DEFAULT_SETTINGS = {
   // Experience
   autoplayMusic: true, // play other people's profile songs automatically
   reduceMotion: false,
+  celebrateBirthday: true, // system birthday post + follower notifications on your birthday
 };
 
 /** Empty profile customisation. */
@@ -267,6 +268,7 @@ export async function serializePost(p, viewerId, author = authorCache(viewerId))
     myReaction: mine[1]?.kind ?? null,
     myBattleVote: mine[2]?.optionId ?? null,
     soundtrack: p.soundtrack ?? null,
+    system: !!p.system,
     album: p.album ?? null,
     inFeed: p.inFeed !== false,
     createdAt: p.createdAt,

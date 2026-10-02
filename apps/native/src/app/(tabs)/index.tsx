@@ -65,6 +65,19 @@ export default function Home() {
         </Row>
       </Gradient>
 
+      {h.birthdays.length ? (
+        <Card style={{ padding: 16 }}>
+          <SectionHead title="Birthdays today 🎂" icon="cake" hint="Send them a wish!" />
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14 }}>
+            {h.birthdays.map((b) => (
+              <Tap key={b.user.id} onPress={() => router.push(`/p/${b.postId}`)} style={{ width: 76, alignItems: 'center', gap: 4 }}>
+                <Avatar user={b.user} size={64} /><Text variant="labelSm" numberOfLines={1}>{b.user.displayName}</Text><Text variant="labelSm" color={c.flame}>Wish 🎉</Text>
+              </Tap>
+            ))}
+          </ScrollView>
+        </Card>
+      ) : null}
+
       <Card style={{ padding: 16 }}>
         <SectionHead title="Popular Members" icon="local-fire-department" to="/members" hint="Best-rated this week" />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14 }}>

@@ -142,7 +142,7 @@ Everything lives in **`apps/server/.env`** (copy `apps/server/.env.example`). Wi
 | --- | --- |
 | Database | `MONGODB_URL` (local `mongodb://…` or Atlas `mongodb+srv://…`) |
 | Admins | `ADMIN_EMAILS=you@domain.com,other@domain.com` (promoted on their next login) |
-| Email (SMTP) | `SMTP_URL=smtps://USER:PASSWORD@HOST:465`, `MAIL_FROM="ChatLOL <hello@yourdomain>"`, `APP_URL` (the web address used in email links) |
+| Email (your SMTP server) | `SMTP_HOST`, `SMTP_PORT` (587/465/25), `SMTP_SECURE` (true for 465), `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM`, optional `SMTP_ALLOW_SELF_SIGNED=1`; `APP_URL` is the web address used in email links |
 | Card payments (web/desktop) | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` (webhook → `/api/payments/stripe/webhook`) |
 | In-app purchases (iOS/Android) | Server: `REVENUECAT_WEBHOOK_AUTH` (webhook → `/api/payments/revenuecat/webhook`). App: `EXPO_PUBLIC_REVENUECAT_IOS_KEY` / `_ANDROID_KEY` in `apps/native/.env` |
 | AI personas | `NVIDIA_API_KEY` (free at build.nvidia.com). Without it personas don't answer DMs. |
@@ -153,7 +153,7 @@ Store products: create consumables `gems_80`, `gems_450`, `gems_1000`, `gems_220
 
 ### Email
 
-`SMTP_URL` + `MAIL_FROM` turn on verification emails (+50 Sparks when confirmed; required to go live or buy Gems) and password resets. Reset links are single-use, expire after an hour, and sign out every other session. Without SMTP the emails are printed to the server log. Associate `chatlol.app` for universal links so `/verify` and `/reset-password` open in the app.
+Your SMTP server details (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM`) turn on verification emails (+50 Sparks when confirmed; required to go live or buy Gems) and password resets. Reset links are single-use, expire after an hour, and sign out every other session. Without SMTP the emails are printed to the server log. Associate `chatlol.app` for universal links so `/verify` and `/reset-password` open in the app.
 
 ## Building & shipping
 

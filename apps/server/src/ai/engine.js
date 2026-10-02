@@ -342,6 +342,38 @@ async function actArena(r) {
   }
 }
 
+// ——— Birthdays ———
+const WISHES = [
+  'happy birthday!! 🎂🎉',
+  'hbd!! have the best day 🥳',
+  'happy birthday 🧡 hope it’s a good one',
+  'HAPPY BIRTHDAY 🎈🎈',
+  'happy bday!! eat all the cake 🍰',
+];
+/** A few personas leave birthday wishes on the birthday post over the next hours. */
+function onBirthday({ postId, userId }) {
+  const wishers = [...roster]
+    .filter((r) => r.userId !== userId)
+    .sort(() => Math.random() - 0.5)
+    .slice(0, Math.floor(rand(2, 5)));
+  wishers.forEach((r, i) =>
+    later(rand(60_000, 3 * 3_600_000) * (i + 1) * config.ai.replyPace, async () => {
+      const post = await db.posts.findOne({ _id: postId, hidden: false });
+      const person = await db.users.findOne({ _id: userId }, { projection: { displayName: 1, handle: 1 } });
+      if (!post || !person || (await db.comments.findOne({ postId, authorId: r.userId }))) return;
+      const text =
+        (await say(
+          r.persona,
+          `It's @${person.handle}'s birthday today on ChatLOL.`,
+          `Write a short, warm birthday wish for ${person.displayName.split(' ')[0]} (max 80 chars).`,
+          [],
+          40,
+        )) ?? pick(WISHES);
+      await insertComment(postId, r.userId, text);
+    }),
+  );
+}
+
 // ——— Shoutbox ———
 async function actShoutbox(r) {
   const recent = await db.shouts
@@ -634,5 +666,6 @@ export async function startPersonaEngine(leader = async () => true) {
   bus.onEvent('thread:created', guard(onThread));
   bus.onEvent('stream:started', guard(onStreamStarted));
   bus.onEvent('shout:created', guard(onShout));
+  bus.onEvent('birthday:posted', guard(onBirthday));
   console.log(`   ${roster.length} AI personas loaded (${awake().length} awake)`);
 }

@@ -5,6 +5,7 @@ import { ageFrom, MIN_AGE, GENDERS, INTEREST_GROUPS, type Gender } from '@chatlo
 import { useSession } from '../stores/session';
 import Logo from '../components/Logo.vue';
 import Icon from '../components/Icon.vue';
+import DatePicker from '../components/DatePicker.vue';
 
 const s = useSession();
 const router = useRouter();
@@ -42,8 +43,8 @@ async function submit() {
             <input v-model="f.handle" class="input pl-10" placeholder="handle" maxlength="20" autocomplete="username" required /></div>
           <input v-model="f.email" type="email" class="input" placeholder="Email" autocomplete="email" required />
           <input v-model="f.password" type="password" class="input" placeholder="Password (8+ characters)" autocomplete="new-password" minlength="8" required />
-          <label class="block"><span class="label pl-6">Birthday</span>
-            <input v-model="f.birthdate" type="date" class="input mt-1" required :max="new Date().toISOString().slice(0, 10)" /></label>
+          <div><span class="label pl-6">Birthday</span>
+            <DatePicker v-model="f.birthdate" class="mt-1" label="Birthday" placeholder="Pick your birthday 🎂" start-view="years" :default-year="new Date().getFullYear() - 25" :max="new Date().toISOString().slice(0, 10)" /></div>
           <p v-if="age !== null && age < MIN_AGE" class="text-error text-body-sm px-2">ChatLOL is for adults {{ MIN_AGE }}+ only.</p>
           <div><span class="label pl-6">I am</span>
             <div class="grid grid-cols-2 gap-2 mt-1" role="radiogroup" aria-label="Gender">

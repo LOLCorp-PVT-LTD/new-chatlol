@@ -57,7 +57,8 @@ adminRouter.get('/admin/overview', async (_req, res) => {
     integrations: {
       database: 'mongodb',
       redis: !!redisClient(),
-      smtp: !!config.mail.smtpUrl,
+      smtp: !!(config.mail.host || config.mail.url),
+      smtpServer: config.mail.host ? `${config.mail.host}:${config.mail.port}${config.mail.secure ? ' (TLS)' : ''}` : null,
       mailFrom: config.mail.from,
       stripe: !!config.payments.stripeSecretKey && !!config.payments.stripeWebhookSecret,
       revenueCat: !!config.payments.revenueCatWebhookAuth,

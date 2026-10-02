@@ -11,7 +11,7 @@ import Empty from './Empty.vue';
 const emit = defineEmits<{ (e: 'close'): void }>();
 const s = useSession();
 const router = useRouter();
-const icons: Record<string, string> = { rating: 'star', gift: 'redeem', invite: 'live_tv', consensus: 'verified', drop: 'wb_twilight', follow: 'person_add', comment: 'chat_bubble', dm: 'mail', arena: 'swords', level: 'military_tech', system: 'campaign', mention: 'alternate_email', profile_view: 'visibility', profile_rating: 'star', wall: 'sticky_note_2' };
+const icons: Record<string, string> = { rating: 'star', gift: 'redeem', invite: 'live_tv', consensus: 'verified', drop: 'wb_twilight', follow: 'person_add', comment: 'chat_bubble', dm: 'mail', arena: 'swords', level: 'military_tech', system: 'campaign', mention: 'alternate_email', profile_view: 'visibility', profile_rating: 'star', wall: 'sticky_note_2', birthday: 'cake' };
 onMounted(async () => {
   await s.loadNotifications();
   if (s.unread) { await api.markNotificationsRead(); s.unread = 0; }

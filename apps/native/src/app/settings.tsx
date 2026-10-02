@@ -18,6 +18,7 @@ const PRIVACY: ToggleDef[] = [
   { k: 'showGender', label: 'Show my gender', hint: 'On your profile and in search', icon: 'wc' },
   { k: 'showCity', label: 'Show my city', hint: 'On your profile', icon: 'location-on' },
   { k: 'showInRoulette', label: 'Appear in Rate & Meet', hint: 'Your photos in the rating deck', icon: 'casino' },
+  { k: 'celebrateBirthday', label: 'Celebrate my birthday', hint: 'Birthday post + follower heads-up (never your age)', icon: 'cake' },
   { k: 'ghostMode', label: 'Ghost mode in lounges', hint: 'Read without showing up', icon: 'visibility-off' },
   { k: 'showAIPersonas', label: 'Show AI personas', hint: 'Include ✦ AI personas in search', icon: 'smart-toy' },
 ];

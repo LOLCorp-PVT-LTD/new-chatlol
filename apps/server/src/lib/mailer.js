@@ -4,16 +4,30 @@ import { config } from '../config.js';
 export const outbox = [];
 let transport = null;
 
+/** True when an SMTP server is set (SMTP_HOST, or the SMTP_URL alternative). */
+export const smtpConfigured = () => !!(config.mail.host || config.mail.url);
+
 export async function sendMail(m) {
   outbox.push(m);
   if (outbox.length > 50) outbox.shift();
-  if (!config.mail.smtpUrl) {
+  if (!smtpConfigured()) {
     console.log(`[mail] (SMTP_URL not set) to=${m.to} subject="${m.subject}"\n${m.text}`);
     return;
   }
   if (!transport) {
     const nodemailer = await import('nodemailer');
-    transport = nodemailer.default.createTransport(config.mail.smtpUrl);
+    const m = config.mail;
+    transport = nodemailer.default.createTransport(
+      m.host
+        ? {
+            host: m.host,
+            port: m.port,
+            secure: m.secure,
+            auth: m.user ? { user: m.user, pass: m.pass } : undefined,
+            tls: m.allowSelfSigned ? { rejectUnauthorized: false } : undefined,
+          }
+        : m.url,
+    );
   }
   try {
     await transport.sendMail({ from: config.mail.from, ...m });

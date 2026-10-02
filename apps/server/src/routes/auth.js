@@ -222,6 +222,7 @@ authRouter.patch('/me/settings', requireAuth, async (req, res) => {
         notifyArena: z.boolean(),
         autoplayMusic: z.boolean(),
         reduceMotion: z.boolean(),
+        celebrateBirthday: z.boolean(),
       })
       .partial(),
     req.body,

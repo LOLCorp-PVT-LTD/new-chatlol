@@ -3,6 +3,7 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'rea
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BrandMark } from '../components/chrome';
+import { DatePicker } from '../components/DatePicker';
 import { ageFrom, MIN_AGE, GENDERS, INTEREST_GROUPS, type Gender } from '@chatlol/shared';
 import { register } from '../lib/actions';
 import { useColors } from '../lib/theme';
@@ -14,14 +15,13 @@ export default function Join() {
   const insets = useSafeAreaInsets();
   const [step, setStep] = useState(1);
   const [f, setF] = useState({ displayName: '', handle: '', email: '', password: '' });
-  const [dob, setDob] = useState({ y: '', m: '', d: '' });
+  const [birthdate, setBirthdate] = useState('');
   const [interests, setInterests] = useState<string[]>([]);
   const [gender, setGender] = useState<Gender | null>(null);
   const [agree, setAgree] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const birthdate = `${dob.y.padStart(4, '0')}-${dob.m.padStart(2, '0')}-${dob.d.padStart(2, '0')}`;
-  const validDob = /^\d{4}-\d{2}-\d{2}$/.test(birthdate) && !Number.isNaN(Date.parse(birthdate)) && dob.y.length === 4;
+  const validDob = /^\d{4}-\d{2}-\d{2}$/.test(birthdate);
   const age = validDob ? ageFrom(birthdate) : null;
   const ok = useMemo(() => f.displayName && /^[a-zA-Z0-9_.]{3,20}$/.test(f.handle) && f.email.includes('@') && f.password.length >= 8 && age !== null && age >= MIN_AGE && !!gender && agree,
     [f, age, agree, gender]);
@@ -46,11 +46,7 @@ export default function Join() {
             <Input value={f.email} onChangeText={set('email')} placeholder="Email" keyboardType="email-address" autoCapitalize="none" autoComplete="email" />
             <Input value={f.password} onChangeText={set('password')} placeholder="Password (8+ characters)" secureTextEntry textContentType="newPassword" />
             <Label>Birthday</Label>
-            <Row gap={8}>
-              <Input value={dob.m} onChangeText={(m) => setDob({ ...dob, m })} placeholder="MM" keyboardType="number-pad" maxLength={2} style={{ flex: 1, textAlign: 'center' }} />
-              <Input value={dob.d} onChangeText={(d) => setDob({ ...dob, d })} placeholder="DD" keyboardType="number-pad" maxLength={2} style={{ flex: 1, textAlign: 'center' }} />
-              <Input value={dob.y} onChangeText={(y) => setDob({ ...dob, y })} placeholder="YYYY" keyboardType="number-pad" maxLength={4} style={{ flex: 1.4, textAlign: 'center' }} />
-            </Row>
+            <DatePicker value={birthdate} onChange={setBirthdate} label="Your birthday" placeholder="Pick your birthday 🎂" startView="years" defaultYear={new Date().getFullYear() - 25} max={new Date().toISOString().slice(0, 10)} />
             {age !== null && age < MIN_AGE ? <Text color={c.error}>ChatLOL is for adults {MIN_AGE}+ only.</Text> : null}
             <Label>I am</Label>
             <Row gap={8}>

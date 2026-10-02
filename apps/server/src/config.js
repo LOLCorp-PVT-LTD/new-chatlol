@@ -91,7 +91,16 @@ export const config = {
   /** Public web app origin used in email links (verification, password reset). */
   appUrl: (env.APP_URL ?? 'http://localhost:5173').replace(/\/$/, ''),
   mail: {
-    smtpUrl: env.SMTP_URL ?? '', // smtps://user:pass@smtp.example.com:465
+    /** Your SMTP server. SMTP_SECURE=true for implicit TLS (port 465); false uses STARTTLS when the server offers it (587/25). */
+    host: env.SMTP_HOST ?? '',
+    port: Number(env.SMTP_PORT ?? 587),
+    secure: env.SMTP_SECURE ? env.SMTP_SECURE === 'true' || env.SMTP_SECURE === '1' : Number(env.SMTP_PORT ?? 587) === 465,
+    user: env.SMTP_USER ?? '',
+    pass: env.SMTP_PASS ?? '',
+    /** Accept a self-signed certificate on your own mail server (SMTP_ALLOW_SELF_SIGNED=1). */
+    allowSelfSigned: env.SMTP_ALLOW_SELF_SIGNED === '1',
+    /** Alternative to the fields above: one smtp(s):// connection string. */
+    url: env.SMTP_URL ?? '',
     from: env.MAIL_FROM ?? 'ChatLOL <hello@chatlol.app>',
   },
 };

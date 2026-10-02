@@ -11,7 +11,7 @@ import { ScreenHeader } from '../components/chrome';
 import { Avatar } from '../components/people';
 import { Empty, Gradient, Icon, Tap, Text, type IconName } from '../components/ui';
 
-const ICONS: Record<string, IconName> = { rating: 'star', gift: 'redeem', invite: 'live-tv', consensus: 'verified', drop: 'wb-twilight', follow: 'person-add', comment: 'chat-bubble', dm: 'mail', arena: 'sports-kabaddi', level: 'military-tech', system: 'campaign', mention: 'alternate-email', profile_view: 'visibility', profile_rating: 'star', wall: 'sticky-note-2' };
+const ICONS: Record<string, IconName> = { rating: 'star', gift: 'redeem', invite: 'live-tv', consensus: 'verified', drop: 'wb-twilight', follow: 'person-add', comment: 'chat-bubble', dm: 'mail', arena: 'sports-kabaddi', level: 'military-tech', system: 'campaign', mention: 'alternate-email', profile_view: 'visibility', profile_rating: 'star', wall: 'sticky-note-2', birthday: 'cake' };
 export default function Notifications() {
   const c = useColors();
   const items = useSession((s) => s.notifications);

@@ -11,7 +11,7 @@ import { haptic, shareLink } from '../lib/native';
 import { useColors } from '../lib/theme';
 import { Avatar, UserName } from './people';
 import { TierPad } from './TierPad';
-import { Card, Icon, IconButton, Row, Tap, Text } from './ui';
+import { Button, Card, Gradient, Icon, IconButton, Row, Tap, Text } from './ui';
 
 function PostCardImpl({ post: initial, onDeleted }: { post: Post; onDeleted?: (id: string) => void }) {
   const c = useColors();
@@ -63,12 +63,20 @@ function PostCardImpl({ post: initial, onDeleted }: { post: Post; onDeleted?: (i
         <Tap onPress={() => router.push(`/u/${post.author.handle}`)}><Avatar user={post.author} size={44} /></Tap>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Row gap={6}><UserName user={post.author} /><View style={{ backgroundColor: c.surfaceContainer, borderRadius: 99, paddingHorizontal: 7, paddingVertical: 1 }}><Text variant="labelSm" color={c.onSurfaceVariant}>Lv {post.author.level}</Text></View></Row>
-          <Text variant="bodySm" color={c.onSurfaceVariant} numberOfLines={1}>@{post.author.handle} • {timeAgo(post.createdAt)}{post.kind === 'drop' ? ' • 🌅 Sunset Drop' : post.author.streakDays > 2 ? ` • 🔥 ${post.author.streakDays}` : ''}</Text>
+          <Text variant="bodySm" color={c.onSurfaceVariant} numberOfLines={1}>@{post.author.handle} • {timeAgo(post.createdAt)}{post.kind === 'drop' ? ' • 🌅 Sunset Drop' : post.kind === 'birthday' ? ' • 🎂 Birthday' : post.author.streakDays > 2 ? ` • 🔥 ${post.author.streakDays}` : ''}</Text>
         </View>
         <IconButton name="more-horiz" label="More" onPress={more} size={38} />
       </Row>
 
-      {post.body ? <Text variant="bodyLg" style={{ paddingHorizontal: 16, paddingBottom: 10 }}>{post.body}</Text> : null}
+      {post.kind === 'birthday' ? (
+        <Gradient colors={['#ff5e00', '#ff8c42', '#ffd166']} style={{ marginHorizontal: 12, borderRadius: 24, paddingVertical: 26, paddingHorizontal: 18, alignItems: 'center', gap: 6 }}>
+          <Text style={{ fontSize: 30, lineHeight: 38 }}>🎈 🎂 🎉</Text>
+          <Avatar user={post.author} size={80} />
+          <Text variant="headlineMd" color="#fff" style={{ textAlign: 'center' }}>Happy birthday, {post.author.displayName.split(' ')[0]}! 🎂</Text>
+          <Text variant="bodyMd" color="rgba(255,255,255,0.95)">Leave a wish below — it means a lot 🧡</Text>
+          {!mine ? <Button small variant="white" title="🎉 Send a birthday wish" onPress={() => router.push(`/p/${post.id}`)} style={{ marginTop: 6 }} /> : null}
+        </Gradient>
+      ) : post.body ? <Text variant="bodyLg" style={{ paddingHorizontal: 16, paddingBottom: 10 }}>{post.body}</Text> : null}
 
       {post.mediaUrl ? (
         <Pressable onPress={() => router.push(`/p/${post.id}`)} onLongPress={() => rate(5)} delayLongPress={350} style={{ marginHorizontal: 10, borderRadius: 24, overflow: 'hidden', backgroundColor: c.surfaceContainer }}>
@@ -104,7 +112,7 @@ function PostCardImpl({ post: initial, onDeleted }: { post: Post; onDeleted?: (i
         </Row>
       ) : null}
 
-      {post.kind !== 'text' && post.kind !== 'battle' && !mine ? (
+      {post.kind !== 'text' && post.kind !== 'battle' && post.kind !== 'birthday' && !mine ? (
         <View style={{ paddingHorizontal: 16, paddingTop: 14 }}><TierPad value={post.myRating} onRate={rate} compact /></View>
       ) : mine && post.ratings.count ? (
         <Text variant="bodySm" color={c.onSurfaceVariant} style={{ paddingHorizontal: 16, paddingTop: 12 }}>Your vibe score: <Text variant="labelMd" color={c.primary}>{toTen(post.ratings.avg)}/10</Text> from {post.ratings.count} ratings</Text>

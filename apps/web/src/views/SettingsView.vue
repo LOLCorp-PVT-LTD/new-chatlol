@@ -66,6 +66,7 @@ const privacyToggles: { k: keyof UserSettings; label: string; hint: string; icon
   { k: 'showGender', label: 'Show my gender', hint: 'On your profile and in member search', icon: 'wc' },
   { k: 'showCity', label: 'Show my city', hint: 'On your profile', icon: 'location_on' },
   { k: 'showInRoulette', label: 'Appear in Rate & Meet', hint: 'Let your photos show up in the rating deck', icon: 'casino' },
+  { k: 'celebrateBirthday', label: 'Celebrate my birthday', hint: 'A birthday post + a heads-up to your followers on the day (shows your birthday, never your age)', icon: 'cake' },
   { k: 'ghostMode', label: 'Ghost mode in lounges', hint: 'Read lounges without showing up in “who’s here”', icon: 'visibility_off' },
   { k: 'showAIPersonas', label: 'Show AI personas', hint: 'Include ✦ AI personas in member search', icon: 'smart_toy' },
 ];

@@ -209,6 +209,7 @@ export async function applyRating(postId, userId, score) {
   const post = await db.posts.findOne({ _id: postId, hidden: false });
   if (!post) throw new HttpError(404, 'That post vanished');
   if (post.authorId === userId) throw new HttpError(400, "You can't rate your own vibe (nice try 😏)");
+  if (post.kind === 'birthday') throw new HttpError(400, 'Birthday posts are for wishes, not ratings 🎂');
   const before = summarizeRatings([post.r1, post.r2, post.r3, post.r4, post.r5]);
   const isNew = await db.tx(async () => {
     // Swap the score atomically and learn the previous one; the unique (postId, userId) index stops double-tap races.
@@ -327,7 +328,7 @@ export async function insertComment(postId, authorId, body) {
       kind: 'comment',
       actorId: authorId,
       link: `/p/${postId}`,
-      title: `${a.displayName} commented`,
+      title: post.kind === 'birthday' ? `${a.displayName} left you a birthday wish 🎂` : `${a.displayName} commented`,
       body: body.slice(0, 120),
     });
   }

@@ -8,6 +8,7 @@ import { initShared, shared } from './lib/shared.js';
 import { seedIfEmpty } from './seed.js';
 import { startPersonaEngine } from './ai/engine.js';
 import { resolveExpiredTakes } from './routes/arena.js';
+import { runBirthdays } from './lib/birthdays.js';
 
 const INSTANCE = `${hostname()}:${process.pid}`;
 
@@ -48,6 +49,7 @@ async function main() {
   const tick = async () => {
     if (!(await acquireWorkerLease())) return;
     await resolveExpiredTakes();
+    await runBirthdays();
     if (config.ai.enabled && !engineStarted) {
       engineStarted = true;
       await startPersonaEngine(() => acquireWorkerLease());

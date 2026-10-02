@@ -111,6 +111,7 @@ async function remove() {
         <p class="text-body-sm text-on-surface-variant truncate">
           @{{ post.author.handle }} • {{ timeAgo(post.createdAt) }}
           <template v-if="post.kind === 'drop'"> • <span class="text-primary font-bold">🌅 Sunset Drop</span></template>
+          <template v-else-if="post.kind === 'birthday'"> • <span class="text-primary font-bold">🎂 Birthday</span></template>
           <template v-else-if="post.author.streakDays > 2"> • 🔥 {{ post.author.streakDays }}</template>
         </p>
       </div>
@@ -124,7 +125,15 @@ async function remove() {
       </div>
     </header>
 
-    <p v-if="post.body" class="px-5 pb-3 text-body-lg whitespace-pre-line break-words">
+    <!-- System birthday card -->
+    <div v-if="post.kind === 'birthday'" class="mx-3 mb-1 rounded-md bg-[linear-gradient(135deg,#ff5e00,#ff8c42_45%,#ffd166)] text-white text-center px-6 py-8 relative overflow-hidden">
+      <div class="absolute inset-0 opacity-25 text-5xl leading-[1.6] select-none pointer-events-none" aria-hidden="true">🎈 🎉 🎂 🎁 🎈 🎉 🎂 🎁 🎈 🎉</div>
+      <Avatar :user="post.author" :size="88" class="mx-auto ring-4 ring-white/80 rounded-full" />
+      <p class="text-headline-lg mt-3 relative">Happy birthday, {{ post.author.displayName.split(' ')[0] }}! 🎂</p>
+      <p class="text-body-md opacity-95 relative">Leave a wish below — it means a lot 🧡</p>
+      <button v-if="!mine" class="btn bg-white text-flame h-10 mt-4 relative" @click="!showComments && toggleComments()">🎉 Send a birthday wish</button>
+    </div>
+    <p v-else-if="post.body" class="px-5 pb-3 text-body-lg whitespace-pre-line break-words">
       <template v-for="(part, i) in post.body.split(/(#[\p{L}\p{N}_]+)/u)" :key="i">
         <RouterLink v-if="part.startsWith('#')" :to="`/feed?tag=${part.slice(1).toLowerCase()}`" class="text-primary font-bold hover:underline">{{ part }}</RouterLink>
         <template v-else>{{ part }}</template>
@@ -164,7 +173,7 @@ async function remove() {
     </div>
 
     <!-- Rating pad -->
-    <div v-if="post.kind !== 'text' && post.kind !== 'battle' && !mine" class="px-5 pt-4">
+    <div v-if="post.kind !== 'text' && post.kind !== 'battle' && post.kind !== 'birthday' && !mine" class="px-5 pt-4">
       <div class="flex items-center justify-between mb-2">
         <span class="label">{{ post.myRating ? 'Your vibe' : 'Lock in your vibe' }}</span>
         <span class="text-label-sm text-primary flex items-center gap-0.5"><Icon name="bolt" :size="14" />+XP per vote</span>

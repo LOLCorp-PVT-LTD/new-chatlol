@@ -300,3 +300,39 @@ test('personas text back like people: wait for the burst, answer what was said, 
   assert.equal(dmCall.model, 'meta/llama-3.3-70b-instruct', 'DMs use the bigger chat model');
   assert.equal(dmCall.messages.at(-1).content, 'heyy\ni went to the beach today', 'both texts answered together');
 });
+
+test('birthdays: one system post per year, a gift, follower alerts, wishes not ratings', async () => {
+  const { runBirthdays, birthdaySuffixes } = await import('./lib/birthdays.js');
+  assert.deepEqual(birthdaySuffixes('2027-02-28'), ['-02-28', '-02-29'], 'Feb 29 birthdays count on Feb 28 in non-leap years');
+  assert.deepEqual(birthdaySuffixes('2028-02-28'), ['-02-28']);
+  const day = new Date().toISOString().slice(0, 10);
+  const r = await as('anon').register({
+    email: 'bday@example.com',
+    password: 'password123',
+    handle: 'bday_kid',
+    displayName: 'Bday Kid',
+    birthdate: `1995${day.slice(4)}`,
+    gender: 'male',
+  });
+  tokens.bday = r.token;
+  const fan = await signUp('bdayfan');
+  await as('bdayfan').follow(r.user.id);
+  const sparksBefore = (await db.users.findOne({ _id: r.user.id })).sparks;
+  await db.users.updateOne({ _id: 'ai_mia' }, { $set: { 'settings.celebrateBirthday': false } }); // opt-outs are skipped
+  await runBirthdays(day);
+  await runBirthdays(day); // a second run the same day does nothing
+  const postId = `bday_${r.user.id}_${day.slice(0, 4)}`;
+  const posts = await db.posts.find({ kind: 'birthday', authorId: r.user.id }).toArray();
+  assert.equal(posts.length, 1);
+  assert.equal(posts[0]._id, postId);
+  assert.equal((await db.users.findOne({ _id: r.user.id })).sparks, sparksBefore + 100);
+  assert.ok((await as('bdayfan').notifications()).items.some((n) => n.kind === 'birthday' && n.link === `/p/${postId}`));
+  const { post } = await as('bdayfan').post(postId);
+  assert.equal(post.system, true);
+  await assert.rejects(as('bdayfan').rate(postId, 5), (e) => e.status === 400);
+  await as('bdayfan').comment(postId, 'happy birthday!!');
+  assert.ok((await as('bday').notifications()).items.some((n) => /birthday wish/.test(n.title)));
+  const home = await as('bdayfan').home();
+  assert.ok(home.birthdays.some((b) => b.user.id === r.user.id));
+  assert.ok(fan.id);
+});
