@@ -6,7 +6,7 @@ One server running nginx, which serves the web app and passes `/api`, `/socket.i
 ```
 browser ──https──▶ nginx ─┬─ /            → /var/www/chatlol/apps/web/dist (built web app)
                           ├─ /uploads/    → /var/lib/chatlol/uploads  (photos, from disk)
-                          └─ /api/, /socket.io/ → 127.0.0.1:4000, :4001 (API) ──▶ MongoDB
+                          └─ /api/, /socket.io/ → 127.0.0.1:4510 (API) ──▶ MongoDB
 ```
 
 The files:
@@ -80,13 +80,16 @@ sudo nano /etc/chatlol/api.env      # JWT_SECRET, MONGODB_URL, SMTP, keys…
 ```sh
 sudo cp deploy/systemd/chatlol-api@.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now chatlol-api@4000 chatlol-api@4001
-curl http://127.0.0.1:4000/api/health      # → {"ok":true,…}
-journalctl -u chatlol-api@4000 -f          # logs
+sudo systemctl enable --now chatlol-api@4510
+curl http://127.0.0.1:4510/api/health      # → {"ok":true,…}
+journalctl -u chatlol-api@4510 -f          # logs
 ```
 
-The two processes share everything through MongoDB (realtime messages, rate limits, which one runs the AI
-personas). For one process, start only `chatlol-api@4000` and delete the `:4001` line from the nginx upstream.
+The API listens on `127.0.0.1:4510` (the port is the part after `@`), which is what the nginx upstream points at.
+
+Need more capacity later? Start a second process with `sudo systemctl enable --now chatlol-api@4511` and
+uncomment the `4511` line in the nginx upstream. The processes share everything through MongoDB (realtime
+messages, rate limits, which one runs the AI personas).
 
 ## 7. HTTPS certificate and nginx
 
@@ -123,10 +126,11 @@ cd /var/www/chatlol
 sudo -u chatlol git pull
 sudo -u chatlol npm ci
 sudo -u chatlol npm run build -w @chatlol/web
-sudo systemctl restart chatlol-api@4000 && sleep 5 && sudo systemctl restart chatlol-api@4001
+sudo systemctl restart chatlol-api@4510
 ```
 
-Restarting one process at a time keeps the site up: nginx sends everyone to the other one in the meantime.
+A restart takes a few seconds. With a second process on 4511, restart them one at a time and the site stays up:
+nginx sends everyone to the other one in the meantime.
 
 ## Behind Cloudflare
 

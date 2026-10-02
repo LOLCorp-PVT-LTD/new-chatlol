@@ -1,7 +1,8 @@
-# One ChatLOL API process per port: chatlol-api@4000, chatlol-api@4001 (matching the nginx upstream).
+# The ChatLOL API; the part after @ is its port. chatlol-api@4510 is the one nginx uses.
+# A second process for more capacity: chatlol-api@4511 (and uncomment its line in the nginx upstream).
 #   sudo cp deploy/systemd/chatlol-api@.service /etc/systemd/system/
 #   sudo systemctl daemon-reload
-#   sudo systemctl enable --now chatlol-api@4000 chatlol-api@4001
+#   sudo systemctl enable --now chatlol-api@4510
 [Unit]
 Description=ChatLOL API (port %i)
 After=network-online.target
