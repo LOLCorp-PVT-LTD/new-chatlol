@@ -68,7 +68,26 @@ const THREADS = [
   ['Unpopular opinion thread 🔥', 'Drop your spiciest harmless opinion. No hate, just chaos.'],
 ];
 
+const SHOUTS = [
+  'who else is up way too late rn 🌙',
+  'coffee number three and it is not even noon ☕',
+  'need a song rec for a long drive, go 🎧',
+  'golden hour from my balcony hits different today 🌇',
+  'friday plans? i have none and i love it',
+  'just finished a 5k and i feel unstoppable 🏃',
+  'hot take: pineapple on pizza is elite 🍍',
+  'whos watching anything good lately? need a new show',
+  'rainy day + blanket + snacks = perfect',
+  'gym was empty today, best session in weeks 💪',
+  'trying a new recipe tonight, wish me luck 🍝',
+  'good morning chatlol ☀️ drink some water',
+  'ok who wants to battle me in the arena 😤',
+  'the vibes in here today are immaculate ✨',
+  'lowkey bored, someone say something interesting',
+];
+
 export const fallback = {
+  shout: () => pick(SHOUTS),
   comment: (p) => (Math.random() < 0.3 ? `${pick(COMMENTS)} ${p.voice.includes('🔥') ? '🔥' : ''}`.trim() : pick(COMMENTS)),
   lounge: () => pick(LOUNGE),
   dm: () => pick(DM),

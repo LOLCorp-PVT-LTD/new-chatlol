@@ -269,7 +269,7 @@ async function actLounge(r) {
   await loungeLine(r, target);
 }
 
-async function actShout(r) {
+async function actThread(r) {
   if (Math.random() < 0.25) {
     const board = pick(r.persona.boards);
     if (!(await db.boards.findOne({ _id: board }))) return;
@@ -375,29 +375,31 @@ function onBirthday({ postId, userId }) {
 }
 
 // ——— Shoutbox ———
+/** One awake persona shouts on the board (and reacts to a few recent shouts). Runs on its own loop so the board stays lively. */
 async function actShoutbox(r) {
   const recent = await db.shouts
     .find({ hidden: { $ne: true } })
     .sort({ createdAt: -1 })
     .limit(12)
     .toArray();
-  if (recent[0]?.authorId === r.userId) return;
-  // React to a couple of recent shouts.
   for (const s of recent.filter((x) => x.authorId !== r.userId).slice(0, 3)) {
     if (Math.random() < 0.5) await reactToShout(s._id, r.userId, pick(['fire', 'heart', 'lol', 'hundred'])).catch(() => {});
   }
-  if ((await shared().get(`shout:cd:${r.userId}`)) || Math.random() < 0.4) return;
+  // Never two in a row from the same persona, and the same 45s cooldown people have.
+  if (recent[0]?.authorId === r.userId || (await shared().get(`shout:cd:${r.userId}`))) return;
   const others = (await withHandles(recent.slice(0, 8))).reverse();
   const board = others.map((x) => `@${x.handle}: ${x.body}`).join('\n') || '(quiet right now)';
-  const text = await say(
-    r.persona,
-    `You're posting on ChatLOL's public Shoutbox, a live notice board everyone sees. Recent shouts:\n${board}`,
-    'Write one short shout (under 120 characters) — something happening in your day, a question for everyone, or a reaction to the board. No hashtags unless natural.',
-    [],
-    60,
-  );
-  if (!text) return;
-  await shared().setNx(`shout:cd:${r.userId}`, '1', 45_000);
+  const text =
+    (await say(
+      r.persona,
+      `You're posting on ChatLOL's public Shoutbox, a live notice board everyone sees. Recent shouts:\n${board}`,
+      'Write one short shout (under 120 characters) — something happening in your day, a question for everyone, or a reaction to the board. No hashtags unless natural. Don\'t repeat what others said.',
+      [],
+      60,
+    )) ?? fallback.shout();
+  // Skip a fallback line that's already on the board so it never looks copy-pasted.
+  if (recent.some((x) => x.body === text)) return;
+  if (!(await shared().setNx(`shout:cd:${r.userId}`, '1', 45_000))) return;
   await insertShout(r.userId, { body: text.slice(0, 140), mood: pick(['hyped', 'chill', 'listening', 'question', 'flex']) });
 }
 
@@ -447,10 +449,9 @@ async function tick() {
   else if (roll < 0.45) await actComment(r);
   else if (roll < 0.62) await actLounge(r);
   else if (roll < 0.72) await actPost(r);
-  else if (roll < 0.8) await actShout(r);
+  else if (roll < 0.8) await actThread(r);
   else if (roll < 0.88) await actArena(r);
   else if (roll < 0.91) await actDrop(r);
-  else if (roll < 0.97) await actShoutbox(r);
   else await actFollowBack(r);
 }
 
@@ -659,6 +660,17 @@ export async function startPersonaEngine(leader = async () => true) {
       .finally(() => setTimeout(loop, rand(12_000, 30_000) / Math.max(0.2, config.ai.activity)));
   };
   setTimeout(loop, 5_000);
+  // The shoutbox gets its own, steadier rhythm: a persona shouts every ~1–3 minutes (scaled by AI_ACTIVITY).
+  const shoutLoop = () => {
+    (async () => {
+      if (!(await isLeader())) return;
+      const up = awake();
+      if (up.length) await actShoutbox(pick(up));
+    })()
+      .catch((e) => console.warn('[ai] shout', e.message))
+      .finally(() => setTimeout(shoutLoop, rand(60_000, 180_000) / Math.max(0.2, config.ai.activity)).unref?.());
+  };
+  setTimeout(shoutLoop, rand(10_000, 30_000)).unref?.();
   await bus.listenCluster();
   bus.onEvent('post:created', guard(onHumanPost));
   bus.onEvent('dm:sent', guard(onDm));
