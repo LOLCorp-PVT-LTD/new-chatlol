@@ -15,4 +15,5 @@ export * from './arcade.js';
 export * from './youtube.js';
 export * from './festivals.js';
 export * from './clans.js';
+export * from './gamesCatalog.js';
 export * from './legal.js';

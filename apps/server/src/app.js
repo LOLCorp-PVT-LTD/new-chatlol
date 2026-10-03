@@ -15,6 +15,7 @@ import { tournamentsRouter } from './routes/tournaments.js';
 import { festivalsRouter } from './routes/festivals.js';
 import { radioRouter } from './routes/radio.js';
 import { clansRouter } from './routes/clans.js';
+import { gamesCatalogRouter } from './routes/gamesCatalog.js';
 import { adsRouter } from './routes/ads.js';
 import { paymentsRouter } from './routes/payments.js';
 import { profileRouter } from './routes/profile.js';
@@ -67,6 +68,7 @@ export function createApp() {
     festivalsRouter,
     radioRouter,
     clansRouter,
+    gamesCatalogRouter,
     adsRouter,
     socialRouter,
     storeRouter,

@@ -149,6 +149,7 @@ export function createApi(opts) {
     declareWar: (id, opponentId, stake) => req('POST', `/clans/${id}/wars`, { opponentId, stake }),
     answerWar: (warId, verdict) => req('POST', `/clan-wars/${warId}/${verdict}`),
     clanWars: () => req('GET', '/clan-wars'),
+    searchGames: (query) => req('GET', `/games-catalog/search${q({ q: query })}`),
     // radio: station = 'shouts' or 'lounge:<id>'
     radio: (station) => req('GET', `/radio/${station.replace(':', '/')}`),
     radioSuggest: (station, youtubeId) => req('POST', `/radio/${station.replace(':', '/')}/suggest`, { youtubeId }),

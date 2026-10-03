@@ -390,6 +390,7 @@ export declare function createApi(opts: ApiClientOptions): {
     clanLounge: (id: string) => Promise<{ loungeId: string }>;
     declareWar: (id: string, opponentId: string, stake: number) => Promise<{ ok: true }>;
     answerWar: (warId: string, verdict: 'accept' | 'decline') => Promise<{ ok: true }>;
+    searchGames: (q?: string) => Promise<{ games: import('./gamesCatalog').ProfileGame[] }>;
     clanWars: () => Promise<{ wars: import('./clans').ClanWar[] }>;
     festival: () => Promise<{ festival: import('./festivals').FestivalSummary | null; loungeId?: ID | null; quiz?: { questions: { q: string; choices: string[] }[]; done: boolean; score: number | null; perRight: number; perfectBonus: number } }>;
     festivalQuiz: (answers: number[]) => Promise<{ right: number; total: number; answers: number[]; reward: RewardEvent | null }>;

@@ -4,6 +4,9 @@ import type { ProfileSection } from '@chatlol/shared';
 import { CURRENTLY_LABELS, PREMIUM_PROFILE, SECTION_SIZES, SECTION_STYLES, parseYouTube, sectionDef } from '@chatlol/shared';
 import { useSession } from '../../stores/session';
 import Icon from '../Icon.vue';
+import GameTile from './GameTile.vue';
+import { api } from '../../lib/api';
+import type { ProfileGame } from '@chatlol/shared';
 
 /** Settings for the selected section: title, width, box style and whatever its type needs. */
 const props = defineProps<{ section: ProfileSection }>();
@@ -35,6 +38,23 @@ function addItem() {
   c.value.items ??= [];
   if (props.section.type === 'links') c.value.items.push({ label: '', url: 'https://' });
   else c.value.items.push({ label: CURRENTLY_LABELS[c.value.items.length % CURRENTLY_LABELS.length], value: '' });
+  touch();
+}
+// Games I play: search Steam + popular non-Steam games, tap to add or remove.
+const gameQ = ref('');
+const gameResults = ref<ProfileGame[]>([]);
+let gt: ReturnType<typeof setTimeout>;
+async function searchGames() {
+  try { gameResults.value = (await api.searchGames(gameQ.value.trim() || undefined)).games; } catch { gameResults.value = []; }
+}
+watch(gameQ, () => { clearTimeout(gt); gt = setTimeout(() => void searchGames(), 300); });
+watch(() => props.section.type, (t) => t === 'games' && void searchGames(), { immediate: true });
+const hasGame = (g: ProfileGame) => (c.value.items ?? []).some((x) => x.id === g.id);
+function toggleGame(g: ProfileGame) {
+  c.value.items ??= [];
+  const i = c.value.items.findIndex((x) => x.id === g.id);
+  if (i >= 0) c.value.items.splice(i, 1);
+  else if (c.value.items.length < 24) c.value.items.push(g);
   touch();
 }
 function removeItem(i: number) {
@@ -87,6 +107,17 @@ function removeItem(i: number) {
 
     <div v-if="section.type === 'spacer'"><p class="label mb-1.5">Height</p>
       <div class="flex gap-1.5"><button v-for="h in (['sm', 'md', 'lg'] as const)" :key="h" class="chip h-9" :class="{ 'chip-active': c.height === h }" @click="c.height = h; touch()">{{ { sm: 'Small', md: 'Medium', lg: 'Large' }[h] }}</button></div></div>
+
+    <div v-if="section.type === 'games'" class="space-y-2">
+      <p class="label">Your games ({{ (c.items ?? []).length }}/24)</p>
+      <div v-if="(c.items ?? []).length" class="grid grid-cols-3 gap-2">
+        <button v-for="g in (c.items as ProfileGame[])" :key="g.id" class="relative text-left" :title="`Remove ${g.name}`" @click="toggleGame(g)"><GameTile :game="g" small /><span class="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/60 text-white text-[11px] flex items-center justify-center">✕</span></button>
+      </div>
+      <input v-model="gameQ" class="input h-10" placeholder="Search games (e.g. Fortnite, Counter-Strike)" />
+      <div class="grid grid-cols-3 gap-2 max-h-72 overflow-y-auto">
+        <button v-for="g in gameResults" :key="g.id" class="relative text-left rounded-md p-1 transition" :class="hasGame(g) ? 'ring-2 ring-flame' : 'hover:bg-surface-container-low'" @click="toggleGame(g)"><GameTile :game="g" small /></button>
+      </div>
+    </div>
 
     <div v-if="section.type === 'links' || section.type === 'currently'" class="space-y-2">
       <p class="label">{{ section.type === 'links' ? 'Links' : 'Currently…' }}</p>

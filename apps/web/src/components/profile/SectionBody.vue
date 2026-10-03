@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import GameTile from './GameTile.vue';
+import type { ProfileGame } from '@chatlol/shared';
 import RichText from '../RichText.vue';
 import { computed } from 'vue';
 import type { ProfileSection } from '@chatlol/shared';
@@ -134,6 +136,14 @@ const own = (yours: string, theirs: string) => (ctx.isMe.value ? yours : theirs)
       <Icon name="link" :size="18" /><span class="text-label-lg truncate flex-1">{{ l.label }}</span><Icon name="open_in_new" :size="16" class="muted" />
     </a>
     <p v-if="!(c.items ?? []).length" class="text-body-md muted">{{ ctx.editing.value ? 'Add links in this box’s settings.' : 'No links yet.' }}</p>
+  </div>
+
+  <!-- Games I play -->
+  <div v-else-if="section.type === 'games'">
+    <div v-if="(c.items ?? []).length" class="grid gap-3" :class="section.size === 'third' ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3'">
+      <GameTile v-for="g in (c.items as ProfileGame[])" :key="g.id" :game="g" />
+    </div>
+    <p v-else class="text-body-md muted">{{ ctx.editing.value ? 'Add your games from this box’s settings 🎮' : 'No games yet.' }}</p>
   </div>
 
   <!-- Currently -->
