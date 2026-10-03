@@ -21,6 +21,7 @@ export const useSession = defineStore('session', () => {
   const ticker = ref<TickerItem[]>([]);
   const levelUp = ref<{ from: number; to: number } | null>(null);
   const typing = ref<Record<string, string | null>>({}); // conversationId → userId typing
+  const typingTimers = new Map<string, ReturnType<typeof setTimeout>>();
   const dmListeners = new Set<(m: ChatMessage) => void>();
   let socket: AppSocket | null = null;
   let toastId = 0;
@@ -88,10 +89,18 @@ export const useSession = defineStore('session', () => {
       }
     });
     socket.on('dm:message', (m) => {
-      if (m.author.id !== user.value?.id) unreadDms.value++;
+      if (m.author.id !== user.value?.id) {
+        unreadDms.value++;
+        if (typing.value[m.roomId] === m.author.id) (clearTimeout(typingTimers.get(m.roomId)), (typing.value = { ...typing.value, [m.roomId]: null }));
+      }
       dmListeners.forEach((fn) => fn(m));
     });
-    socket.on('dm:typing', ({ conversationId, userId, typing: t }) => { typing.value = { ...typing.value, [conversationId]: t ? userId : null }; });
+    // "typing…" lasts 4 s after the last keystroke signal, and clears at once on "stopped" or when their message lands.
+    socket.on('dm:typing', ({ conversationId, userId, typing: t }) => {
+      clearTimeout(typingTimers.get(conversationId));
+      typing.value = { ...typing.value, [conversationId]: t ? userId : null };
+      if (t) typingTimers.set(conversationId, setTimeout(() => (typing.value = { ...typing.value, [conversationId]: null }), 4000));
+    });
     socket.on('ticker', (t) => { ticker.value = [t, ...ticker.value].slice(0, 12); });
     // LOLShield / moderator actions take effect immediately.
     socket.on('moderation', (m) => {

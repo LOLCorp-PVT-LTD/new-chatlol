@@ -56,7 +56,7 @@ function prefetch(id: string) {
   if (!cache.has(id) && !inflight.has(id)) void fetchMessages(id).then((r) => cache.set(id, r.messages)).catch(() => {});
 }
 async function open(id: string) {
-  if (showing.value && showing.value !== id) drafts.set(showing.value, draft.value);
+  if (showing.value && showing.value !== id) (drafts.set(showing.value, draft.value), stopTyping(showing.value));
   draft.value = drafts.get(id) ?? '';
   readAt.value = null;
   const cached = cache.get(id);
@@ -106,14 +106,28 @@ onMounted(async () => {
   if (route.params.id) await open(route.params.id as string);
   s.socket().on('dm:read', onRead);
 });
-onUnmounted(() => { off(); s.socket().off('dm:read', onRead); });
+onUnmounted(() => { stopTyping(showing.value ?? undefined); off(); s.socket().off('dm:read', onRead); });
 watch(() => route.params.id, (id) => id && open(id as string));
 
+// Tell the other person we're typing (at most every 2 s), and that we stopped: on send, on clearing the box,
+// after 3 s idle, or when leaving the chat.
 let typingSent = 0;
+let typingIdle: ReturnType<typeof setTimeout> | undefined;
+function stopTyping(id = active.value?.id) {
+  clearTimeout(typingIdle);
+  if (!typingSent || !id) return;
+  typingSent = 0;
+  s.socket().emit('dm:typing', { conversationId: id, typing: false });
+}
 function onInput() {
-  if (!active.value || Date.now() - typingSent < 2000) return;
+  if (!active.value) return;
+  if (!draft.value.trim()) return stopTyping();
+  clearTimeout(typingIdle);
+  const id = active.value.id;
+  typingIdle = setTimeout(() => stopTyping(id), 3000);
+  if (Date.now() - typingSent < 2000) return;
   typingSent = Date.now();
-  s.socket().emit('dm:typing', { conversationId: active.value.id, typing: true });
+  s.socket().emit('dm:typing', { conversationId: id, typing: true });
 }
 
 const box = ref<HTMLInputElement>();
@@ -121,6 +135,7 @@ const addEmoji = (t: string) => (draft.value = insertAtCaret(box.value, draft.va
 async function send(sticker: StickerInput | null = null) {
   if (!active.value || (!draft.value.trim() && !sticker) || sending.value) return;
   sending.value = true;
+  stopTyping();
   const body = sticker ? '' : draft.value.trim();
   if (!sticker) { draft.value = ''; drafts.delete(active.value.id); }
   try {
