@@ -41,6 +41,8 @@ export interface ServerEvents {
     }) => void;
     'feed:new': (p: Post) => void;
     'arena:update': (p: { id: ID; version: number; status: string }) => void;
+    /** A player's live activity in a game (e.g. pool aim and power), relayed to everyone else. */
+    'arena:live': (p: { id: ID; userId: ID; data: Record<string, unknown> }) => void;
     'message:reactions': (p: { id: ID; roomId: ID; reactions: Partial<Record<import('./types').ReactionKind, number>> }) => void;
     /** A Kick Ticket removed you from a lounge. */
     'lounge:kicked': (p: { loungeId: ID; by: string; minutes: number }) => void;
@@ -112,6 +114,7 @@ export interface ClientEvents {
     'stream:join': (streamId: ID) => void;
     'arena:watch': (arenaId: ID) => void;
     'arena:unwatch': (arenaId: ID) => void;
+    'arena:live': (arenaId: ID, data: Record<string, unknown>) => void;
     /** Listen to a radio station ('shouts' or 'lounge:<id>'). */
     'radio:watch': (station: string) => void;
     'radio:unwatch': (station: string) => void;

@@ -202,6 +202,7 @@ export async function attachRealtime(server) {
     };
     socket.on('stream:join', safe(joinStream));
 
+    const playing = new Set(); // arenas this socket plays in
     // ——— Game arenas: live updates (clients refetch their own view on 'arena:update') ———
     socket.on(
       'arena:watch',
@@ -209,9 +210,26 @@ export async function attachRealtime(server) {
         if (typeof arenaId !== 'string') return;
         const a = await db.arenas.findOne({ _id: arenaId }, { projection: { visibility: 1, playerIds: 1, invitedIds: 1 } });
         if (a && (a.visibility === 'public' || a.playerIds.includes(userId) || a.invitedIds.includes(userId))) socket.join(room.arena(arenaId));
+        if (a?.playerIds.includes(userId)) playing.add(arenaId);
       }),
     );
-    socket.on('arena:unwatch', (arenaId) => typeof arenaId === 'string' && socket.leave(room.arena(arenaId)));
+    socket.on('arena:unwatch', (arenaId) => typeof arenaId === 'string' && (playing.delete(arenaId), socket.leave(room.arena(arenaId))));
+    // Live activity (aim, power…) from a player, relayed as-is to everyone else watching. Throttled, small payloads.
+    let liveAt = 0;
+    const checked = new Map(); // arenaId → when we last looked up whether this user plays in it
+    socket.on('arena:live', safe(async (arenaId, data) => {
+      if (typeof arenaId !== 'string' || !data || typeof data !== 'object' || !socket.rooms.has(room.arena(arenaId))) return;
+      const t = Date.now();
+      if (t - liveAt < 40 || JSON.stringify(data).length > 300) return;
+      liveAt = t;
+      if (!playing.has(arenaId) && t - (checked.get(arenaId) ?? 0) > 5000) {
+        checked.set(arenaId, t);
+        const a = await db.arenas.findOne({ _id: arenaId }, { projection: { playerIds: 1 } });
+        if (a?.playerIds.includes(userId)) playing.add(arenaId);
+      }
+      if (!playing.has(arenaId)) return;
+      socket.to(room.arena(arenaId)).emit('arena:live', { id: arenaId, userId, data });
+    }));
 
     // ——— Radio: listeners join the station's room for live now-playing / queue updates ———
     socket.on('radio:watch', (station) => typeof station === 'string' && validStation(station) && socket.join(radioRoom(station)));
