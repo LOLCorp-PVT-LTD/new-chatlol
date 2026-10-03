@@ -13,9 +13,10 @@ import { placeStake, newTake } from '../routes/arena.js';
 import { insertStreamMessage } from '../routes/live.js';
 import { insertShout, reactToShout } from '../routes/shouts.js';
 import { ensureDrop } from '../lib/drops.js';
-import { personaById, systemPrompt, chatPrompt } from './personas.js';
+import { personaById, registerPersona, systemPrompt, chatPrompt } from './personas.js';
 import { nimChat, nimImage, nimVision, nimEnabled } from './nim.js';
 import { fallback } from './fallback.js';
+import { splitPhoto, askedForPhoto, photoAllowed, imagePrompt, PHOTO_RULES } from './photos.js';
 import { acceptFriendRequest, declineFriendRequest } from '../lib/friends.js';
 
 /**
@@ -38,7 +39,9 @@ let awakeIds = new Set();
 let isLeader = async () => true;
 
 async function loadRoster() {
-  roster = (await db.users.find({ isAi: true, deletedAt: null }, { projection: { personaId: 1 } }).toArray())
+  const rows = await db.users.find({ isAi: true, deletedAt: null }, { projection: { personaId: 1, personaDef: 1 } }).toArray();
+  for (const r of rows) if (r.personaDef) registerPersona(r.personaDef);
+  roster = rows
     .map((r) => ({ persona: personaById(r.personaId), userId: r._id }))
     .filter((r) => r.persona);
 }
@@ -143,7 +146,7 @@ async function actPost(r) {
     await insertPost(r.userId, { kind: 'text', body: text });
     return;
   }
-  const idea = pick(p.photoIdeas);
+  const idea = (Math.random() < 0.6 && (await freshPhotoIdea(p))) || pick(p.photoIdeas);
   const media = await nimImage(idea);
   if (!media) {
     // Without image generation, personas post text instead of mismatched stock photos.
@@ -162,6 +165,61 @@ async function actPost(r) {
       60,
     )) ?? fallback.caption();
   await insertPost(r.userId, { kind: 'photo', body: caption, mediaUrl: media });
+}
+
+/** A new photo idea from the persona's life right now (time of day, interests, city), so feeds don't repeat. */
+async function freshPhotoIdea(p) {
+  const hour = localHour(p.timezone);
+  const idea = await nimChat(
+    [
+      {
+        role: 'user',
+        content: `You are ${p.displayName}, ${p.age}, in ${p.city}, into ${p.interests.join(', ')}. It's ${hour}:00 for you. Describe in under 20 words one photo you'd take right now to post, as a camera sees it: a place, food, object, view, pet or hobby. No people, no faces. Reply with only the description.`,
+      },
+    ],
+    { maxTokens: 50, temperature: 1 },
+  );
+  const d = idea?.replace(/^["'\s]+|["'.\s]+$/g, '');
+  return d && photoAllowed(d) && localCheck(d).ok ? d : null;
+}
+
+/** Adds a photo to the persona's profile gallery (an album, not the news feed). At most one a day. */
+async function actGallery(r) {
+  const p = r.persona;
+  const since = new Date(Date.now() - 24 * 3_600_000).toISOString();
+  if (await db.posts.findOne({ authorId: r.userId, inFeed: false, createdAt: { $gt: since } })) return;
+  if ((await db.posts.countDocuments({ authorId: r.userId, inFeed: false })) >= 60) return;
+  const idea = (await freshPhotoIdea(p)) ?? pick(p.photoIdeas);
+  const media = await nimImage(idea);
+  if (!media) return;
+  const album = pick(p.albums?.length ? p.albums : p.interests.slice(0, 3)).slice(0, 30);
+  const caption = (await say(p, `You are adding a photo of: ${idea} to your "${album}" album.`, 'Write a very short caption (max 60 chars), no hashtags.', [], 40)) ?? '';
+  await insertPost(r.userId, { kind: 'photo', body: caption, mediaUrl: media, album, inFeed: false });
+  console.log(`[ai] ${p.displayName} added a photo to "${album}"`);
+}
+
+/**
+ * Now and then a persona changes its profile picture: a generated picture without a face (their view, hobby, pet),
+ * or back to their original one. At most every 10 days; sometimes they post about it.
+ */
+async function actAvatar(r) {
+  const p = r.persona;
+  const u = await db.users.findOne({ _id: r.userId }, { projection: { avatarUrl: 1, originalAvatarUrl: 1, avatarChangedAt: 1 } });
+  if (!u || (u.avatarChangedAt && Date.now() - new Date(u.avatarChangedAt).getTime() < 10 * 86_400_000)) return;
+  const original = u.originalAvatarUrl ?? u.avatarUrl;
+  let next = null;
+  if (u.originalAvatarUrl && u.avatarUrl !== u.originalAvatarUrl && Math.random() < 0.3) next = u.originalAvatarUrl;
+  else {
+    const idea = (await freshPhotoIdea(p)) || p.avatarIdea || pick(p.photoIdeas);
+    next = await nimImage(`${idea}, profile picture, square composition, no visible faces`);
+  }
+  if (!next) return;
+  await db.users.updateOne({ _id: r.userId }, { $set: { avatarUrl: next, originalAvatarUrl: original, avatarChangedAt: now() } });
+  console.log(`[ai] ${p.displayName} changed their profile picture`);
+  if (next !== original && Math.random() < 0.5) {
+    const caption = (await say(p, 'You just changed your profile picture.', 'Write a tiny post about your new pfp (max 60 chars).', [], 40)) ?? 'new pfp 🌙';
+    await insertPost(r.userId, { kind: 'photo', body: caption, mediaUrl: next });
+  }
 }
 
 async function actDrop(r) {
@@ -464,6 +522,8 @@ async function tick() {
   else if (roll < 0.8) await actThread(r);
   else if (roll < 0.88) await actArena(r);
   else if (roll < 0.91) await actDrop(r);
+  else if (roll < 0.94) await actGallery(r);
+  else if (roll < 0.95) await actAvatar(r);
   else await actFollowBack(r);
 }
 
@@ -535,21 +595,29 @@ async function replyInDm(conversationId, ai, humanId) {
     const turns = [];
     for (const m of hist.reverse()) {
       const role = m.authorId === ai.userId ? 'assistant' : 'user';
-      const content = m.kind === 'image' ? '[sent a photo]' : m.body;
+      const content = m.kind === 'image' ? (m.aiPhoto ? `[sent a photo: ${m.aiPhoto}]` : '[sent a photo]') : m.body;
       const prev = turns[turns.length - 1];
       if (prev?.role === role) prev.content += `\n${content}`;
       else turns.push({ role, content });
     }
     if (turns[turns.length - 1]?.role !== 'user') return; // nothing new to answer
     const notes = conv?.aiNotes?.[ai.userId] ?? '';
-    const raw = await nimChat([{ role: 'system', content: chatPrompt(ai.persona, human, notes) }, ...turns.slice(-24)], {
+    const photosOn = config.ai.dmPhotos && !!config.nim.imageUrl;
+    const raw = await nimChat([{ role: 'system', content: chatPrompt(ai.persona, human, notes, photosOn ? PHOTO_RULES : []) }, ...turns.slice(-24)], {
       model: config.nim.chatModel,
       maxTokens: 180,
       temperature: 0.85,
       retries: 2,
     });
-    if (!raw || !localCheck(raw).ok || !(await deepCheck(raw))) return;
-    const bubbles = raw
+    if (!raw) return;
+    const lastAsk = turns[turns.length - 1].content;
+    let { text, photo } = splitPhoto(raw);
+    if (!photosOn) photo = null;
+    else if (!photo && askedForPhoto(lastAsk)) photo = await photoIdea(ai, turns);
+    if (text && (!localCheck(text).ok || !(await deepCheck(text)))) return;
+    if (photo && !(photoAllowed(photo, lastAsk) && localCheck(photo).ok && (await deepCheck(photo)))) photo = null;
+    if (!text && !photo) return;
+    const bubbles = text
       .split(/\n+/)
       .map((b) => b.trim())
       .filter(Boolean)
@@ -560,6 +628,7 @@ async function replyInDm(conversationId, ai, humanId) {
       await sleep(typingMs);
       await insertDm(conversationId, ai.userId, text);
     }
+    if (photo) await sendDmPhoto(conversationId, ai, humanId, photo);
     void rememberAbout(conversationId, ai, human, notes, turns);
   } finally {
     dmBusy.delete(conversationId);
@@ -572,6 +641,46 @@ async function replyInDm(conversationId, ai, humanId) {
       conversationId,
       later(rand(2_000, 5_000) * config.ai.replyPace, () => replyInDm(conversationId, ai, humanId)),
     );
+}
+
+/** They asked for a pic but the reply had no PHOTO line: ask for just a description (or NONE if it shouldn't be sent). */
+async function photoIdea(ai, turns) {
+  const p = ai.persona;
+  const transcript = turns
+    .slice(-8)
+    .map((t) => `${t.role === 'user' ? 'Them' : p.displayName}: ${t.content}`)
+    .join('\n');
+  const out = await nimChat(
+    [
+      {
+        role: 'system',
+        content: `You are ${p.displayName}, ${p.age}, in ${p.city}, into ${p.interests.join(', ')}. The other person asked for a photo. Describe in under 25 words the photo you would send, as a camera sees it (a place, food, object, view, pet or your current activity). If they asked for a selfie, your face or body, other people, children, or anything sexual or revealing, reply exactly NONE. Reply with only the description or NONE.`,
+      },
+      { role: 'user', content: transcript },
+    ],
+    { maxTokens: 60, temperature: 0.7 },
+  );
+  return out && !/^\s*none\b/i.test(out) ? out.replace(/^\[?photo:\s*/i, '').replace(/\]$/, '').trim() : null;
+}
+
+/** Generates the photo and sends it as an image message, with a daily cap per conversation. */
+async function sendDmPhoto(conversationId, ai, humanId, description) {
+  const count = await shared().incr(`ai:dm-photos:${conversationId}:${today()}`, 86_400);
+  if (count > config.ai.dmPhotosPerDay) {
+    console.log(`[ai] photo cap reached in ${conversationId}`);
+    return;
+  }
+  simulateTyping(conversationId, ai.userId, [humanId], 8_000 * config.ai.replyPace);
+  const media = await nimImage(imagePrompt(description, ai.persona.city));
+  if (!media) {
+    console.warn(`[ai] DM photo failed for "${description.slice(0, 60)}"`);
+    await insertDm(conversationId, ai.userId, pick(["ugh it won't send rn, my phone's being weird 😅", "hm the pic keeps failing to upload, I'll try later"]));
+    return;
+  }
+  const msg = await insertDm(conversationId, ai.userId, '', 'image', media);
+  // Remember what the photo shows, so the conversation can refer back to it
+  await db.messages.updateOne({ _id: msg.id }, { $set: { aiPhoto: description.slice(0, 300) } });
+  console.log(`[ai] ${ai.persona.displayName} sent a photo: ${description.slice(0, 80)}`);
 }
 
 /** Every few exchanges, the persona updates short private notes about the person so later chats feel continuous. */
@@ -692,5 +801,7 @@ export async function startPersonaEngine(leader = async () => true) {
   bus.onEvent('shout:created', guard(onShout));
   bus.onEvent('birthday:posted', guard(onBirthday));
   bus.onEvent('friend:requested', guard(onFriendRequest));
+  // New personas from the admin panel join straight away (every instance reloads its roster)
+  bus.onEvent('personas:changed', () => void loadRoster().then(refreshAwake).catch((e) => console.warn('[ai] roster', e.message)));
   console.log(`   ${roster.length} AI personas loaded (${awake().length} awake)`);
 }

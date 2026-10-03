@@ -36,6 +36,7 @@ process.env.NVIDIA_API_KEY = 'nvapi-test';
 process.env.NIM_BASE_URL = `http://127.0.0.1:${nim.address().port}/v1`;
 process.env.NIM_IMAGE_URL = '';
 process.env.NIM_SAFETY_MODEL = 'nvidia/llama-3.1-nemoguard-8b-content-safety';
+process.env.NIM_PREFERRED_MODELS = '';
 process.env.NIM_MODELS = 'meta/llama-3.1-8b-instruct';
 process.env.AI_ACTIVITY = '0.01';
 process.env.AI_REPLY_PACE = '0.001';

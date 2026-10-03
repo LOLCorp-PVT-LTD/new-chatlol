@@ -356,8 +356,9 @@ export declare function createApi(opts: ApiClientOptions): {
         resolveFlag: (id: ID, status: 'resolved' | 'dismissed') => Promise<{ ok: true }>;
         removeContent: (type: string, id: ID) => Promise<{ ok: true }>;
         modlog: () => Promise<{ items: { id: ID; user: UserPublic; kind: string; reason: string; until: string | null; by: string; createdAt: string }[] }>;
-        personas: () => Promise<{ items: { id: ID; handle: string; displayName: string; avatarUrl: string; dmFrom: 'everyone' | 'following' | 'nobody'; active: boolean }[] }>;
+        personas: () => Promise<{ items: { id: ID; handle: string; displayName: string; avatarUrl: string; dmFrom: 'everyone' | 'following' | 'nobody'; active: boolean; generated: boolean }[] }>;
         updatePersona: (id: ID, b: { dmFrom?: 'everyone' | 'following' | 'nobody'; active?: boolean }) => Promise<{ ok: true }>;
+        generatePersonas: (b: { count: number; hint?: string }) => Promise<{ started: true }>;
         setPerms: (id: ID, perms: import('./permissions').Permission[]) => Promise<{ user: AdminUser }>;
         wallet: (id: ID, b: { sparks?: number; gems?: number; reason?: string }) => Promise<{ user: AdminUser }>;
         items: () => Promise<{ items: { key: string; name: string; kind: string; emoji: string | null; rarity: string | null; price: number }[] }>;

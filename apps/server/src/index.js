@@ -9,7 +9,7 @@ import { backfillFriendships } from './lib/friends.js';
 import { initShared, shared, sharedBackend } from './lib/shared.js';
 import { seedIfEmpty } from './seed.js';
 import { startPersonaEngine } from './ai/engine.js';
-import { refreshModels } from './ai/nim.js';
+import { refreshModels, setModelStore } from './ai/nim.js';
 import { resolveExpiredTakes } from './routes/arena.js';
 import { runBirthdays } from './lib/birthdays.js';
 
@@ -50,12 +50,21 @@ async function main() {
       const report = (r) =>
         r
           ? console.log(
-              `   NIM models: ${r.pool.join(', ')} · replies to people: ${r.chatModel}${r.removed.length ? ` · retired by NVIDIA, dropped: ${r.removed.join(', ')}` : ''}`,
+              `   NIM models: ${r.pool.join(', ')} · using first: ${r.current ?? '—'} · replies to people: ${r.chatModel}${r.removed.length ? ` · retired by NVIDIA, dropped: ${r.removed.join(', ')}` : ''}${r.added?.length ? ` · new: ${r.added.join(', ')}` : ''}`,
             )
           : console.log(
               `   NIM models: ${config.nim.models.join(', ')} (couldn't read NVIDIA's catalogue; retired models drop out on first use)`,
             );
-      void refreshModels().then(report);
+      // Working models are saved in MongoDB (kv: nim:models), so restarts start from known-good ones and new releases / retirements are tracked.
+      const kv = db.kv.raw;
+      const modelStore = {
+        load: async () => JSON.parse((await kv.findOne({ _id: 'nim:models' }))?.v ?? '{}'),
+        save: (reg) => kv.updateOne({ _id: 'nim:models' }, { $set: { v: JSON.stringify(reg), exp: null } }, { upsert: true }),
+      };
+      void setModelStore(modelStore)
+        .then((r) => r && r.usable && console.log(`   NIM models restored from MongoDB: ${r.usable} working (${r.saved} tracked)`))
+        .then(() => refreshModels())
+        .then(report);
       setInterval(() => void refreshModels(), 6 * 3_600_000).unref();
     }
     console.log(

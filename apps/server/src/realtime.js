@@ -168,16 +168,17 @@ export async function attachRealtime(server) {
     const viewersChanged = async (streamId) => {
       io.to(room.stream(streamId)).emit('stream:viewers', { streamId, viewers: await shared().scard(streamKeys.watchers(streamId)) });
     };
-    socket.on(
-      'stream:join',
-      safe(async (streamId) => {
-        if (typeof streamId !== 'string' || !(await db.streams.findOne({ _id: streamId, endedAt: null }))) return;
-        socket.join(room.stream(streamId));
-        joinedStreams.add(streamId);
-        await shared().sadd(streamKeys.watchers(streamId), socket.id);
-        await viewersChanged(streamId);
-      }),
-    );
+    const joinStream = async (streamId) => {
+      if (typeof streamId !== 'string') return false;
+      if (joinedStreams.has(streamId)) return true;
+      if (!(await db.streams.findOne({ _id: streamId, endedAt: null }))) return false;
+      socket.join(room.stream(streamId));
+      joinedStreams.add(streamId);
+      await shared().sadd(streamKeys.watchers(streamId), socket.id);
+      await viewersChanged(streamId);
+      return true;
+    };
+    socket.on('stream:join', safe(joinStream));
 
     const leaveStream = async (streamId) => {
       await stopWatching(streamId);
@@ -224,7 +225,8 @@ export async function attachRealtime(server) {
     socket.on(
       'rtc:watch',
       safe(async (streamId, ack) => {
-        if (typeof streamId !== 'string' || !joinedStreams.has(streamId)) return ack?.({ ok: false, reason: 'offline' });
+        // Join here too: 'stream:join' is emitted just before and runs concurrently, so it may not have finished yet.
+        if (!(await joinStream(streamId))) return ack?.({ ok: false, reason: 'offline' });
         const s = await db.streams.findOne({ _id: streamId, endedAt: null }, { projection: { video: 1 } });
         if (!s?.video) return ack?.({ ok: false, reason: 'no-video' });
         const host = await shared().get(streamKeys.host(streamId));

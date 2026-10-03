@@ -120,6 +120,23 @@ async function giveItem() { if (itemKey.value) await run(() => api.admin.giveIte
 async function removeItem(type: string, id: string) { try { await api.admin.removeContent(type, id); ok('Removed'); if (detail.value) await openUser(detail.value.user.id); } catch (e) { err(e); } }
 async function resolveReport(id: string, status: 'actioned' | 'dismissed', remove = false) { try { await api.admin.resolveReport(id, { status, removeContent: remove }); void load(); } catch (e) { err(e); } }
 async function resolveFlag(id: string, status: 'resolved' | 'dismissed') { try { await api.admin.resolveFlag(id, status); void load(); } catch (e) { err(e); } }
+async function generatePersonas() {
+  const r = await formDialog({
+    title: 'Generate new personas', icon: 'auto_awesome', confirmText: 'Generate',
+    body: 'The AI invents new adult personas with their own bio, texting style and a generated profile picture. They start posting and chatting straight away.',
+    fields: [
+      { key: 'count', type: 'choices', label: 'How many', value: '1', options: ['1', '2', '3', '5'].map((v) => ({ value: v, label: v })) },
+      { key: 'hint', type: 'textarea', label: 'Ideas (optional)', placeholder: 'e.g. a gamer from Manchester, a chef in Lagos', maxLength: 300 },
+    ],
+  });
+  if (!r) return;
+  try {
+    await api.admin.generatePersonas({ count: Number(r.count), hint: String(r.hint ?? '') });
+    ok('Generating… new personas appear here in a minute or two');
+    setTimeout(() => void load(), 60_000);
+    setTimeout(() => void load(), 120_000);
+  } catch (e) { err(e); }
+}
 async function setPersona(id: string, b: { dmFrom?: 'everyone' | 'following' | 'nobody'; active?: boolean }) { try { await api.admin.updatePersona(id, b); void load(); } catch (e) { err(e); } }
 async function refund(p: AdminPayment) {
   const stripe = p.provider === 'stripe';
@@ -294,10 +311,13 @@ const INTEGRATION_LABELS: Record<string, string> = { database: 'Database', redis
 
     <!-- Personas -->
     <template v-else-if="section === 'personas'">
-      <p class="text-body-md text-on-surface-variant">Choose which AI personas accept DMs, or switch a persona off entirely.</p>
+      <div class="flex items-center gap-3 flex-wrap">
+        <p class="text-body-md text-on-surface-variant flex-1 min-w-[200px]">Choose which AI personas accept DMs, or switch a persona off entirely.</p>
+        <button class="btn-primary h-10" @click="generatePersonas"><Icon name="auto_awesome" /> Generate personas</button>
+      </div>
       <div class="card divide-y divide-sandstone">
         <div v-for="p in personas" :key="p.id" class="flex items-center gap-3 px-4 py-3 flex-wrap">
-          <img :src="p.avatarUrl" alt="" class="w-10 h-10 rounded-full object-cover" /><span class="flex-1 min-w-[140px]"><b>{{ p.displayName }}</b> <span class="text-on-surface-variant">@{{ p.handle }}</span></span>
+          <img :src="p.avatarUrl" alt="" class="w-10 h-10 rounded-full object-cover" /><span class="flex-1 min-w-[140px]"><b>{{ p.displayName }}</b> <span class="text-on-surface-variant">@{{ p.handle }}</span><span v-if="p.generated" class="ml-2 rounded-full bg-surface-container-low px-2 py-0.5 text-label-sm">generated</span></span>
           <select :value="p.dmFrom" class="input h-10 w-auto" @change="setPersona(p.id, { dmFrom: ($event.target as HTMLSelectElement).value as 'everyone' })">
             <option value="everyone">DMs: everyone</option><option value="following">DMs: people it follows</option><option value="nobody">DMs: off</option></select>
           <button class="btn-ghost h-10" @click="setPersona(p.id, { active: !p.active })">{{ p.active ? 'Active ✓' : 'Switched off' }}</button>
