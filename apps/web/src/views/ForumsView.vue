@@ -40,8 +40,8 @@ async function create() {
 <template>
   <div class="max-w-[720px] mx-auto space-y-5">
     <div class="flex items-end justify-between gap-3">
-      <div><h1 class="text-headline-xl">Shouts 📣</h1><p class="text-body-md text-on-surface-variant">The public notice board. Ask, debate, share.</p></div>
-      <button v-if="s.user" class="btn-primary" @click="composing = true; draft.board = board ?? 'daily'"><Icon name="campaign" /> New Shout</button>
+      <div><h1 class="text-headline-xl">Forums 💬</h1><p class="text-body-md text-on-surface-variant">The public discussion board. Ask, debate, share.</p></div>
+      <button v-if="s.user" class="btn-primary" @click="composing = true; draft.board = board ?? 'daily'"><Icon name="forum" /> New Forum Post</button>
     </div>
     <div class="flex gap-2 overflow-x-auto scrollbar-none pb-1">
       <button class="chip" :class="{ 'chip-active': !board }" @click="board = undefined">🌐 All</button>
@@ -71,14 +71,14 @@ async function create() {
       </RouterLink>
     </article>
 
-    <Modal v-if="composing" title="New Shout" @close="composing = false">
+    <Modal v-if="composing" title="New Forum Post" @close="composing = false">
       <div class="px-6 pb-6 space-y-3">
         <select v-model="draft.board" class="input text-body-md" aria-label="Board">
           <option v-for="b in boards" :key="b.id" :value="b.id">{{ b.emoji }} {{ b.name }}</option>
         </select>
         <input v-model="draft.title" class="input" placeholder="Title" maxlength="120" />
         <textarea v-model="draft.body" class="textarea" rows="5" placeholder="What’s on your mind?" maxlength="4000" />
-        <button class="btn-primary w-full" :disabled="draft.title.length < 4 || !draft.body.trim()" @click="create">Post Shout (+20 ✦)</button>
+        <button class="btn-primary w-full" :disabled="draft.title.length < 4 || !draft.body.trim()" @click="create">Post to Forums (+20 ✦)</button>
       </div>
     </Modal>
   </div>

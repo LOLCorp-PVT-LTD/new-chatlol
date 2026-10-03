@@ -66,7 +66,7 @@ async function send() {
     </div>
     <form v-if="s.user" class="sticky bottom-24 lg:bottom-4 flex gap-2 card p-2 shadow-float" @submit.prevent="send">
       <EmojiButton class="self-center" @insert="addEmoji" />
-      <input ref="box" v-model="draft" class="input h-12 border-transparent" placeholder="Add to the shout…" maxlength="2000" />
+      <input ref="box" v-model="draft" class="input h-12 border-transparent" placeholder="Reply to this thread…" maxlength="2000" />
       <button class="btn-primary h-12 w-12 px-0 shrink-0" aria-label="Reply" :disabled="!draft.trim()"><Icon name="send" /></button>
     </form>
   </div>

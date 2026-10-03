@@ -47,6 +47,8 @@ export const ICON_MAP: Record<string, string> = {
   emoji_events: 'cup',
   expand_more: 'arrow-down-1',
   expand_less: 'arrow-up-1',
+  fullscreen: 'maximize-4',
+  fullscreen_exit: 'maximize-3',
   face: 'happyemoji',
   flag: 'flag',
   format_color_fill: 'paintbucket',

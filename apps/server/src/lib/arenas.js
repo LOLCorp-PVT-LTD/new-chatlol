@@ -114,6 +114,7 @@ export async function inviteToArena(a, byId, userIds) {
       title: `🎮 ${by.displayName} invited you to ${GAMES[a.game].name}`,
       body: `${a.name}${a.stake.amount ? ` · stake ${a.stake.amount.toLocaleString()} ${LABEL[a.stake.currency]}` : ''}`,
       link: `/arenas/${a._id}`,
+      action: { type: 'arena_invite', id: a._id },
     });
   return next;
 }

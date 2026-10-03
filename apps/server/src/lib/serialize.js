@@ -15,6 +15,7 @@ import {
   themeAllowed,
   DEFAULT_APP_THEME,
   LEGAL_VERSION,
+  clanEventFor,
 } from '@chatlol/shared';
 import { db, now, today } from '../db.js';
 import { presence } from './presence.js';
@@ -102,7 +103,7 @@ export function invalidateStats(userId) {
   statsCache.delete(userId);
 }
 
-async function stats(userId) {
+export async function stats(userId) {
   const c = statsCache.get(userId);
   if (c && Date.now() - c.at < STATS_TTL) return c;
   const [r = { r1: 0, r2: 0, r3: 0, r4: 0, r5: 0 }] = await db.posts
@@ -182,6 +183,10 @@ export async function userPublic(u, viewerId) {
     premium: isPremium(u),
     boosted: !!(u.boost?.until && u.boost.until > now()),
     isKing: await isKing(u._id),
+    // Clan MVP badge for the week after they earned it.
+    clanMvp: u.clanMvp && u.clanMvp.week >= clanEventFor().week - 1 ? { clanId: u.clanMvp.clanId, clan: u.clanMvp.clan } : null,
+    // Their clan: a badge on their profile; the tag next to their name once the clan reaches level 2.
+    clan: u.clan ? { id: u.clan.id, tag: u.clan.tag, name: u.clan.name, emoji: u.clan.emoji ?? '🏰', color: u.clan.color ?? null, level: u.clan.level ?? 1, legend: u.clan.level >= 8, glow: u.clan.glow ?? 0 } : null,
     createdAt: u.createdAt,
   };
   if (viewerId && viewerId !== u._id) {
@@ -435,6 +440,7 @@ export async function serializeNotification(n, author = authorCache(), viewerPre
     teaserAvatar: anonymous ? teaserAvatar(n._id) : null,
     link: anonymous && n.kind === 'profile_view' ? '/premium' : (n.link ?? null),
     read: !!n.read,
+    action: n.action ?? null,
     createdAt: n.createdAt,
   };
 }

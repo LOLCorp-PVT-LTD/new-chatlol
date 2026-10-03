@@ -79,6 +79,7 @@ export async function sendFriendRequest(me, targetId) {
       link: '/friends',
       title: `${meRow.displayName} sent you a friend request 🤝`,
       body: 'Accept it to become friends.',
+      action: { type: 'friend_request', id: me },
     });
     bus.emitEvent('friend:requested', { fromId: me, toId: targetId });
   }

@@ -121,7 +121,6 @@ export const LEVEL_GATES = [
   { key: 'forum', label: 'Start forum threads and reply', level: 5 },
   { key: 'live', label: 'Go live', level: 5 },
   { key: 'arena', label: 'Create game arenas', level: 8 },
-  { key: 'lounge', label: 'Create your own lounge', level: 10 },
 ];
 /** How many lounges a member may own (staff: unlimited). */
 export const LOUNGE_LIMIT = { member: 1, premium: 3 };

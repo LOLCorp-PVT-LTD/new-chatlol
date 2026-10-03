@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Toast } from '../stores/session';
+import type { Toast, ToastAction } from '../stores/session';
 import { useSession } from '../stores/session';
 const s = useSession();
 
@@ -12,12 +12,17 @@ function parts(t: Toast) {
   const m = t.title.match(LEAD) ?? t.title.match(TRAIL);
   return { art: m?.[1] ?? FALLBACK[t.kind], title: m ? t.title.replace(m[0], ' ').trim() : t.title };
 }
+async function run(t: Toast, a: ToastAction) {
+  s.dismissToast(t.id);
+  await a.run();
+}
 </script>
 <template>
   <div class="fixed z-[90] top-[max(16px,env(safe-area-inset-top))] right-4 left-4 sm:left-auto sm:w-[400px] space-y-3 pointer-events-none" aria-live="polite">
     <TransitionGroup name="toast">
       <div v-for="t in s.toasts" :key="t.id" class="toast pointer-events-auto rounded-[24px] p-5 pr-14 flex items-center gap-4 relative" :class="`toast-${t.kind}`" role="status">
-        <span class="text-[44px] leading-none shrink-0 drop-shadow-[0_6px_10px_rgba(0,0,0,.15)] select-none" aria-hidden="true">{{ parts(t).art }}</span>
+        <img v-if="t.avatarUrl" :src="t.avatarUrl" alt="" class="w-12 h-12 rounded-full object-cover shrink-0" />
+        <span v-else class="text-[44px] leading-none shrink-0 drop-shadow-[0_6px_10px_rgba(0,0,0,.15)] select-none" aria-hidden="true">{{ parts(t).art }}</span>
         <div class="min-w-0 flex-1">
           <p class="toast-title">{{ parts(t).title }}</p>
           <p v-if="t.body" class="toast-body mt-1">{{ t.body }}</p>
@@ -25,6 +30,9 @@ function parts(t: Toast) {
             <span v-if="t.sparks" class="toast-chip">+{{ t.sparks }} ✦</span>
             <span v-if="t.xp" class="toast-chip">+{{ t.xp }} XP</span>
           </p>
+          <div v-if="t.actions?.length" class="mt-3 flex flex-wrap gap-2">
+            <button v-for="a in t.actions" :key="a.label" type="button" class="toast-act" :class="{ 'toast-act-primary': a.primary }" @click="run(t, a)">{{ a.label }}</button>
+          </div>
         </div>
         <button type="button" class="toast-close absolute top-3.5 right-3.5 w-9 h-9 rounded-[10px] flex items-center justify-center" aria-label="Dismiss" @click="s.dismissToast(t.id)">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
@@ -47,6 +55,10 @@ function parts(t: Toast) {
 .toast-error { background: #fdebe8; }
 .toast-chip { background: rgba(0, 0, 0, 0.06); border-radius: 999px; padding: 2px 10px; font-weight: 600; }
 .toast-close { border: 1px solid rgba(0, 0, 0, 0.1); background: rgba(255, 255, 255, 0.7); color: #3a302a; }
+.toast-act { border-radius: 999px; padding: 6px 16px; font-weight: 600; font-size: 0.9rem; border: 1px solid rgba(0, 0, 0, 0.14); background: rgba(255, 255, 255, 0.7); }
+.toast-act-primary { background: rgb(var(--c-primary)); color: rgb(var(--c-on-primary)); border-color: transparent; }
+.toast-act:hover { filter: brightness(1.05); }
+[data-theme='dark'] .toast-act:not(.toast-act-primary) { border-color: rgba(255, 255, 255, 0.15); background: rgba(255, 255, 255, 0.06); }
 .toast-close:hover { background: #fff; }
 [data-theme='dark'] .toast { background: #241b16; color: #f6ece6; box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5); }
 [data-theme='dark'] .toast-reward { background: #1f2b1c; }

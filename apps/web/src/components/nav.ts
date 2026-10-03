@@ -8,6 +8,7 @@ export const NAV: NavItem[] = [
   { to: '/friends', label: 'Friends', icon: 'diversity_3' },
   { to: '/messages', label: 'Messages', icon: 'mail', badge: 'dms' },
   { to: '/lounges', label: 'Hangout Lounges', icon: 'forum' },
+  { to: '/clans', label: 'Clans', icon: 'shield' },
   { to: '/forums', label: 'Forums', icon: 'groups' },
   { to: '/live', label: 'Live Streams', icon: 'live_tv' },
   { to: '/drops', label: 'Daily Sunset Drops', icon: 'wb_twilight' },

@@ -243,7 +243,7 @@ function Body({ section, ctx, fg, tile, font }: { section: ProfileSection; ctx: 
       ) : <Muted fg={fg}>{ctx.preview ? 'Add links in this box’s settings.' : 'No links yet.'}</Muted>;
     case 'currently':
       return (cfg.items ?? []).length ? (
-        <View style={{ gap: 8 }}>{(cfg.items ?? []).map((it, i) => <View key={i}><Text variant="labelSm" color={fg} style={{ opacity: 0.72 }}>{it.label.toUpperCase()}</Text><Text variant="labelLg" color={fg}>{it.value}</Text></View>)}</View>
+        <View style={{ gap: 8 }}>{(cfg.items ?? []).map((it, i) => <View key={i}><Text variant="labelSm" color={fg} style={{ opacity: 0.72 }}>{(it.label ?? '').toUpperCase()}</Text><Text variant="labelLg" color={fg}>{it.value}</Text></View>)}</View>
       ) : <Muted fg={fg}>{ctx.preview ? 'Fill this in from the box’s settings.' : 'Nothing yet.'}</Muted>;
     case 'video':
       if (!cfg.videoId) return <Muted fg={fg}>{ctx.preview ? 'Paste a YouTube link in this box’s settings.' : ''}</Muted>;

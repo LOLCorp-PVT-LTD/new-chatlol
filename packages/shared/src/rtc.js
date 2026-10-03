@@ -38,8 +38,10 @@ export class MeshHost {
     on('rtc:peer-left', ({ streamId, peer }) => {
       if (streamId === this.streamId) this.drop(peer);
     });
+    // One signal at a time, in arrival order: overlapping async handlers could apply ICE before the answer.
+    let chain = Promise.resolve();
     on('rtc:signal', (s) => {
-      if (s.streamId === this.streamId) void this.onSignal(s);
+      if (s.streamId === this.streamId) chain = chain.then(() => this.onSignal(s)).catch((e) => console.warn('[rtc] host signal', e?.message ?? e));
     });
     // Re-announce after a reconnect so viewers re-request video.
     on('connect', () => this.announce());
@@ -106,7 +108,10 @@ export class MeshViewer {
   pc = null;
   host = null;
   handlers = [];
+  /** Host ICE candidates that arrived before the offer was applied (signals can overtake each other). */
   pending = [];
+  retries = 0;
+  retryTimer = null;
   onStream;
   onState;
 
@@ -122,8 +127,9 @@ export class MeshViewer {
       this.socket.on(ev, fn);
       this.handlers.push([ev, fn]);
     };
+    let chain = Promise.resolve();
     on('rtc:signal', (s) => {
-      if (s.streamId === this.streamId) void this.onSignal(s);
+      if (s.streamId === this.streamId) chain = chain.then(() => this.onSignal(s)).catch((e) => console.warn('[rtc] viewer signal', e?.message ?? e));
     });
     on('rtc:host-ready', ({ streamId }) => {
       if (streamId === this.streamId) this.request();
@@ -145,22 +151,34 @@ export class MeshViewer {
     });
   }
 
-  reset() {
+  reset({ keepPending = false } = {}) {
     this.pc?.close();
     this.pc = null;
     this.host = null;
-    this.pending = [];
+    if (!keepPending) this.pending = [];
+  }
+
+  /** A connection that failed (or never got going) is retried a few times with a fresh offer. */
+  retry() {
+    clearTimeout(this.retryTimer);
+    if (this.retries >= 4) return this.onState?.('failed');
+    this.retries++;
+    this.onState?.('connecting');
+    this.retryTimer = setTimeout(() => this.request(), 1500 * this.retries);
   }
 
   async onSignal(s) {
     if (s.description?.type === 'offer') {
-      this.reset();
+      // A new offer replaces any old connection; candidates already queued for it are kept.
+      this.reset({ keepPending: true });
       this.host = s.peer;
       const pc = this.makePeer({ iceServers: this.ice.iceServers, iceTransportPolicy: this.ice.iceTransportPolicy });
       this.pc = pc;
       pc.addEventListener('track', (e) => {
-        if (e.streams?.[0]) {
-          this.onStream?.(e.streams[0]);
+        const stream = e.streams?.[0];
+        if (stream) {
+          this.retries = 0;
+          this.onStream?.(stream);
           this.onState?.('live');
         }
       });
@@ -169,7 +187,12 @@ export class MeshViewer {
           this.socket.emit('rtc:signal', { streamId: this.streamId, peer: this.host, candidate: candidateJson(e.candidate) });
       });
       pc.addEventListener('connectionstatechange', () => {
-        if (pc.connectionState === 'failed') this.onState?.('failed');
+        if (pc !== this.pc) return;
+        if (pc.connectionState === 'connected') this.retries = 0;
+        if (pc.connectionState === 'failed') {
+          console.warn('[rtc] connection failed — check that the TURN server is reachable (TURN_URLS, ports 3478/5349 and the relay port range open)');
+          this.retry();
+        }
       });
       await pc.setRemoteDescription(s.description);
       for (const c of this.pending.splice(0)) if (c) await pc.addIceCandidate(c).catch(() => {});
@@ -177,12 +200,14 @@ export class MeshViewer {
       await pc.setLocalDescription(answer);
       this.socket.emit('rtc:signal', { streamId: this.streamId, peer: s.peer, description: { type: 'answer', sdp: answer.sdp ?? '' } });
     } else if (s.candidate) {
-      if (this.pc) await this.pc.addIceCandidate(s.candidate).catch(() => {});
+      // Only once the offer is applied; before that, queue it.
+      if (this.pc?.remoteDescription && (!this.host || s.peer === this.host)) await this.pc.addIceCandidate(s.candidate).catch(() => {});
       else this.pending.push(s.candidate);
     }
   }
 
   stop() {
+    clearTimeout(this.retryTimer);
     this.socket.emit('rtc:unwatch', this.streamId);
     for (const [ev, fn] of this.handlers) this.socket.off(ev, fn);
     this.handlers = [];

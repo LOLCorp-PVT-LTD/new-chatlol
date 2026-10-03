@@ -3,10 +3,12 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import type { Arena } from '@chatlol/shared';
 import { POCKETS, POOL, simulateShot } from '@chatlol/shared';
 import PlayerStrip from './PlayerStrip.vue';
+import { useSession } from '../../stores/session';
 
 /**
- * 8-ball pool on a canvas. Move the mouse / finger to aim (a guide line shows the path), hold and pull back for
- * power, release to shoot. Every shot is replayed with the same physics the server used, so all players see the
+ * 8-ball pool on a canvas. Move the mouse / finger to aim (a guide line shows the path), press and hold: the power
+ * meter swings up and down while you hold, release to shoot. Your aim and power are streamed live, so the other
+ * player and watchers see the cue move. Every shot is replayed with the same physics the server used, so all players see the
  * exact same animation.
  */
 const props = defineProps<{ arena: Arena; myTurn: boolean }>();
@@ -19,6 +21,27 @@ const aim = ref(0);
 const power = ref(0);
 const charging = ref(false);
 const cuePos = ref<{ x: number; y: number } | null>(null);
+let phase = 0;
+/** The other player's live cue (aim, power, placed cue ball), from 'arena:live'. */
+const remote = ref<{ aim: number; power: number; charging: boolean; cue: { x: number; y: number } | null } | null>(null);
+const session = useSession();
+let sentAt = 0;
+let sentKey = '';
+function sendLive(force = false) {
+  if (!props.myTurn || !props.arena.id) return;
+  const t = Date.now();
+  const data = { aim: +aim.value.toFixed(3), power: +power.value.toFixed(2), charging: charging.value, cue: cuePos.value };
+  const key = JSON.stringify(data);
+  if (key === sentKey || (!force && t - sentAt < 60)) return;
+  sentAt = t; sentKey = key;
+  session.socket().emit('arena:live', props.arena.id, data);
+}
+function onLive(p: { id: string; userId: string; data: Record<string, unknown> }) {
+  if (p.id !== props.arena.id || props.myTurn) return;
+  const d = p.data as { aim?: number; power?: number; charging?: boolean; cue?: { x: number; y: number } | null };
+  if (typeof d.aim !== 'number') return;
+  remote.value = { aim: d.aim, power: Math.min(1, Math.max(0, Number(d.power) || 0)), charging: !!d.charging, cue: d.cue && typeof d.cue.x === 'number' ? d.cue : null };
+}
 let shown: Ball[] = [];
 let anim: { frames: number[][][]; i: number } | null = null;
 let raf = 0;
@@ -52,18 +75,20 @@ function draw() {
   g.fillStyle = '#050505';
   for (const [x, y] of POCKETS) { g.beginPath(); g.arc(x, y, POOL.POCKET, 0, Math.PI * 2); g.fill(); }
   // Aim guide.
-  if (props.myTurn && !anim) {
-    const cb = cuePos.value ?? cue();
-    g.setLineDash([8, 8]); g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = 2;
-    g.beginPath(); g.moveTo(cb.x, cb.y); g.lineTo(cb.x + Math.cos(aim.value) * 600, cb.y + Math.sin(aim.value) * 600); g.stroke(); g.setLineDash([]);
+  const live = cueView();
+  if (live && !anim) {
+    const { cb, a, pw } = live;
+    g.setLineDash([8, 8]); g.strokeStyle = props.myTurn ? 'rgba(255,255,255,.55)' : 'rgba(255,255,255,.3)'; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(cb.x, cb.y); g.lineTo(cb.x + Math.cos(a) * 600, cb.y + Math.sin(a) * 600); g.stroke(); g.setLineDash([]);
     // Cue stick, pulled back with power.
-    const back = 20 + power.value * 90;
-    g.strokeStyle = '#d9a066'; g.lineWidth = 8; g.lineCap = 'round';
-    g.beginPath(); g.moveTo(cb.x - Math.cos(aim.value) * back, cb.y - Math.sin(aim.value) * back); g.lineTo(cb.x - Math.cos(aim.value) * (back + 320), cb.y - Math.sin(aim.value) * (back + 320)); g.stroke();
+    const back = 20 + pw * 90;
+    g.strokeStyle = props.myTurn ? '#d9a066' : '#b88a5c'; g.lineWidth = 8; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(cb.x - Math.cos(a) * back, cb.y - Math.sin(a) * back); g.lineTo(cb.x - Math.cos(a) * (back + 320), cb.y - Math.sin(a) * (back + 320)); g.stroke();
   }
   for (const b of shown) {
     if (b.in) continue;
-    const p = b.id === 0 && cuePos.value && !anim ? cuePos.value : b;
+    const placed = props.myTurn ? cuePos.value : remote.value?.cue;
+    const p = b.id === 0 && placed && !anim ? placed : b;
     g.save();
     g.shadowColor = 'rgba(0,0,0,.45)'; g.shadowBlur = 6; g.shadowOffsetY = 3;
     g.fillStyle = colorOf(b.id); g.beginPath(); g.arc(p.x, p.y, POOL.R, 0, Math.PI * 2); g.fill();
@@ -74,11 +99,22 @@ function draw() {
     hl.addColorStop(0, 'rgba(255,255,255,.7)'); hl.addColorStop(0.4, 'rgba(255,255,255,0)');
     g.fillStyle = hl; g.beginPath(); g.arc(p.x, p.y, POOL.R, 0, Math.PI * 2); g.fill();
   }
-  if (charging.value) {
+  if (live?.charging && !anim) {
+    // Power meter on the right rail: swings up and down while held.
+    const pw = live.pw;
+    const H = c.height * 0.6, W = Math.max(12, c.width * 0.018), x = c.width - W - c.width * 0.012, y = (c.height - H) / 2;
     g.setTransform(1, 0, 0, 1, 0, 0);
-    g.fillStyle = 'rgba(0,0,0,.4)'; g.fillRect(c.width - 30, 20, 14, 160);
-    g.fillStyle = `hsl(${120 - power.value * 120} 90% 50%)`; g.fillRect(c.width - 30, 180 - power.value * 160, 14, power.value * 160);
+    g.fillStyle = 'rgba(0,0,0,.45)'; g.beginPath(); g.roundRect(x - 3, y - 3, W + 6, H + 6, W); g.fill();
+    g.fillStyle = `hsl(${120 - pw * 120} 90% 50%)`; g.beginPath(); g.roundRect(x, y + H - pw * H, W, pw * H, W / 2); g.fill();
   }
+}
+
+/** Whose cue to draw: mine on my turn, otherwise the other player's live one. */
+function cueView() {
+  if (props.myTurn) return { cb: cuePos.value ?? cue(), a: aim.value, pw: power.value, charging: charging.value };
+  const r = remote.value;
+  if (!r || !cue()) return null;
+  return { cb: r.cue ?? cue(), a: r.aim, pw: r.power, charging: r.charging };
 }
 
 function loop() {
@@ -91,7 +127,11 @@ function loop() {
       shown = st.value.balls.map((b) => ({ ...b }));
     }
   }
-  if (charging.value) power.value = Math.min(1, power.value + 0.012);
+  if (charging.value) {
+    phase += 0.035;
+    power.value = 0.03 + 0.97 * (1 - Math.cos(phase)) / 2;
+  }
+  sendLive();
   draw();
   raf = requestAnimationFrame(loop);
 }
@@ -103,7 +143,9 @@ watch(() => st.value.lastShot, (shot, old) => {
   shown = shot.before.map((b) => ({ ...b }));
   anim = { frames: r.frames, i: 0 };
   cuePos.value = null;
+  remote.value = null;
 });
+watch(() => props.myTurn, () => (remote.value = null));
 
 function onMove(e: PointerEvent) {
   if (!props.myTurn || anim) return;
@@ -118,13 +160,15 @@ function onDown(e: PointerEvent) {
   if (st.value.ballInHand && !cuePos.value && p.x <= POOL.W / 4) return void (cuePos.value = { x: Math.max(POOL.R, p.x), y: Math.min(POOL.H - POOL.R, Math.max(POOL.R, p.y)) });
   onMove(e);
   charging.value = true;
-  power.value = 0.05;
+  phase = 0;
+  power.value = 0.03;
 }
 function onUp() {
   if (!charging.value) return;
   charging.value = false;
   emit('move', { type: 'shoot', angle: aim.value, power: power.value, ...(cuePos.value ? { cueX: cuePos.value.x, cueY: cuePos.value.y } : {}) });
   power.value = 0;
+  sendLive(true);
 }
 function resize() {
   const c = canvas.value!;
@@ -136,8 +180,10 @@ onMounted(() => {
   resize();
   addEventListener('resize', resize);
   raf = requestAnimationFrame(loop);
+  session.socket().on('arena:live', onLive);
 });
 onUnmounted(() => {
+  session.socket().off('arena:live', onLive);
   cancelAnimationFrame(raf);
   removeEventListener('resize', resize);
 });
@@ -149,8 +195,8 @@ const myGroup = computed(() => (props.arena.mySeat != null ? st.value.groups[pro
     <section class="card p-3">
       <canvas ref="canvas" class="w-full rounded-[22px] touch-none" :class="myTurn ? 'cursor-crosshair' : ''" @pointermove="onMove" @pointerdown="onDown" @pointerup="onUp" @pointerleave="onUp" />
       <p class="text-center text-body-sm text-on-surface-variant mt-2">
-        <template v-if="myTurn">{{ st.ballInHand && !cuePos ? 'Ball in hand: tap left of the line to place the cue ball' : 'Aim with the pointer · press and hold for power · release to shoot' }}</template>
-        <template v-else>Waiting for the other player…</template>
+        <template v-if="myTurn">{{ st.ballInHand && !cuePos ? 'Ball in hand: tap left of the line to place the cue ball' : 'Aim with the pointer · hold — the power meter swings up and down · release to shoot' }}</template>
+        <template v-else>{{ remote?.charging ? 'They’re lining up the shot…' : remote ? 'They’re aiming…' : 'Waiting for the other player…' }}</template>
         <template v-if="myGroup"> · You’re on <b>{{ myGroup }}</b></template>
       </p>
     </section>

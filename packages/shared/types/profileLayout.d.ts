@@ -1,7 +1,7 @@
 export type SectionType =
   | 'about' | 'details' | 'interests' | 'song' | 'stats' | 'rating' | 'wall' | 'gallery' | 'photos' | 'topPhotos'
   | 'feed' | 'shouts' | 'friends' | 'followers' | 'following' | 'badges' | 'level' | 'threads' | 'text' | 'quote'
-  | 'links' | 'currently' | 'video' | 'spacer';
+  | 'links' | 'games' | 'currently' | 'video' | 'spacer';
 export type SectionSize = 'third' | 'half' | 'twothirds' | 'full';
 export type SectionStyle = 'card' | 'glass' | 'accent' | 'outline' | 'plain';
 export type HeaderStyle = 'cover' | 'centered' | 'split' | 'compact';
@@ -17,7 +17,8 @@ export interface SectionConfig {
   by?: string;
   videoId?: string;
   height?: 'sm' | 'md' | 'lg';
-  items?: { label: string; url?: string; value?: string }[];
+  /** Links, Currently… rows, or games (Games I play). */
+  items?: { label?: string; url?: string; value?: string; id?: string; name?: string; logo?: string | null; emoji?: string | null; color?: string | null }[];
 }
 export interface ProfileSection { id: string; type: SectionType; size: SectionSize; style: SectionStyle; title: string; config: SectionConfig }
 export interface ProfileLayout { header: HeaderStyle; width: PageWidth; gap: SectionGap; corners: CornerStyle; font: ProfileFont; sections: ProfileSection[] }

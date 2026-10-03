@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { DM_SPARK_COST, LOUNGE_LIMIT, REWARDS, can, hasPower } from '@chatlol/shared';
+import { DM_SPARK_COST, REWARDS, can, hasPower } from '@chatlol/shared';
 import { db, newId, now, isDuplicateKey, isObjectIdHex } from '../db.js';
 import { assertEmojiOwned, resolveSticker, stickerInput, stickerPreview } from '../lib/stickers.js';
 import { optionalAuth, requireAuth, uid } from '../lib/auth.js';
@@ -228,7 +228,13 @@ export async function serializeLounge(l, author, viewer = null) {
 
 const viewerOf = (req) => (req.userId ? db.users.findOne({ _id: req.userId }, { projection: { role: 1, perms: 1 } }) : null);
 /** Seasonal lounges close when their festival ends. */
-const openLounges = () => ({ $or: [{ expiresAt: null }, { expiresAt: { $exists: false } }, { expiresAt: { $gt: now() } }] });
+const openLounges = () => ({ clanId: null, $or: [{ expiresAt: null }, { expiresAt: { $exists: false } }, { expiresAt: { $gt: now() } }] });
+/** Clan lounges are for that clan's members only. */
+async function assertLoungeAccess(l, userId) {
+  if (!l.clanId) return;
+  if (!userId || !(await db.clanMembers.findOne({ clanId: l.clanId, userId }))) throw new HttpError(403, 'This is a private clan lounge');
+}
+export { assertLoungeAccess };
 
 socialRouter.get('/lounges', optionalAuth, async (req, res) => {
   const author = authorCache(req.userId);
@@ -242,6 +248,7 @@ socialRouter.get('/lounges', optionalAuth, async (req, res) => {
 socialRouter.get('/lounges/:id', optionalAuth, async (req, res) => {
   const l = await db.lounges.findOne(byIdOrSlug(req.params.id));
   if (!l) throw new HttpError(404, 'Lounge not found');
+  await assertLoungeAccess(l, req.userId);
   const author = authorCache(req.userId);
   const rows = (await recentMessages('lounge', l._id, 60)).reverse();
   res.json({ lounge: await serializeLounge(l, author, await viewerOf(req)), messages: await Promise.all(rows.map((m) => serializeMessage(m, author))) });
@@ -269,12 +276,7 @@ socialRouter.post('/lounges', requireAuth, async (req, res) => {
   assertClean(`${b.name} ${b.topic} ${b.nowPlaying}`);
   const u = await db.users.findOne({ _id: me }, { projection: { role: 1, perms: 1, premium: 1 } });
   const staff = can(u, 'lounges');
-  if (!staff) {
-    await assertLevel(me, 'lounge');
-    const limit = isPremium(u) ? LOUNGE_LIMIT.premium : LOUNGE_LIMIT.member;
-    if ((await db.lounges.countDocuments({ ownerId: me })) >= limit)
-      throw new HttpError(409, `You can have ${limit} lounge${limit === 1 ? '' : 's'} at a time${isPremium(u) ? '' : ' — 3 with Premium 👑'}`, 'lounge_limit');
-  }
+  if (!staff) throw new HttpError(403, 'Only admins can open new lounges', 'forbidden');
   let slug = slugify(b.name);
   if (await db.lounges.findOne({ slug })) slug = `${slug}-${newId().slice(-5)}`;
   const last = await db.lounges.find({}).sort({ position: -1 }).limit(1).toArray();

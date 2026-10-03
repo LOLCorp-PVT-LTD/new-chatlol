@@ -13,6 +13,8 @@ import { resolveArenaTimeouts } from './lib/arenas.js';
 import { finishDueTournaments } from './lib/tournaments.js';
 import { startPersonaEngine } from './ai/engine.js';
 import { resumeRadio, startRadioLoop } from './lib/radio.js';
+import { payClanWeek, resolveClanWars } from './lib/clans.js';
+import { resolveSiege } from './lib/clanWorld.js';
 import { refreshModels, setModelStore } from './ai/nim.js';
 import { resolveExpiredTakes } from './routes/arena.js';
 import { runBirthdays } from './lib/birthdays.js';
@@ -92,6 +94,9 @@ async function main() {
     await runInactivity();
     await resolveArenaTimeouts();
     await finishDueTournaments();
+    await resolveClanWars();
+    await payClanWeek();
+    await resolveSiege();
     if (config.ai.enabled && !engineStarted) {
       engineStarted = true;
       await startPersonaEngine(() => acquireWorkerLease());

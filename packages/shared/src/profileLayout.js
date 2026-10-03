@@ -1,3 +1,4 @@
+import { cleanGames } from './gamesCatalog.js';
 import { SHOP_FONTS } from './cosmetics.js';
 /**
  * Profile page builder: a member arranges sections on a 12-column grid and picks the page's overall look.
@@ -87,6 +88,7 @@ export const PROFILE_SECTIONS = [
   { key: 'text', label: 'Text box', emoji: '📝', desc: 'Write anything you like', sizes: ['third', 'half', 'twothirds', 'full'], size: 'half', multi: true, config: { body: { max: 1500, def: '' } } },
   { key: 'quote', label: 'Quote', emoji: '❝', desc: 'A big quote or motto', sizes: ['third', 'half', 'twothirds', 'full'], size: 'full', multi: true, config: { text: { max: 200, def: '' }, by: { max: 60, def: '' } } },
   { key: 'links', label: 'Links', emoji: '🔗', desc: 'Your other socials and sites', sizes: ['third', 'half', 'twothirds', 'full'], size: 'third', multi: true, config: { items: { max: 8, def: [] } } },
+  { key: 'games', label: 'Games I play', emoji: '🎮', desc: 'Games you play or want to try, with their logos', sizes: ['third', 'half', 'twothirds', 'full'], size: 'half', config: { items: { max: 24, def: [] } } },
   { key: 'currently', label: 'Currently', emoji: '🎧', desc: 'What you’re watching, reading, playing…', sizes: ['third', 'half', 'twothirds', 'full'], size: 'third', config: { items: { max: 6, def: [] } } },
   { key: 'video', label: 'YouTube video', emoji: '▶️', desc: 'Show a YouTube video', sizes: ['half', 'twothirds', 'full'], size: 'half', multi: true, config: { videoId: { def: '' } } },
   { key: 'spacer', label: 'Spacer', emoji: '↕️', desc: 'Empty space to shape your layout', sizes: ['third', 'half', 'twothirds', 'full'], size: 'full', multi: true, config: { height: { def: 'md' } } },
@@ -242,6 +244,7 @@ function cleanConfig(type, raw = {}) {
         .filter((i) => i && httpUrl(i.url))
         .slice(0, spec.max)
         .map((i) => ({ label: str(i.label, 40) || String(i.url).replace(/^https?:\/\//, '').slice(0, 40), url: String(i.url) }));
+    else if (k === 'items' && type === 'games') out.items = cleanGames(c.items);
     else if (k === 'items' && type === 'currently')
       out.items = (Array.isArray(c.items) ? c.items : [])
         .filter((i) => i && String(i.value ?? '').trim())

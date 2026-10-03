@@ -67,7 +67,7 @@ homeRouter.get('/home', optionalAuth, async (req, res) => {
       .toArray(),
     ensureDrop(),
     db.hotTakes.find({ resolved: false }).sort({ agreePool: -1 }).limit(3).toArray(),
-    db.lounges.find({ $or: [{ expiresAt: null }, { expiresAt: { $exists: false } }, { expiresAt: { $gt: new Date().toISOString() } }] }).sort({ position: 1 }).toArray(),
+    db.lounges.find({ clanId: null, $or: [{ expiresAt: null }, { expiresAt: { $exists: false } }, { expiresAt: { $gt: new Date().toISOString() } }] }).sort({ position: 1 }).toArray(),
     db.users
       .find({ deletedAt: null, isAi: false, 'moderation.status': { $ne: 'banned' } })
       .sort({ createdAt: -1 })

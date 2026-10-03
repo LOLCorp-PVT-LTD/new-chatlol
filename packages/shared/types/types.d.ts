@@ -13,6 +13,10 @@ export interface Cosmetics {
     button?: string | null;
 }
 export interface UserPublic {
+    /** Clan MVP last week. */
+    clanMvp?: { clanId: string; clan: string } | null;
+    /** Their clan (badge on the profile; tag next to their name from clan level 2). `glow` = Prestige upgrade level. */
+    clan?: { id: string; tag: string; name: string; emoji: string; color: string | null; level: number; legend: boolean; glow: number } | null;
     id: ID;
     handle: string;
     displayName: string;
@@ -293,6 +297,8 @@ export interface Conversation {
     updatedAt: ISODate;
 }
 export interface NotificationItem {
+    /** Requests and invitations: the app shows Accept / Decline buttons that do this. */
+    action?: { type: 'friend_request' | 'arena_invite' | 'clan_invite' | 'clan_request' | 'clan_war'; id: string } | null;
     id: ID;
     kind: 'rating' | 'gift' | 'invite' | 'consensus' | 'drop' | 'follow' | 'comment' | 'dm' | 'arena' | 'level' | 'system' | 'mention' | 'profile_view' | 'profile_rating' | 'wall' | 'birthday';
     title: string;

@@ -8,7 +8,8 @@ import { getSocket, reconnectSocket, type AppSocket } from '../lib/socket';
 import { syncWebPush } from '../lib/webPush';
 import { ding, buzz, confetti, fxPrefs } from '../lib/fx';
 
-export interface Toast { id: number; kind: 'reward' | 'info' | 'error' | 'level'; title: string; body?: string; sparks?: number; xp?: number }
+export interface ToastAction { label: string; primary?: boolean; run: () => Promise<unknown> | void }
+export interface Toast { id: number; kind: 'reward' | 'info' | 'error' | 'level'; title: string; body?: string; sparks?: number; xp?: number; avatarUrl?: string | null; actions?: ToastAction[] }
 export interface TickerItem { id: string; text: string; actor: UserPublic | null; at: string }
 
 export const useSession = defineStore('session', () => {
@@ -32,6 +33,44 @@ export const useSession = defineStore('session', () => {
   function dismissToast(id: number) {
     toasts.value = toasts.value.filter((x) => x.id !== id);
   }
+  /** Accept / Decline buttons for request and invitation notifications. */
+  function requestActions(a: NonNullable<NotificationItem['action']>, link: string | null): ToastAction[] {
+    const go = (path: string | null) => path && void import('../router').then(({ router }) => router.push(path));
+    const done = (msg: string, p: Promise<unknown>, after?: () => void) =>
+      p.then(() => (toast({ kind: 'info', title: msg }), after?.())).catch((e: Error) => toast({ kind: 'error', title: e.message }));
+    switch (a.type) {
+      case 'friend_request':
+        return [
+          { label: 'Accept', primary: true, run: () => done('🤝 You’re now friends!', api.acceptFriend(a.id)) },
+          { label: 'Decline', run: () => done('Request declined', api.declineFriend(a.id)) },
+        ];
+      case 'arena_invite':
+        return [
+          { label: 'Join game', primary: true, run: () => done('🎮 You’re in!', api.joinArena(a.id), () => go(`/arenas/${a.id}`)) },
+          { label: 'Not now', run: () => {} },
+        ];
+      case 'clan_invite':
+        return [
+          { label: 'Join clan', primary: true, run: () => done('🏰 Welcome to the clan!', api.joinClan(a.id), () => go(`/clans/${a.id}`)) },
+          { label: 'Decline', run: () => {} },
+        ];
+      case 'clan_request': {
+        const [clanId, userId] = a.id.split(':');
+        return [
+          { label: 'Accept', primary: true, run: () => done('Accepted into the clan', api.clanRequest(clanId, userId, 'accept')) },
+          { label: 'Decline', run: () => done('Request declined', api.clanRequest(clanId, userId, 'decline')) },
+        ];
+      }
+      case 'clan_war':
+        return [
+          { label: 'Accept war', primary: true, run: () => done('⚔️ War on!', api.answerWar(a.id, 'accept'), () => go(link)) },
+          { label: 'Decline', run: () => done('Challenge declined', api.answerWar(a.id, 'decline')) },
+        ];
+      default:
+        return [];
+    }
+  }
+
   function toast(t: Omit<Toast, 'id'>, ms = 6500) {
     // HTTP responses and the socket can both report the same reward — show it once.
     const key = `${t.kind}:${t.title}`;
@@ -82,15 +121,22 @@ export const useSession = defineStore('session', () => {
     socket.on('notification', (n) => {
       notifications.value.unshift(n);
       if (n.kind !== 'dm') unread.value++;
+      // Sounds: DMs have their own chime (below); requests a rising call; everything else a soft bell.
+      if (n.kind !== 'dm') ding(n.action ? 'request' : 'notify');
       if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
         new Notification(n.title, { body: n.body, icon: n.actor?.avatarUrl || '/icon-192.png', tag: n.id });
-      } else if (n.kind !== 'dm') {
-        toast({ kind: 'info', title: n.title, body: n.body });
+      }
+      if (n.kind !== 'dm') {
+        const actions = n.action ? requestActions(n.action, n.link) : undefined;
+        // Requests stay up longer so there's time to answer them.
+        toast({ kind: 'info', title: n.title, body: n.body, avatarUrl: n.actor?.avatarUrl ?? null, actions }, actions ? 15000 : 6500);
       }
     });
     socket.on('dm:message', (m) => {
       if (m.author.id !== user.value?.id) {
         unreadDms.value++;
+        // A chime unless you're looking at that very conversation.
+        if (document.hidden || !location.pathname.endsWith(`/messages/${m.roomId}`)) ding('message');
         if (typing.value[m.roomId] === m.author.id) (clearTimeout(typingTimers.get(m.roomId)), (typing.value = { ...typing.value, [m.roomId]: null }));
       }
       dmListeners.forEach((fn) => fn(m));

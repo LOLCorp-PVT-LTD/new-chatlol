@@ -6,6 +6,7 @@ import { GAMES } from '@chatlol/shared';
 import { api } from '../lib/api';
 import { useSession } from '../stores/session';
 import { confirmDialog } from '../lib/dialog';
+import { useFullscreen } from '../lib/fullscreen';
 import Avatar from '../components/Avatar.vue';
 import UserName from '../components/UserName.vue';
 import Icon from '../components/Icon.vue';
@@ -30,6 +31,8 @@ const BOARDS: Record<string, Component> = {
 
 /** One arena: the lobby (invite, start) and then the live game. Updates arrive over the socket. */
 const s = useSession();
+const stage = ref<HTMLElement>();
+const fs = useFullscreen(stage);
 const route = useRoute();
 const router = useRouter();
 const id = route.params.id as string;
@@ -140,19 +143,24 @@ const payout = (userId: string) => arena.value?.payouts.find((p) => p.userId ===
     </section>
 
     <!-- Game -->
-    <template v-else-if="arena.state">
+    <div v-else-if="arena.state" ref="stage" class="space-y-4">
+      <div class="flex justify-end">
+        <button type="button" class="btn-secondary h-9" :aria-pressed="fs.on.value" @click="fs.toggle"><Icon :name="fs.on.value ? 'fullscreen_exit' : 'fullscreen'" :size="18" /> {{ fs.on.value ? 'Exit full screen' : 'Full screen' }}</button>
+      </div>
       <section v-if="arena.status === 'finished'" class="card p-5 text-center space-y-2">
         <p class="text-headline-md">🏁 Game over</p>
         <p class="text-body-md text-on-surface-variant">{{ arena.outcome?.reason }}</p>
         <div class="flex flex-wrap justify-center gap-3"><div v-for="p in arena.players" :key="p.id" class="flex items-center gap-2"><Avatar :user="p" :size="32" /><span class="text-label-lg">{{ p.displayName }}</span><span v-if="payout(p.id)" class="text-primary text-label-lg">+{{ payout(p.id).toLocaleString() }} {{ CUR[arena.stake.currency] }}</span></div></div>
         <RouterLink to="/games" class="btn-secondary inline-flex mt-2">Back to arenas</RouterLink>
       </section>
-      <ChessBoard v-if="arena.game === 'chess'" :arena="arena" :my-turn="myTurn" @move="move" />
-      <CheckersBoard v-else-if="arena.game === 'checkers'" :arena="arena" :my-turn="myTurn" @move="move" />
-      <PokerTable v-else-if="arena.game === 'poker'" :arena="arena" :my-turn="myTurn" @move="move" />
-      <TycoonBoard v-else-if="arena.game === 'tycoon'" :arena="arena" :my-turn="myTurn" @move="move" />
-      <component :is="BOARDS[arena.game]" v-else-if="BOARDS[arena.game]" :arena="arena" :my-turn="myTurn" @move="move" />
-    </template>
+      <div class="fs-fit mx-auto" style="--fs-aspect: 1.5">
+        <ChessBoard v-if="arena.game === 'chess'" :arena="arena" :my-turn="myTurn" @move="move" />
+        <CheckersBoard v-else-if="arena.game === 'checkers'" :arena="arena" :my-turn="myTurn" @move="move" />
+        <PokerTable v-else-if="arena.game === 'poker'" :arena="arena" :my-turn="myTurn" @move="move" />
+        <TycoonBoard v-else-if="arena.game === 'tycoon'" :arena="arena" :my-turn="myTurn" @move="move" />
+        <component :is="BOARDS[arena.game]" v-else-if="BOARDS[arena.game]" :arena="arena" :my-turn="myTurn" @move="move" />
+      </div>
+    </div>
     <p v-else-if="arena.status === 'closed'" class="card p-5 text-center">This room was closed.</p>
 
     <Modal v-if="inviting" @close="inviting = false">

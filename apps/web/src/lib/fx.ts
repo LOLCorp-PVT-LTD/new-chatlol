@@ -6,11 +6,12 @@ export function buzz(pattern: number | number[] = 12) {
   if (fxPrefs.haptics && 'vibrate' in navigator) navigator.vibrate?.(pattern);
 }
 
-export function ding(kind: 'reward' | 'match' | 'level' | 'tap' = 'reward') {
+export function ding(kind: 'reward' | 'match' | 'level' | 'tap' | 'message' | 'notify' | 'request' = 'reward') {
   if (!fxPrefs.sound) return;
   try {
     ctx ??= new AudioContext();
-    const notes = { reward: [880, 1320], match: [660, 990, 1320], level: [523, 659, 784, 1046], tap: [440] }[kind];
+    // message: a soft two-note "pop" for DMs · notify: a bell for notifications · request: a rising three-note call
+    const notes = { reward: [880, 1320], match: [660, 990, 1320], level: [523, 659, 784, 1046], tap: [440], message: [988, 1319], notify: [784, 1175], request: [587, 784, 1175] }[kind];
     notes.forEach((f, i) => {
       const o = ctx!.createOscillator();
       const g = ctx!.createGain();

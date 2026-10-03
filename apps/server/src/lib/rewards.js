@@ -26,6 +26,9 @@ export async function grant(userId, sparks, xp, reason, emit = true, { boost = t
   let boosted = false;
   if (boost && sparks > 0 && hasPower(before, 'boost_2x')) (sparks *= 2), (boosted = true);
   if (boost && xp > 0 && hasPower(before, 'xp_surge')) (xp *= 2), (boosted = true);
+  // Clans: perks, HQ buildings and territories boost members' Sparks / XP.
+  const clans = boost && (sparks > 0 || xp > 0) && !before.isAi ? await import('./clans.js') : null;
+  if (clans) ({ sparks, xp } = await clans.clanRewardBonus(userId, sparks, xp, reason));
   // Sparks never go below zero.
   await db.users.updateOne({ _id: userId }, [
     { $set: { sparks: { $max: [0, { $add: ['$sparks', sparks] }] }, xp: { $add: ['$xp', xp] } } },
@@ -49,6 +52,8 @@ export async function grant(userId, sparks, xp, reason, emit = true, { boost = t
       link: '/locker',
     });
   }
+  // …and every Spark a member earns builds their clan's Rep.
+  if (clans) void clans.addRepFromSparks(userId, sparks, reason).catch((e) => console.warn('[clans] rep', e.message));
   if (emit && !before.isAi) await emitWallet(userId, ev);
   return ev;
 }
@@ -132,6 +137,8 @@ export async function notify(userId, n) {
     body: n.body,
     actorId: n.actorId ?? null,
     link: n.link ?? null,
+    /** Requests and invitations: { type, id } — the app shows Accept / Decline buttons for it. */
+    action: n.action ?? null,
     read: false,
     createdAt: now(),
   };

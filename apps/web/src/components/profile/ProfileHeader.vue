@@ -63,6 +63,8 @@ const btnStyle = computed(() => buttonStyleByKey(u.value.cosmetics.button)?.css 
         <h1 class="text-headline-xl flex items-center gap-2 flex-wrap" :class="{ 'justify-center': centered, 'sm:justify-start justify-center': style === 'split', '!text-headline-lg': style === 'compact' }">
           {{ u.displayName }} <span v-if="gender" class="text-headline-sm" :title="gender.label">{{ gender.emoji }}</span>
           <span class="rounded-full px-3 py-1 text-label-md hdr-chip">{{ tier.emoji }} {{ tier.label.toUpperCase() }}</span>
+          <RouterLink v-if="u.clanMvp" :to="`/clans/${u.clanMvp.clanId}`" class="rounded-full px-3 py-1 text-label-md hdr-chip" :title="`Clan MVP of ${u.clanMvp.clan} last week`">🏅 CLAN MVP</RouterLink>
+          <RouterLink v-if="u.clan" :to="`/clans/${u.clan.id}`" class="rounded-full px-3 py-1 text-label-md hdr-chip hdr-clan" :class="{ 'hdr-clan-glow': u.clan.glow >= 2 }" :style="u.clan.color ? { '--clan': u.clan.color } : undefined" :title="`Member of ${u.clan.name} · clan level ${u.clan.level}`">{{ u.clan.emoji }} {{ u.clan.name }} <b>[{{ u.clan.tag }}]</b></RouterLink>
           <span v-if="style === 'compact' && u.premium" class="text-label-md">👑</span>
         </h1>
         <p class="text-body-md opacity-90">@{{ u.handle }} · {{ u.online ? '🟢 Online' : `Active ${timeAgo(u.lastSeenAt)} ago` }}<template v-if="style === 'compact' && u.isAI"> · ✦ AI persona</template></p>
@@ -98,6 +100,10 @@ const btnStyle = computed(() => buttonStyleByKey(u.value.cosmetics.button)?.css 
 .hdr-light:not(.hdr-split) { background: rgb(255 255 255 / 0.6); color: #251911; }
 .hdr-split { min-height: 260px; display: flex; align-items: flex-end; }
 .hdr-split .hdr-body { width: 100%; }
+.hdr-clan { box-shadow: inset 0 0 0 1.5px var(--clan, #7c3aed); }
+.hdr-clan-glow { box-shadow: inset 0 0 0 1.5px var(--clan, #7c3aed), 0 0 14px color-mix(in srgb, var(--clan, #7c3aed) 60%, transparent); animation: clan-pulse 2.4s ease-in-out infinite; }
+@keyframes clan-pulse { 50% { box-shadow: inset 0 0 0 1.5px var(--clan, #7c3aed), 0 0 22px color-mix(in srgb, var(--clan, #7c3aed) 80%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .hdr-clan-glow { animation: none; } }
 .hdr-dark .hdr-chip, .hdr-split .hdr-chip { background: rgb(255 255 255 / 0.2); }
 .hdr-light:not(.hdr-split) .hdr-chip { background: rgb(0 0 0 / 0.08); }
 </style>
