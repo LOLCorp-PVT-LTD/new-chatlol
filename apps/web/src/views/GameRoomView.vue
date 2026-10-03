@@ -49,28 +49,43 @@ const myTurn = computed(() => arena.value?.status === 'playing' && seated.value 
 const secondsLeft = computed(() => (arena.value?.turnDeadline ? Math.max(0, Math.ceil((Date.parse(arena.value.turnDeadline) - now.value) / 1000)) : null));
 const err = (e: unknown) => s.toast({ kind: 'error', title: (e as Error).message });
 
-async function load() {
-  try { arena.value = (await api.arena(id, code)).arena; } catch (e) { err(e); void router.push('/games'); }
+/** Applies a server snapshot unless we already hold a newer one (responses can arrive out of order). */
+function apply(a: Arena) {
+  if (!arena.value || arena.value.id !== a.id || a.version >= arena.value.version) arena.value = a;
 }
-const onUpdate = (u: { id: string; version: number }) => { if (u.id === id && (!arena.value || u.version !== arena.value.version)) void load(); };
+// One fetch at a time; updates that land meanwhile trigger exactly one more.
+let loading = false;
+let again = false;
+async function load() {
+  if (loading) return void (again = true);
+  loading = true;
+  try { apply((await api.arena(id, code)).arena); } catch (e) { if (!arena.value) { err(e); void router.push('/games'); } }
+  finally {
+    loading = false;
+    if (again) { again = false; void load(); }
+  }
+}
+const onUpdate = (u: { id: string; version: number }) => { if (u.id === id && (!arena.value || u.version > arena.value.version)) void load(); };
+const onConnect = () => { s.socket().emit('arena:watch', id); void load(); };
 let tick: ReturnType<typeof setInterval>;
 onMounted(async () => {
   await load();
   const sock = s.socket();
   sock.emit('arena:watch', id);
   sock.on('arena:update', onUpdate);
-  sock.on('connect', () => sock.emit('arena:watch', id));
+  sock.on('connect', onConnect);
   tick = setInterval(() => (now.value = Date.now()), 1000);
 });
 onUnmounted(() => {
   const sock = s.socket();
   sock.emit('arena:unwatch', id);
   sock.off('arena:update', onUpdate);
+  sock.off('connect', onConnect);
   clearInterval(tick);
 });
 
 async function act<T extends { arena: Arena }>(p: Promise<T>) {
-  try { arena.value = (await p).arena; } catch (e) { err(e); }
+  try { apply((await p).arena); } catch (e) { err(e); }
 }
 const join = () => act(api.joinArena(id, code));
 const start = () => act(api.startArena(id));
@@ -100,14 +115,14 @@ const payout = (userId: string) => arena.value?.payouts.find((p) => p.userId ===
 </script>
 
 <template>
-  <div v-if="arena && game" class="max-w-[1100px] mx-auto space-y-4">
+  <div v-if="arena && game" class="max-w-[1180px] mx-auto space-y-4">
     <header class="card p-4 flex flex-wrap items-center gap-3">
       <span class="text-4xl">{{ game.emoji }}</span>
       <div class="min-w-0 flex-1">
         <h1 class="text-headline-sm truncate">{{ arena.name }}</h1>
         <p class="text-body-sm text-on-surface-variant">{{ game.name }} · {{ arena.stake.amount ? `${CUR[arena.stake.currency]} ${arena.stake.amount.toLocaleString()} each` : 'Just for fun' }} · {{ arena.visibility === 'private' ? '🔒 Invite-only' : '🌍 Public' }}</p>
       </div>
-      <span v-if="arena.status === 'playing'" class="chip" :class="{ 'chip-active': myTurn }">{{ arena.turnSeat === -1 ? 'Everyone plays' : myTurn ? 'Your turn' : 'Waiting' }}<template v-if="secondsLeft != null"> · ⏱ {{ secondsLeft }}s</template></span>
+      <span v-if="arena.status === 'playing'" class="chip tabular-nums min-w-[150px] justify-center" :class="{ 'chip-active': myTurn }">{{ arena.turnSeat === -1 ? 'Everyone plays' : myTurn ? 'Your turn' : 'Waiting' }}<template v-if="secondsLeft != null"> · ⏱ {{ secondsLeft }}s</template></span>
       <button v-if="arena.code" class="btn-secondary h-10" @click="copyLink"><Icon name="link" :size="18" /> {{ arena.code }}</button>
       <button v-if="seated && arena.status !== 'finished' && arena.status !== 'closed'" class="btn-ghost h-10 text-error" @click="leave">{{ arena.status === 'playing' ? 'Resign' : isHost ? 'Close room' : 'Leave' }}</button>
     </header>
