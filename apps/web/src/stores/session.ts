@@ -27,14 +27,18 @@ export const useSession = defineStore('session', () => {
   const isAuthed = computed(() => !!user.value);
 
   const recent = new Map<string, number>();
-  function toast(t: Omit<Toast, 'id'>, ms = 3200) {
+  function dismissToast(id: number) {
+    toasts.value = toasts.value.filter((x) => x.id !== id);
+  }
+  function toast(t: Omit<Toast, 'id'>, ms = 6500) {
     // HTTP responses and the socket can both report the same reward — show it once.
     const key = `${t.kind}:${t.title}`;
     if (Date.now() - (recent.get(key) ?? 0) < 2500) return;
     recent.set(key, Date.now());
     const id = ++toastId;
     toasts.value.push({ ...t, id });
-    setTimeout(() => (toasts.value = toasts.value.filter((x) => x.id !== id)), ms);
+    // Toasts stay up long enough to read (6.5s at least); the ✕ closes one early.
+    setTimeout(() => dismissToast(id), Math.max(ms, 6500));
   }
 
   function reward(r?: RewardEvent | null) {
@@ -178,7 +182,7 @@ export const useSession = defineStore('session', () => {
   watch(() => user.value?.xp, (xp) => { if (user.value && xp !== undefined) user.value.level = levelForXp(xp); });
 
   return {
-    user, ready, isAuthed, toasts, notifications, unread, unreadDms, ticker, levelUp, typing,
+    user, ready, isAuthed, toasts, dismissToast, notifications, unread, unreadDms, ticker, levelUp, typing,
     boot, login, register, logout, adoptSession, refresh, reward, toast, applyUser, spend, onDm, loadNotifications,
     socket: () => socket ?? getSocket(),
   };
