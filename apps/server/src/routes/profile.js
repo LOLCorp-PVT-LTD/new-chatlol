@@ -256,7 +256,7 @@ profileRouter.put('/me/profile/layout', requireAuth, async (req, res) => {
     assertClean(text);
     const verdict = await classify(text);
     if (!verdict.safe || verdict.severe)
-      throw new HttpError(422, 'SafeShield caught something on your page — keep it kind 🧡', 'moderation_layout');
+      throw new HttpError(422, 'LOLShield caught something on your page — keep it kind 🧡', 'moderation_layout');
   }
   await db.users.updateOne({ _id: id }, { $set: { 'profile.layout': layout } });
   res.json({ user: await userPrivate(await db.users.findOne({ _id: id })), layout, premiumRemoved });

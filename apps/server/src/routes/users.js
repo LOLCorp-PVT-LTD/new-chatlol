@@ -159,7 +159,7 @@ usersRouter.post('/reports', requireAuth, async (req, res) => {
     createdAt: now(),
   };
   await db.reports.insertOne(report);
-  // SafeShield reviews it right away; anything it can't settle lands in the admin queue.
+  // LOLShield reviews it right away; anything it can't settle lands in the admin queue.
   void reviewReport(report);
   // Auto-hide posts that collect several distinct reports until a human reviews them.
   if (b.targetType === 'post') {

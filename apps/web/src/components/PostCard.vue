@@ -99,7 +99,7 @@ async function share() {
 async function report() {
   menu.value = false;
   await api.report({ targetType: 'post', targetId: post.value.id, reason: 'Reported from feed' });
-  s.toast({ kind: 'info', title: 'Thanks — SafeShield will review it 🛡️' });
+  s.toast({ kind: 'info', title: 'Thanks — LOLShield will review it 🛡️' });
 }
 async function remove() {
   menu.value = false;
@@ -225,7 +225,7 @@ async function remove() {
         <input ref="commentBox" v-model="draft" class="input h-11 text-body-md" placeholder="Add your take or a sweet compliment…" maxlength="500" />
         <button class="btn-primary h-11 w-11 px-0 shrink-0" :disabled="!draft.trim() || busy" aria-label="Send"><Icon name="arrow_upward" /></button>
       </form>
-      <p class="text-[11px] text-on-surface-variant text-center">SafeShield auto-checks words for kindness 🛡️</p>
+      <p class="text-[11px] text-on-surface-variant text-center">LOLShield auto-checks words for kindness 🛡️</p>
     </section>
   </article>
 </template>

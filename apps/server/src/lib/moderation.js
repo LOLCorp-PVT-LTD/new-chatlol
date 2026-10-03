@@ -1,8 +1,10 @@
 import { config } from '../config.js';
 import { HttpError } from './http.js';
+import { ruleByKey } from '@chatlol/shared';
+import { actingAdmin } from './actor.js';
 
 /**
- * SafeShield: a fast local filter for slurs/harassment + optional NVIDIA NemoGuard content-safety check.
+ * LOLShield: a fast local filter for slurs/harassment + optional NVIDIA NemoGuard content-safety check.
  * The local list is intentionally short here — plug in your own maintained list in production.
  */
 const BLOCKED = [
@@ -24,9 +26,11 @@ export function localCheck(text) {
   return { ok: true };
 }
 
+/** Words-list check for a request. Admins are never moderated. */
 export function assertClean(text) {
+  if (actingAdmin()) return;
   const r = localCheck(text);
-  if (!r.ok) throw new HttpError(422, 'SafeShield caught that one — keep it kind 🧡', `moderation_${r.reason}`);
+  if (!r.ok) throw new HttpError(422, 'LOLShield caught that one — keep it kind 🧡', `moderation_${r.reason}`);
 }
 
 /** Insults and hostility that aren't bannable on their own but add up when aimed at people repeatedly. */
@@ -85,8 +89,44 @@ export async function classify(text) {
     }
   }
   const severeModel = categories.some((c) => /threat|criminal|weapons|controlled|child|minor|sexual \(minor\)|human trafficking/i.test(c));
-  return { safe: !categories.length && !modelUnsafe, severe: severe || severeModel, hostile, categories: [...new Set(categories)] };
+  const cats = [...new Set(categories)];
+  const rules = rulesFor(cats);
+  // A severe community rule (threats, minors, self-harm encouragement, non-consensual sharing, illegal) is always severe.
+  // (Self-harm is handled with care instead: someone talking about their own struggles needs support, not a ban.)
+  const severeRule = rules.some((k) => k !== 'self_harm' && ruleByKey(k)?.severity === 'severe');
+  const selfHarmOnly = rules.length === 1 && rules[0] === 'self_harm' && !severe;
+  return { safe: !cats.length && !modelUnsafe, severe: !selfHarmOnly && (severe || severeModel || severeRule), selfHarm: rules.includes('self_harm'), selfHarmOnly, hostile, categories: cats, rules };
 }
+
+/**
+ * Maps detector categories (local word lists and NVIDIA NemoGuard's taxonomy) to the Community Guidelines rules
+ * members agreed to, so every removal and strike cites the rule that was broken.
+ */
+const CATEGORY_RULES = [
+  [/harass|bully|insult/i, 'harassment'],
+  [/hate|identity/i, 'hate'],
+  [/threat|violence|terror|weapon|guns/i, 'violence_threats'],
+  [/criminal|controlled|drugs|trafficking|illegal/i, 'illegal'],
+  [/sexual \(minor\)|minor|child/i, 'adults_only'],
+  [/sexual|nudity|explicit/i, 'sexual_content'],
+  [/suicide|self.?harm/i, 'self_harm'],
+  [/pii|privacy|doxx/i, 'non_consensual'],
+  [/scam|fraud|unauthori[sz]ed advice|manipulation/i, 'scams_fraud'],
+  [/profan/i, 'profanity'],
+];
+export function rulesFor(categories) {
+  const out = [];
+  for (const c of categories) {
+    const hit = CATEGORY_RULES.find(([re]) => re.test(c));
+    out.push(hit ? hit[1] : 'harassment');
+  }
+  // Minors trump plain sexual content.
+  return [...new Set(out)].sort((a, b) => (a === 'adults_only' ? -1 : b === 'adults_only' ? 1 : 0));
+}
+export const ruleReason = (keys, fallback = 'Community Guidelines') => {
+  const r = ruleByKey(keys?.[0]);
+  return r ? `Broke the rule “${r.title}”` : fallback;
+};
 
 /** Asynchronous deep check with NemoGuard; returns false if the model flags the text as unsafe. */
 export async function deepCheck(text) {

@@ -93,7 +93,7 @@ export const useSession = defineStore('session', () => {
     });
     socket.on('dm:typing', ({ conversationId, userId, typing: t }) => { typing.value = { ...typing.value, [conversationId]: t ? userId : null }; });
     socket.on('ticker', (t) => { ticker.value = [t, ...ticker.value].slice(0, 12); });
-    // SafeShield / moderator actions take effect immediately.
+    // LOLShield / moderator actions take effect immediately.
     socket.on('moderation', (m) => {
       if (m.action === 'suspend' || m.action === 'ban') {
         toast({ kind: 'error', title: m.action === 'ban' ? 'Your account was terminated' : 'Your account was suspended', body: m.reason ?? undefined }, 8000);

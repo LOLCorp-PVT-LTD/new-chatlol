@@ -35,7 +35,7 @@ async function report() {
   const reason = await reportDialog('this shout');
   if (!reason) return;
   await api.report({ targetType: 'shout', targetId: props.shout.id, reason });
-  s.toast({ kind: 'info', title: 'Thanks — SafeShield is reviewing it 🛡️' });
+  s.toast({ kind: 'info', title: 'Thanks — LOLShield is reviewing it 🛡️' });
 }
 </script>
 

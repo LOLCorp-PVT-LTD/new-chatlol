@@ -179,7 +179,7 @@ async function report() {
   const reason = await reportDialog(`@${user.value!.handle}`);
   if (!reason) return;
   await api.report({ targetType: 'user', targetId: user.value!.id, reason });
-  s.toast({ kind: 'info', title: 'Thanks — SafeShield is reviewing it 🛡️' });
+  s.toast({ kind: 'info', title: 'Thanks — LOLShield is reviewing it 🛡️' });
 }
 async function share() {
   const url = `${location.origin}/u/${user.value!.handle}`;

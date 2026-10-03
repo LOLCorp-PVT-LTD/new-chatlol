@@ -36,7 +36,7 @@ export function ShoutCard({ shout, onUpdate, onReply, onRemoved, flat }: { shout
       ...(!canDelete && me ? [{ label: 'Report', icon: 'flag' as const, danger: true, onPress: async () => {
         const reason = await reportDialog('this shout');
         if (!reason) return;
-        await api.report({ targetType: 'shout', targetId: shout.id, reason }); toast({ kind: 'info', title: 'Thanks — SafeShield is reviewing it 🛡️' });
+        await api.report({ targetType: 'shout', targetId: shout.id, reason }); toast({ kind: 'info', title: 'Thanks — LOLShield is reviewing it 🛡️' });
       } }] : []),
     ]);
   }

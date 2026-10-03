@@ -5,7 +5,7 @@
  */
 export const PERMISSIONS = [
   { key: 'overview', label: 'Dashboard', desc: 'Stats, revenue totals and integrations', group: 'Panel' },
-  { key: 'reports', label: 'Reports & flags', desc: 'Review reports and SafeShield flags, remove content', group: 'Moderation' },
+  { key: 'reports', label: 'Reports & flags', desc: 'Review reports and LOLShield flags, remove content', group: 'Moderation' },
   { key: 'mute', label: 'Warn, mute & suspend', desc: 'Temporary restrictions and clearing strikes', group: 'Moderation' },
   { key: 'ban', label: 'Ban', desc: 'Ban and unban accounts', group: 'Moderation' },
   { key: 'terminate', label: 'Terminate accounts', desc: 'Permanently close an account and scrub its personal data', group: 'Moderation' },

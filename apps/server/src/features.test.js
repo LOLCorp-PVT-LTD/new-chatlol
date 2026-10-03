@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 /**
- * Profiles, Shoutbox, Premium, SafeShield moderation, admin panel and human-like persona DMs.
+ * Profiles, Shoutbox, Premium, LOLShield moderation, admin panel and human-like persona DMs.
  * NVIDIA NIM is replaced by a local mock so the persona DM path can be exercised offline.
  */
 const nimCalls = [];
@@ -226,7 +226,7 @@ test('profile wall respects the owner’s wall setting', async () => {
   await assert.rejects(as('visitor').postWall(owner.id, { body: 'hi again' }), (e) => e.status === 403);
 });
 
-test('SafeShield: threats suspend immediately; repeated insults escalate to a mute', async () => {
+test('LOLShield: threats suspend immediately; repeated insults escalate to a mute', async () => {
   await signUp('menace');
   const victim = await signUp('victim');
   await as('menace').shout({ body: `@${victim.handle} i will kill you` });
@@ -246,7 +246,7 @@ test('SafeShield: threats suspend immediately; repeated insults escalate to a mu
   assert.ok((await as('bully').feed({})).items.length > 0);
 });
 
-test('reports are reviewed by SafeShield automatically', async () => {
+test('reports are reviewed by LOLShield automatically', async () => {
   const rude = await signUp('rude');
   await signUp('reporter');
   const { post } = await as('rude').createPost({ body: 'normal post here' });
@@ -993,4 +993,19 @@ test('ads: off by default, admin sets slot codes, Premium members are ad-free', 
   const { adsRouter } = await import('./routes/ads.js');
   assert.ok(adsRouter);
   assert.deepEqual((await as('adview').ads()).slots, {}, 'Premium is ad-free');
+});
+
+test('LOLShield: strikes cite the broken rule, admins are never moderated', async () => {
+  const { rulesFor } = await import('./lib/moderation.js');
+  assert.deepEqual(rulesFor(['Hate/Identity Hate']), ['hate']);
+  assert.deepEqual(rulesFor(['Sexual', 'Sexual (minor)']), ['adults_only', 'sexual_content']);
+  const admin = await signUp('modadmin');
+  await db.users.updateOne({ _id: admin.id }, { $set: { role: 'admin' } });
+  // The word filter lets admins through…
+  await as('modadmin').shout({ body: 'kill yourself (quoting a report for the team)' });
+  await wait(300);
+  assert.equal((await db.modEvents.countDocuments({ userId: admin.id, kind: 'strike' })), 0, 'no strikes for admins');
+  // …but not members, and the strike names the rule.
+  await signUp('modmember');
+  await assert.rejects(as('modmember').shout({ body: 'kill yourself' }), (e) => e.status === 422);
 });

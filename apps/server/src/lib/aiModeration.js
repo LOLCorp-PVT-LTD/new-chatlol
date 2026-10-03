@@ -1,12 +1,16 @@
 import { config } from '../config.js';
 import { db, now } from '../db.js';
-import { classify } from './moderation.js';
+import { classify, ruleReason } from './moderation.js';
+import { COMMUNITY_RULES, ruleByKey } from '@chatlol/shared';
+
+/** The Community Guidelines as the LLM judge sees them (key: title — summary). */
+const RULEBOOK = COMMUNITY_RULES.map((r) => `- ${r.key} (${r.severity}): ${r.title} — ${r.summary}`).join('\n');
 import { addStrike, flag } from './enforcement.js';
 import { shared } from './shared.js';
 import { io, room } from './io.js';
 
 /**
- * SafeShield AI moderation. Every piece of user content is screened after it's written:
+ * LOLShield AI moderation. Every piece of user content is screened after it's written:
  *  - unsafe content is removed and the author gets a strike (strikes escalate: warn → mute → suspend → review for ban)
  *  - threats / criminal activity / exploitation: removed, 30-day suspension, flagged for a human to terminate
  *  - name-calling that isn't bannable on its own is counted; keeping it up (or aiming it at one person) earns strikes
@@ -15,7 +19,7 @@ import { io, room } from './io.js';
  */
 
 /** Removes a piece of content from view. `ref` = { type, id }. */
-export async function removeContent(ref, reason = 'Removed by SafeShield') {
+export async function removeContent(ref, reason = 'Removed by LOLShield') {
   if (!ref?.id) return;
   const hide = { $set: { hidden: true, removedReason: reason, removedAt: now() } };
   switch (ref.type) {
@@ -42,7 +46,7 @@ export async function removeContent(ref, reason = 'Removed by SafeShield') {
     case 'message':
       await db.messages.updateOne(
         { _id: ref.id },
-        { $set: { body: '🛡️ Message removed by SafeShield', mediaUrl: null, kind: 'removed', removedReason: reason } },
+        { $set: { body: '🛡️ Message removed by LOLShield', mediaUrl: null, kind: 'removed', removedReason: reason } },
       );
       break;
     default:
@@ -74,12 +78,15 @@ async function contentOf(type, id) {
 export function screen({ userId, text, ref, targetId = null }) {
   if (!text?.trim()) return;
   void (async () => {
+    // Admins are never moderated.
+    if ((await db.users.findOne({ _id: userId }, { projection: { role: 1 } }))?.role === 'admin') return;
     const verdict = await classify(text);
+    if (verdict.selfHarmOnly) return supportInCrisis(userId, ref, text);
     if (verdict.severe) {
       await removeContent(ref);
       await addStrike(userId, {
-        reason: `Threats or criminal activity (${verdict.categories.join(', ')})`,
-        category: 'severe',
+        reason: `${ruleReason(verdict.rules, 'Threats or criminal activity')} (${verdict.categories.join(', ')})`,
+        category: verdict.rules[0] ?? 'severe',
         ref,
         severe: true,
       });
@@ -88,14 +95,29 @@ export function screen({ userId, text, ref, targetId = null }) {
     if (!verdict.safe) {
       await removeContent(ref);
       await addStrike(userId, {
-        reason: `Removed for ${verdict.categories.join(', ') || 'unsafe content'}`,
-        category: verdict.categories[0] ?? 'unsafe',
+        reason: ruleReason(verdict.rules, `Removed for ${verdict.categories.join(', ') || 'unsafe content'}`),
+        category: verdict.rules[0] ?? 'unsafe',
         ref,
       });
       return;
     }
     if (verdict.hostile) await countHostility(userId, targetId, ref, text);
-  })().catch((e) => console.warn('[safeshield]', e.message));
+  })().catch((e) => console.warn('[lolshield]', e.message));
+}
+
+/**
+ * Someone may be talking about hurting themselves: no strike and nothing removed. They get support resources, and a
+ * human on the team is asked to look (high priority).
+ */
+async function supportInCrisis(userId, ref, text) {
+  const { notify } = await import('./rewards.js');
+  await notify(userId, {
+    kind: 'system',
+    title: 'We’re here for you 🧡',
+    body: 'If you’re going through a hard time, you don’t have to face it alone. In the UK, Samaritans are free to call on 116 123, any time. If you’re in danger right now, call 999.',
+    link: '/safety',
+  });
+  await flag({ userId, reason: 'Possible self-harm risk: check in with care (no strike given)', category: 'self_harm', ref, priority: 'high', excerpt: text.slice(0, 280) });
 }
 
 /** Insults add up: 3 in an hour, or 2 aimed at the same person in a day, become a harassment strike. */
@@ -129,7 +151,7 @@ async function judgeConversation(messages, users) {
       {
         role: 'system',
         content:
-          'You are a trust & safety reviewer for a social app for adults. Judge whether anyone in this chat is harassing, bullying, threatening, sexually harassing, scamming, grooming, or planning crime. Banter between friends and mild swearing are fine. Reply with ONLY JSON: {"violation":true|false,"severity":"none|minor|major|severe","offender":"@handle or empty","reason":"short reason"}',
+          `You are LOLShield, the trust & safety reviewer for ChatLOL, a social app for adults. Judge this chat against ChatLOL's Community Guidelines:\n${RULEBOOK}\nBanter between friends and mild swearing are fine. Reply with ONLY JSON: {"violation":true|false,"rule":"rule key or empty","severity":"none|minor|major|severe","offender":"@handle or empty","reason":"short reason"}`,
       },
       { role: 'user', content: transcript.slice(-6000) },
     ],
@@ -144,6 +166,7 @@ async function judgeConversation(messages, users) {
       severity: j.severity ?? 'none',
       offenderId: offender?._id ?? null,
       reason: String(j.reason ?? '').slice(0, 200),
+      rule: ruleByKey(j.rule) ? j.rule : null,
     };
   } catch {
     return null;
@@ -161,8 +184,8 @@ export async function reviewReport(report) {
         const ref = { type: report.targetType, id: report.targetId };
         await removeContent(ref, 'Removed after a report');
         await addStrike(item.authorId, {
-          reason: `Reported content: ${v.categories.join(', ') || 'unsafe'}`,
-          category: v.categories[0] ?? 'reported',
+          reason: `${ruleReason(v.rules, 'Reported content')} (${v.categories.join(', ') || 'unsafe'})`,
+          category: v.rules[0] ?? 'reported',
           ref,
           severe: v.severe,
         });
@@ -180,8 +203,8 @@ export async function reviewReport(report) {
         const j = await judgeConversation(msgs, users);
         if (j?.violation && j.offenderId === otherId && j.severity !== 'none' && j.severity !== 'minor') {
           await addStrike(otherId, {
-            reason: `Harassment in DMs: ${j.reason}`,
-            category: 'harassment',
+            reason: `${ruleReason([j.rule ?? 'harassment'])} in DMs: ${j.reason}`,
+            category: j.rule ?? 'harassment',
             ref: { type: 'conversation', id: conv._id },
             severe: j.severity === 'severe',
           });
@@ -210,7 +233,7 @@ export async function reviewReport(report) {
       { $set: decided ? { status: 'actioned', resolvedBy: 'ai', resolvedAt: now() } : { status: 'open' } },
     );
   } catch (e) {
-    console.warn('[safeshield] report review failed', e.message);
+    console.warn('[lolshield] report review failed', e.message);
   }
 }
 

@@ -6,6 +6,7 @@ import { config } from '../config.js';
 import { db, now, isObjectIdHex } from '../db.js';
 import { HttpError } from './http.js';
 import { assertNotBanned, standing } from './enforcement.js';
+import { actorStore } from './actor.js';
 
 const scrypt = promisify(_scrypt);
 
@@ -98,7 +99,8 @@ export async function requireAuth(req, _res, next) {
     req.userRole = u.role ?? 'user';
     req.userPerms = permissionsOf(u);
     void db.users.updateOne({ _id: uid }, { $set: { lastSeenAt: now() } }).catch(() => {});
-    next();
+    // The rest of the request knows who's acting (admins are exempt from moderation).
+    actorStore.run({ userId: uid, role: req.userRole }, next);
   } catch (e) {
     next(e);
   }

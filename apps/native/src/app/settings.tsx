@@ -40,7 +40,7 @@ const EXPERIENCE: ToggleDef[] = [
   { k: 'hapticsEnabled', label: 'Haptics', hint: 'Taps, matches and rewards', icon: 'vibration' },
   { k: 'soundEnabled', label: 'Sounds', hint: 'Reward chimes', icon: 'volume-up' },
   { k: 'reduceMotion', label: 'Reduce motion', hint: 'Fewer animations', icon: 'motion-photos-off' },
-  { k: 'safeMode', label: 'SafeShield strict mode', hint: 'Hide community-flagged posts', icon: 'shield' },
+  { k: 'safeMode', label: 'LOLShield strict mode', hint: 'Hide community-flagged posts', icon: 'shield' },
 ];
 
 export default function Settings() {

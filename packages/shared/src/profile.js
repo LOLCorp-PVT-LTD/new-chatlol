@@ -178,7 +178,7 @@ export const spotifyOpenUrl = (song) => `https://open.spotify.com/${song.type}/$
 
 // ——— Moderation ———
 export const MOD_STATUSES = ['active', 'muted', 'suspended', 'banned'];
-/** What happens at each strike count within the rolling window (AI SafeShield escalation ladder). */
+/** What happens at each strike count within the rolling window (AI LOLShield escalation ladder). */
 export const STRIKE_LADDER = [
   { strikes: 1, action: 'warn' },
   { strikes: 2, action: 'mute', minutes: 60 },

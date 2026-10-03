@@ -185,7 +185,7 @@ adminRouter.get('/admin/users/:id', async (req, res) => {
     db.shouts.find({ authorId: u._id }).sort({ createdAt: -1 }).limit(10).toArray(),
     db.messages.find({ authorId: u._id }).sort({ createdAt: -1 }).limit(20).toArray(),
   ]);
-  const byName = async (id) => (id === 'ai' ? 'SafeShield AI' : `@${(await author(id)).handle}`);
+  const byName = async (id) => (id === 'ai' ? 'LOLShield AI' : `@${(await author(id)).handle}`);
   res.json({
     user: await adminUser(u),
     events: await Promise.all(
@@ -432,7 +432,7 @@ adminRouter.get('/admin/users/:id/content', requirePerm('reports'), async (req, 
       mediaUrl: r.removedOriginal?.mediaUrl ?? r.mediaUrl ?? null,
       where: r.roomId ?? r.postId ?? r.threadId ?? r.profileId ?? null,
       hidden: !!r.hidden,
-      removed: r.removed ?? (r.kind === 'removed' ? { by: 'SafeShield', reason: r.removedReason ?? '' } : null),
+      removed: r.removed ?? (r.kind === 'removed' ? { by: 'LOLShield', reason: r.removedReason ?? '' } : null),
       reactions: r.reactions ?? null,
       createdAt: r.createdAt,
     })),
@@ -731,7 +731,7 @@ adminRouter.post('/admin/content/remove', requirePerm('reports'), async (req, re
 adminRouter.get('/admin/modlog', async (_req, res) => {
   const rows = await db.modEvents.find({}).sort({ createdAt: -1 }).limit(100).toArray();
   const author = authorCache();
-  const byName = async (id) => (id === 'ai' ? 'SafeShield AI' : `@${(await author(id)).handle}`);
+  const byName = async (id) => (id === 'ai' ? 'LOLShield AI' : `@${(await author(id)).handle}`);
   res.json({
     items: await Promise.all(
       rows.map(async (e) => ({

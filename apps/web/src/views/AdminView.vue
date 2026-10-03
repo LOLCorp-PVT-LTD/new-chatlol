@@ -271,7 +271,7 @@ const INTEGRATION_LABELS: Record<string, string> = { database: 'Database', redis
       <div class="flex gap-2"><button v-for="x in (['open', 'closed', 'all'] as const)" :key="x" class="chip capitalize" :class="{ 'chip-active': reportStatus === x }" @click="reportStatus = x">{{ x }}</button></div>
       <div v-for="r in reports" :key="r.id" class="card p-4 space-y-2">
         <div class="flex items-center gap-2 flex-wrap text-body-sm"><span class="chip h-7 text-label-sm">{{ r.targetType }}</span><b>@{{ r.reporter.handle }}</b> reported <button v-if="r.target" class="font-bold text-primary" @click="openUser(r.target.id)">@{{ r.target.handle }}</button> • {{ timeAgo(r.createdAt) }} ago
-          <span class="ml-auto rounded-full px-2 py-0.5 text-label-sm" :class="r.status === 'actioned' ? 'bg-online/15 text-green-700' : r.status === 'dismissed' ? 'bg-surface-container' : 'bg-yellow-400/20'">{{ r.status }}{{ r.resolvedBy === 'ai' ? ' by SafeShield' : '' }}</span></div>
+          <span class="ml-auto rounded-full px-2 py-0.5 text-label-sm" :class="r.status === 'actioned' ? 'bg-online/15 text-green-700' : r.status === 'dismissed' ? 'bg-surface-container' : 'bg-yellow-400/20'">{{ r.status }}{{ r.resolvedBy === 'ai' ? ' by LOLShield' : '' }}</span></div>
         <p class="text-body-md"><b>Reason:</b> {{ r.reason }}</p>
         <p v-if="r.content" class="rounded-md bg-surface-container-low p-3 text-body-md" :class="{ 'line-through opacity-60': r.content.removed }">{{ r.content.text }}</p>
         <img v-if="r.content?.mediaUrl" :src="r.content.mediaUrl" alt="" class="max-h-48 rounded-md" />
@@ -286,7 +286,7 @@ const INTEGRATION_LABELS: Record<string, string> = { database: 'Database', redis
 
     <!-- AI flags -->
     <template v-else-if="section === 'flags'">
-      <p class="text-body-md text-on-surface-variant">SafeShield escalations: severe violations (already suspended) and repeat offenders it recommends terminating.</p>
+      <p class="text-body-md text-on-surface-variant">LOLShield escalations: severe violations (already suspended) and repeat offenders it recommends terminating.</p>
       <div v-for="f in flags" :key="f.id" class="card p-4 space-y-2">
         <div class="flex items-center gap-2 text-body-sm flex-wrap"><span class="rounded-full px-2 py-0.5 text-label-sm" :class="f.priority === 'high' ? 'bg-error/15 text-error' : 'bg-surface-container'">{{ f.priority }}</span>
           <button class="font-bold text-primary" @click="openUser(f.user.id)">@{{ f.user.handle }}</button> • {{ f.category }} • {{ timeAgo(f.createdAt) }} ago</div>

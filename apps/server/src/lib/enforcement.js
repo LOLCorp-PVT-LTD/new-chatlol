@@ -5,7 +5,7 @@ import { io, room } from './io.js';
 
 /**
  * Account standing: active → muted (can read, can't post or chat) → suspended (can't sign in until a date)
- * → banned (terminated, permanent). Strikes from SafeShield or moderators escalate along STRIKE_LADDER.
+ * → banned (terminated, permanent). Strikes from LOLShield or moderators escalate along STRIKE_LADDER.
  */
 
 /** The standing that applies right now (an expired mute or suspension counts as active). */
@@ -55,7 +55,7 @@ export async function canPost(userId) {
 }
 
 const ACTION_COPY = {
-  warn: (r) => ['SafeShield warning ⚠️', `Heads up: ${r}. Repeat it and you'll be muted.`],
+  warn: (r) => ['LOLShield warning ⚠️', `Heads up: ${r}. Repeat it and you'll be muted.`],
   mute: (r, until) => ['You’ve been muted 🔇', `${r}. You can post again ${fmt(until)}.`],
   suspend: (r, until) => ['Account suspended', `${r}. Suspended until ${fmt(until)}.`],
   ban: (r) => ['Account terminated', r],
@@ -65,7 +65,7 @@ const ACTION_COPY = {
 };
 
 /**
- * Applies a moderation action and records it. `by` is 'ai' (SafeShield) or a moderator's user id.
+ * Applies a moderation action and records it. `by` is 'ai' (LOLShield) or a moderator's user id.
  * actions: warn | mute | suspend | ban | unmute | unsuspend | unban | strike_clear
  */
 export async function applyAction(
@@ -90,7 +90,7 @@ export async function applyAction(
   if (copy) {
     // Imported lazily: rewards.js imports this module's callers.
     const { notify } = await import('./rewards.js');
-    await notify(userId, { kind: 'system', title: copy[0], body: copy[1], link: '/settings' });
+    await notify(userId, { kind: 'system', title: copy[0], body: copy[1], link: action === 'warn' || action === 'mute' || action === 'suspend' ? '/guidelines' : '/settings' });
   }
   io()?.to(room.user(userId)).emit('moderation', { action, until, reason });
   if (action === 'suspend' || action === 'ban') io()?.in(room.user(userId)).disconnectSockets(true);
@@ -102,7 +102,8 @@ export async function applyAction(
  */
 export async function addStrike(userId, { reason, category = null, ref = null, severe = false, by = 'ai' }) {
   const u = await db.users.findOne({ _id: userId }, { projection: { isAi: 1, role: 1 } });
-  if (!u || u.isAi) return null;
+  // AI personas and admins are never moderated.
+  if (!u || u.isAi || u.role === 'admin') return null;
   await db.modEvents.insertOne({ _id: newId(), userId, kind: 'strike', reason, category, ref, byUserId: by, severe, createdAt: now() });
   if (severe) {
     await applyAction(userId, { action: 'suspend', minutes: 30 * 24 * 60, reason, by, category, ref });
