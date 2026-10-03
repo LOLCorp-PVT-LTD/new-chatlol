@@ -72,6 +72,8 @@ export interface StatusRank {
     checkInBoost: number;
     color: string;
     badge?: boolean;
+    /** Badge look: plain (early ranks), filled (Noble), shine (Royalty, Legendary). */
+    style: 'plain' | 'filled' | 'shine';
 }
 export declare const STATUS_RANKS: StatusRank[];
 export declare const statusFor: (level: number) => StatusRank;

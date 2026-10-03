@@ -239,13 +239,18 @@ export const KING = { key: 'king_crown', name: 'King of ChatLOL', emoji: '👑',
 
 // ——— Status ranks ———
 /** Prestige by level. Each rank multiplies the daily check-in bonus; Noble and up show a badge by their name. */
+/**
+ * Status ranks come from a member's level (which comes from their XP), so everyone always has one. Every rank shows
+ * a badge next to the member's name everywhere: plain for the early ranks, filled from Noble, shining for Royalty
+ * and Legendary (`style`).
+ */
 export const STATUS_RANKS = [
-  { key: 'commoner', label: 'Commoner', emoji: '🪵', minLevel: 1, checkInBoost: 1, color: '#8c7b6b' },
-  { key: 'squire', label: 'Squire', emoji: '🛡️', minLevel: 5, checkInBoost: 1.1, color: '#6b8fb3' },
-  { key: 'knight', label: 'Knight', emoji: '⚔️', minLevel: 10, checkInBoost: 1.25, color: '#5470e8' },
-  { key: 'noble', label: 'Noble', emoji: '🎩', minLevel: 18, checkInBoost: 1.5, color: '#8f63e8', badge: true },
-  { key: 'royalty', label: 'Royalty', emoji: '💍', minLevel: 28, checkInBoost: 1.75, color: '#d4a017', badge: true },
-  { key: 'legendary', label: 'Legendary', emoji: '🌟', minLevel: 40, checkInBoost: 2, color: '#ff5e00', badge: true },
+  { key: 'commoner', label: 'Commoner', emoji: '🪵', minLevel: 1, checkInBoost: 1, color: '#8c7b6b', badge: true, style: 'plain' },
+  { key: 'squire', label: 'Squire', emoji: '🛡️', minLevel: 5, checkInBoost: 1.1, color: '#6b8fb3', badge: true, style: 'plain' },
+  { key: 'knight', label: 'Knight', emoji: '⚔️', minLevel: 10, checkInBoost: 1.25, color: '#5470e8', badge: true, style: 'plain' },
+  { key: 'noble', label: 'Noble', emoji: '🎩', minLevel: 18, checkInBoost: 1.5, color: '#8f63e8', badge: true, style: 'filled' },
+  { key: 'royalty', label: 'Royalty', emoji: '💍', minLevel: 28, checkInBoost: 1.75, color: '#d4a017', badge: true, style: 'shine' },
+  { key: 'legendary', label: 'Legendary', emoji: '🌟', minLevel: 40, checkInBoost: 2, color: '#ff5e00', badge: true, style: 'shine' },
 ];
 export const statusFor = (level) => [...STATUS_RANKS].reverse().find((r) => level >= r.minLevel) ?? STATUS_RANKS[0];
 
