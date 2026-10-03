@@ -134,6 +134,10 @@ export function stripPremiumLayout(layout) {
   return { layout: out, removed: [...removed] };
 }
 
+// ——— Referrals ———
+/** Gold for each friend who joins with your link, paid once they've verified their email and reached minLevel. */
+export const REFERRAL = { gold: 1, minLevel: 3 };
+
 // ——— Username changes ———
 /** Members can change their @handle for Gold (staff can change it for free from the admin panel). */
 export const HANDLE_CHANGE_GOLD = 1;

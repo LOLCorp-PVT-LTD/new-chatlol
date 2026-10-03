@@ -892,3 +892,21 @@ test('game arenas: level gate, invite-only, escrowed stakes, server-checked move
   assert.equal((await db.users.findOne({ _id: winner })).sparks, 900 + 190, 'pot 200 minus 5% rake');
   assert.equal(c.id.length, 24);
 });
+
+test('referrals: invite link, friend joins, inviter gets 1 Gold once the friend is verified and level 3', async () => {
+  const inviter = await signUp('refa');
+  const { code, link } = await as('refa').referral();
+  assert.ok(link.endsWith(`?ref=${code}`));
+  n++;
+  const r = await as('anon').register({ email: `refb${n}@example.com`, password: 'password123', handle: `refb_${n}`, displayName: 'refb', birthdate: '1996-02-02', gender: 'female', ref: code });
+  tokens.refb = r.token;
+  const friendId = r.user.id;
+  assert.equal((await db.users.findOne({ _id: friendId })).referredById, inviter.id);
+  const { maybePayReferral } = await import('./lib/referrals.js');
+  assert.equal(await maybePayReferral(friendId), false, 'not verified / levelled yet');
+  await db.users.updateOne({ _id: friendId }, { $set: { emailVerifiedAt: new Date().toISOString(), xp: xpForLevel(3) } });
+  assert.equal(await maybePayReferral(friendId), true);
+  assert.equal(await maybePayReferral(friendId), false, 'pays once');
+  assert.equal((await db.users.findOne({ _id: inviter.id })).gold, 1);
+  assert.equal((await as('refa').referral()).paid, 1);
+});

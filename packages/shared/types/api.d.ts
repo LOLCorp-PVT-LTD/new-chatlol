@@ -23,6 +23,8 @@ export declare function createApi(opts: ApiClientOptions): {
         birthdate: string;
         gender: import('./profile').Gender;
         interests?: string[];
+        /** Referral code from an invite link. */
+        ref?: string;
     }) => Promise<AuthResponse>;
     login: (b: {
         login: string;
@@ -261,6 +263,8 @@ export declare function createApi(opts: ApiClientOptions): {
     }>;
     unlockTheme: (key: import('./themes').AppThemeKey) => Promise<{ user: UserPrivate }>;
     changeHandle: (handle: string) => Promise<{ user: UserPrivate }>;
+    referral: () => Promise<{ code: string; link: string; joined: number; paid: number; goldEarned: number; friends: { id: ID; displayName: string; handle: string; avatarUrl: string; paid: boolean; joinedAt: string }[] }>;
+    inviteByEmail: (emails: string[]) => Promise<{ sent: number }>;
     exchange: (to: 'gems' | 'gold', amount: number) => Promise<{ sparks: number; gems: number; gold: number }>;
     useTicket: (key: import('./progression').TicketKey, targetId: ID, loungeId?: ID) => Promise<{ used: string; free: boolean; target: { id: ID; handle: string } }>;
     games: () => Promise<{ games: import('./games').GameInfo[]; currencies: import('./games').StakeCurrency[]; stakeLimits: Record<string, number>; rakePct: number }>;

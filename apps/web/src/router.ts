@@ -18,6 +18,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/drops', component: () => import('./views/DropsView.vue'), meta: { title: 'Sunset Drops' } },
   { path: '/roulette', component: () => import('./views/RouletteView.vue'), meta: { auth: true, title: 'Vibe Roulette' } },
   { path: '/arena', component: () => import('./views/ArenaView.vue'), meta: { title: 'Hot Take Arena' } },
+  { path: '/invite', component: () => import('./views/InviteView.vue'), meta: { title: 'Invite friends' } },
   { path: '/games', component: () => import('./views/GamesView.vue'), meta: { title: 'Game Arenas' } },
   { path: '/arenas/:id', component: () => import('./views/GameRoomView.vue'), meta: { remount: true, title: 'Game Arena' } },
   { path: '/shouts', component: () => import('./views/ShoutboxView.vue'), meta: { rails: false, title: 'Shoutbox' } },

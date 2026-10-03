@@ -2,6 +2,12 @@
 import DialogHost from './components/DialogHost.vue';
 import { computed, ref, watch, onUnmounted } from 'vue';
 import { useRoute } from 'vue-router';
+
+// Invite links (?ref=CODE): remember the code until sign-up, whichever page they land on.
+try {
+  const ref = new URLSearchParams(location.search).get('ref');
+  if (ref && /^[A-Za-z0-9]{4,16}$/.test(ref)) localStorage.setItem('chatlol.ref', ref);
+} catch { /* storage blocked */ }
 import type { Post } from '@chatlol/shared';
 import { useSession } from './stores/session';
 import TopBar from './components/TopBar.vue';

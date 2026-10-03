@@ -17,6 +17,7 @@ export const NAV: NavItem[] = [
   { to: '/insights', label: 'Who Viewed Me', icon: 'visibility' },
   { to: '/premium', label: 'Premium', icon: 'workspace_premium' },
   { to: '/vault', label: 'Sparks Vault', icon: 'diamond' },
+  { to: '/invite', label: 'Invite & earn Gold', icon: 'person_add' },
 ];
 export const TABS: NavItem[] = [
   { to: '/', label: 'Home', icon: 'home' },

@@ -40,6 +40,7 @@ export async function grant(userId, sparks, xp, reason, emit = true, { boost = t
   const to = levelForXp(before.xp + xp);
   const ev = { sparks, xp, gems, reason, boosted, levelUp: to > from ? { from, to } : null };
   if (to > from && !before.isAi) {
+    void import('./referrals.js').then((m) => m.maybePayReferral(userId)).catch(() => {});
     await db.users.updateOne({ _id: userId }, { $inc: { sparks: to * 10 } });
     await notify(userId, {
       kind: 'level',

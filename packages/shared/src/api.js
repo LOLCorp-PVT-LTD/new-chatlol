@@ -192,6 +192,8 @@ export function createApi(opts) {
     usePower: (key) => req('POST', `/store/${key}/use`),
     unlockTheme: (key) => req('POST', `/me/themes/${key}/unlock`),
     changeHandle: (handle) => req('POST', '/me/handle', { handle }),
+    referral: () => req('GET', '/me/referral'),
+    inviteByEmail: (emails) => req('POST', '/me/referral/invite', { emails }),
     exchange: (to, amount) => req('POST', '/wallet/exchange', { to, amount }),
     useTicket: (key, targetId, loungeId) => req('POST', `/tickets/${key}/use`, { targetId, loungeId }),
     king: () => req('GET', '/king'),

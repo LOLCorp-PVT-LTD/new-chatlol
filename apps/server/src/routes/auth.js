@@ -10,6 +10,7 @@ import { assertClean } from '../lib/moderation.js';
 import { itemIdFor } from '../lib/ids.js';
 import { vapidKeys } from '../lib/push.js';
 import { dailyCheckIn } from '../lib/progression.js';
+import { attachReferrer, emailInvites, maybePayReferral, referralStats } from '../lib/referrals.js';
 import { consumeToken, sendPasswordReset, sendVerification, sendEmailChangedNotice } from '../lib/emailTokens.js';
 import { config } from '../config.js';
 import { closeAccount } from '../lib/accounts.js';
@@ -33,6 +34,8 @@ authRouter.post('/auth/register', async (req, res) => {
       birthdate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       gender: z.enum(['male', 'female'], { message: 'pick Male or Female' }),
       interests: z.array(z.string().max(30)).max(MAX_INTERESTS).optional(),
+      /** Referral code from an invite link. */
+      ref: z.string().max(16).optional(),
     }),
     req.body,
   );
@@ -66,6 +69,7 @@ authRouter.post('/auth/register', async (req, res) => {
       throw new HttpError(409, e.keyPattern?.email ? 'That email already has an account' : 'That handle is taken', 'taken');
     throw e;
   }
+  await attachReferrer(id, b.ref);
   // Starter social graph: follow a handful of active members so the feed is alive from minute one.
   const starters = await db.users
     .find({ _id: { $ne: id }, deletedAt: null }, { projection: { _id: 1 } })
@@ -110,6 +114,7 @@ authRouter.post('/auth/verify', async (req, res) => {
   if (!userId) throw new HttpError(400, 'That link has expired or was already used', 'invalid_token');
   const r = await db.users.updateOne({ _id: userId, emailVerifiedAt: null }, { $set: { emailVerifiedAt: now() } });
   if (r.modifiedCount) await grant(userId, 50, 25, 'Email verified ✅');
+  void maybePayReferral(userId);
   res.json({ ok: true });
 });
 
@@ -240,6 +245,17 @@ authRouter.patch('/me/settings', requireAuth, async (req, res) => {
   const set = Object.fromEntries(Object.entries(b).map(([k, v]) => [`settings.${k}`, v]));
   if (Object.keys(set).length) await db.users.updateOne({ _id: id }, { $set: set });
   res.json({ user: await me(id) });
+});
+
+// ——— Referrals ———
+authRouter.get('/me/referral', requireAuth, async (req, res) => {
+  res.json(await referralStats(uid(req)));
+});
+authRouter.post('/me/referral/invite', requireAuth, async (req, res) => {
+  const id = uid(req);
+  const { emails } = parse(z.object({ emails: z.array(z.string().email().max(200)).min(1).max(10) }), req.body);
+  await rateLimit(`invite:${id}`, 5);
+  res.json({ sent: await emailInvites(id, emails) });
 });
 
 /** Change your @handle: costs Gold (HANDLE_CHANGE_GOLD). */

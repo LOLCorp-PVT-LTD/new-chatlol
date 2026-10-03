@@ -23,7 +23,10 @@ async function submit() {
   busy.value = true;
   error.value = '';
   try {
-    await s.register({ ...f.value, gender: f.value.gender!, handle: f.value.handle.trim(), email: f.value.email.trim() });
+    let ref: string | undefined;
+    try { ref = localStorage.getItem('chatlol.ref') ?? undefined; } catch { /* private mode */ }
+    await s.register({ ...f.value, gender: f.value.gender!, handle: f.value.handle.trim(), email: f.value.email.trim(), ref });
+    try { localStorage.removeItem('chatlol.ref'); } catch { /* ignore */ }
     router.replace('/drops');
   } catch (e) { error.value = (e as Error).message; step.value = 1; } finally { busy.value = false; }
 }
