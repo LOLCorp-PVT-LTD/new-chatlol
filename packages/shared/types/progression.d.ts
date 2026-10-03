@@ -44,3 +44,18 @@ export declare const PREMIUM_PROFILE: {
 export declare function stripPremiumLayout<
   L extends { header: string; font: string; width: string; sections: { type: string; style: string }[] },
 >(layout: L): { layout: L; removed: string[] };
+export declare const EXCHANGE: { sparksPerGem: number; gemsPerGold: number };
+export type TicketKey = 'ban_ticket' | 'mute_ticket' | 'kick_ticket' | 'premium_gift';
+export interface Ticket {
+    key: TicketKey;
+    name: string;
+    emoji: string;
+    desc: string;
+    gold: number;
+    minutes: number;
+    immunityHours: number;
+    rarity: 'common' | 'rare' | 'epic' | 'legendary';
+}
+export declare const TICKETS: Ticket[];
+export declare const ticketByKey: (key: string) => Ticket | undefined;
+export declare const KING: { key: string; name: string; emoji: string; gold: number; reignDays: number };

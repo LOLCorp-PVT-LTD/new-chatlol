@@ -182,6 +182,9 @@ export function createApi(opts) {
     inventory: () => req('GET', '/store/inventory'),
     claimDaily: () => req('POST', '/store/daily'),
     usePower: (key) => req('POST', `/store/${key}/use`),
+    exchange: (to, amount) => req('POST', '/wallet/exchange', { to, amount }),
+    useTicket: (key, targetId, loungeId) => req('POST', `/tickets/${key}/use`, { targetId, loungeId }),
+    king: () => req('GET', '/king'),
 
     // live
     streams: () => req('GET', '/live'),

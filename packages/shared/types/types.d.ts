@@ -40,6 +40,8 @@ export interface UserPublic {
     premium: boolean;
     /** Featured by staff: shown first in Browse Members and more often in Rate & Meet. */
     boosted?: boolean;
+    /** The reigning King of ChatLOL (golden crown). */
+    isKing?: boolean;
     isFollowing?: boolean;
     /** How you stand with them (only on other people). */
     friendship?: Friendship | null;
@@ -50,8 +52,10 @@ export interface UserPrivate extends UserPublic {
     emailVerified: boolean;
     /** Earned currency: Roulette, Drops, Arena, gifts. Never sold. */
     sparks: number;
-    /** Premium currency bought with real money. Cosmetics only — can't be staked or gambled. */
+    /** Premium currency bought with real money (or exchanged from Sparks). */
     gems: number;
+    /** Top currency, exchanged from Gems: buys tickets and the King's crown. */
+    gold: number;
     dailyGoal: {
         done: number;
         target: number;
@@ -261,7 +265,7 @@ export interface NotificationItem {
     read: boolean;
     createdAt: ISODate;
 }
-export type StoreItemKind = 'frame' | 'flair' | 'theme' | 'banner' | 'gift' | 'crate' | 'boost' | 'streak_freeze' | 'stickers' | 'emojis' | 'unlock' | 'power';
+export type StoreItemKind = 'frame' | 'flair' | 'theme' | 'banner' | 'gift' | 'crate' | 'boost' | 'streak_freeze' | 'stickers' | 'emojis' | 'unlock' | 'power' | 'ticket' | 'king';
 export type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
 export interface StoreItem {
     id: ID;
@@ -271,6 +275,8 @@ export interface StoreItem {
     price: number;
     /** Price in Gems, or null when the item can only be bought with earned Sparks (e.g. loot crates). */
     gemPrice: number | null;
+    /** Gold-only items (tickets, the King's crown): their Gold price. */
+    goldPrice: number | null;
     rarity: Rarity;
     emoji: string;
     preview: string;
@@ -432,6 +438,7 @@ export interface AdminUser extends UserPublic {
     birthdate: string;
     sparks: number;
     gems: number;
+    gold: number;
     premiumUntil: ISODate | null;
     standing: { status: import('./profile').ModStatus; until: ISODate | null; reason: string | null };
     strikes30d: number;

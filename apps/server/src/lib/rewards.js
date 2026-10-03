@@ -47,11 +47,11 @@ export async function grant(userId, sparks, xp, reason, emit = true, { boost = t
 }
 
 export async function emitWallet(userId, ev) {
-  const u = await db.users.findOne({ _id: userId }, { projection: { sparks: 1, gems: 1, xp: 1 } });
+  const u = await db.users.findOne({ _id: userId }, { projection: { sparks: 1, gems: 1, gold: 1, xp: 1 } });
   if (!u) return;
   io()
     ?.to(room.user(userId))
-    .emit('wallet', { sparks: u.sparks, gems: u.gems ?? 0, xp: u.xp, level: levelForXp(u.xp) });
+    .emit('wallet', { sparks: u.sparks, gems: u.gems ?? 0, gold: u.gold ?? 0, xp: u.xp, level: levelForXp(u.xp) });
   if (ev && (ev.sparks || ev.xp)) io()?.to(room.user(userId)).emit('reward', ev);
 }
 

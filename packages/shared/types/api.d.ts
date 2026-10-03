@@ -241,12 +241,15 @@ export declare function createApi(opts: ApiClientOptions): {
         items: StoreItem[];
         sparks: number;
         gems: number;
+        gold: number;
         crateOdds: Record<string, number>;
+        exchange: { sparksPerGem: number; gemsPerGold: number };
     }>;
-    buy: (id: ID, currency?: "sparks" | "gems") => Promise<WithReward<{
+    buy: (id: ID, currency?: "sparks" | "gems" | "gold") => Promise<WithReward<{
         item: StoreItem;
         sparks: number;
         gems: number;
+        gold: number;
         won?: StoreItem | null;
     }>>;
     inventory: () => Promise<{
@@ -256,6 +259,9 @@ export declare function createApi(opts: ApiClientOptions): {
         used: { key: string; until: string };
         powers: Partial<Record<import('./progression').PowerKey, string>>;
     }>;
+    exchange: (to: 'gems' | 'gold', amount: number) => Promise<{ sparks: number; gems: number; gold: number }>;
+    useTicket: (key: import('./progression').TicketKey, targetId: ID, loungeId?: ID) => Promise<{ used: string; free: boolean; target: { id: ID; handle: string } }>;
+    king: () => Promise<{ king: { user: UserPublic; since: string; until: string } | null }>;
     claimDaily: () => Promise<WithReward<{
         claimed: boolean;
         nextAt: string;
@@ -364,7 +370,7 @@ export declare function createApi(opts: ApiClientOptions): {
         updatePersona: (id: ID, b: { dmFrom?: 'everyone' | 'following' | 'nobody'; active?: boolean }) => Promise<{ ok: true }>;
         generatePersonas: (b: { count: number; hint?: string }) => Promise<{ started: true }>;
         setPerms: (id: ID, perms: import('./permissions').Permission[]) => Promise<{ user: AdminUser }>;
-        wallet: (id: ID, b: { sparks?: number; gems?: number; reason?: string }) => Promise<{ user: AdminUser }>;
+        wallet: (id: ID, b: { sparks?: number; gems?: number; gold?: number; reason?: string }) => Promise<{ user: AdminUser }>;
         items: () => Promise<{ items: { key: string; name: string; kind: string; emoji: string | null; rarity: string | null; price: number }[] }>;
         giveItem: (id: ID, key: string, qty?: number) => Promise<{ ok: true }>;
         boost: (id: ID, hours: number) => Promise<{ user: AdminUser }>;

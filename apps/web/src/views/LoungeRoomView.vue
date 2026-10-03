@@ -6,7 +6,8 @@ import RichText from '../components/RichText.vue';
 import StickerView from '../components/StickerView.vue';
 import { insertAtCaret } from '../lib/insertAtCaret';
 import { nextTick, onMounted, onUnmounted, ref } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
+import { confirmDialog } from '../lib/dialog';
 import type { ChatMessage, Lounge } from '@chatlol/shared';
 import { timeAgo } from '@chatlol/shared';
 import { api } from '../lib/api';
@@ -16,6 +17,7 @@ import UserName from '../components/UserName.vue';
 import Icon from '../components/Icon.vue';
 
 const route = useRoute();
+const router = useRouter();
 const s = useSession();
 const id = route.params.id as string;
 const lounge = ref<Lounge | null>(null);
@@ -29,12 +31,31 @@ const scroll = async () => { await nextTick(); list.value?.scrollTo({ top: list.
 const onMsg = (m: ChatMessage) => { if (m.roomId === id) { messages.value.push(m); void scroll(); } };
 const onPresence = (p: { loungeId: string; onlineCount: number }) => { if (p.loungeId === id) online.value = Math.max(online.value, p.onlineCount); };
 
+const onKicked = (k: { loungeId: string; by: string; minutes: number }) => {
+  if (k.loungeId !== id) return;
+  s.toast({ kind: 'error', title: `🥾 @${k.by} kicked you out`, body: `You can come back in ${k.minutes} minutes.` }, 6000);
+  void router.push('/lounges');
+};
+/** Kick Ticket: tap someone's name in the room. */
+async function kick(m: ChatMessage) {
+  if (!(await confirmDialog({ title: `🥾 Kick @${m.author.handle}?`, body: 'Uses one Kick Ticket: they’re out of this lounge for an hour.', danger: true }))) return;
+  try {
+    const r = await api.useTicket('kick_ticket', m.author.id, id);
+    s.toast({ kind: 'reward', title: `🥾 @${r.target.handle} was kicked${r.free ? ' (King’s freebie 👑)' : ''}` });
+  } catch (e) { s.toast({ kind: 'error', title: (e as Error).message }); }
+}
+
 onMounted(async () => {
   const r = await api.lounge(id);
   lounge.value = r.lounge;
   online.value = r.lounge.onlineCount;
   const sock = s.socket();
-  sock.emit('lounge:join', id, (history) => { messages.value = history; void scroll(); });
+  sock.emit('lounge:join', id, (history) => {
+    if (!Array.isArray(history)) return onKicked({ loungeId: id, by: 'someone', minutes: 60 });
+    messages.value = history;
+    void scroll();
+  });
+  sock.on('lounge:kicked', onKicked);
   sock.on('lounge:message', onMsg);
   sock.on('lounge:presence', onPresence);
 });
@@ -43,6 +64,7 @@ onUnmounted(() => {
   sock.emit('lounge:leave', id);
   sock.off('lounge:message', onMsg);
   sock.off('lounge:presence', onPresence);
+  sock.off('lounge:kicked', onKicked);
 });
 const box = ref<HTMLInputElement>();
 const addEmoji = (t: string) => (draft.value = insertAtCaret(box.value, draft.value, t));
@@ -66,7 +88,8 @@ function send(text = draft.value, sticker: StickerInput | null = null) {
         <RouterLink :to="`/u/${m.author.handle}`"><Avatar :user="m.author" :size="34" /></RouterLink>
         <div class="max-w-[75%]">
           <div class="flex items-center gap-1.5 text-label-sm text-on-surface-variant mb-0.5" :class="{ 'justify-end': m.author.id === s.user?.id }">
-            <UserName :user="m.author" :link="false" /><span>{{ timeAgo(m.createdAt) }}</span></div>
+            <UserName :user="m.author" :link="false" /><span>{{ timeAgo(m.createdAt) }}</span>
+            <button v-if="s.user && m.author.id !== s.user.id && !m.author.isAI" class="opacity-50 hover:opacity-100" title="Kick (uses a Kick Ticket)" :aria-label="`Kick @${m.author.handle}`" @click="kick(m)">🥾</button></div>
           <StickerView v-if="m.sticker" :sticker="m.sticker" :size="128" class="block" :class="{ 'ml-auto': m.author.id === s.user?.id }" />
           <p v-if="m.body && emojiOnly(m.body)" :class="{ 'text-right': m.author.id === s.user?.id }"><RichText :text="m.body" /></p>
           <p v-else-if="m.body" class="px-4 py-2 rounded-[20px] text-body-md break-words"

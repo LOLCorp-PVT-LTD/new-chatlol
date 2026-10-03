@@ -68,7 +68,7 @@ export const useSession = defineStore('session', () => {
     socket.on('wallet', (w) => {
       if (!user.value) return;
       const before = user.value.level;
-      Object.assign(user.value, { sparks: w.sparks, gems: w.gems, xp: w.xp, level: w.level });
+      Object.assign(user.value, { sparks: w.sparks, gems: w.gems, gold: w.gold, xp: w.xp, level: w.level });
       if (w.level > before && !levelUp.value) levelUp.value = { from: before, to: w.level };
     });
     socket.on('reward', (r) => { if (r.reason !== 'rate') toast({ kind: 'reward', title: r.reason, sparks: r.sparks, xp: r.xp }, 2600); });

@@ -807,3 +807,48 @@ test('progression: power-ups, level gates, daily check-in streak and the 7-day i
   assert.equal(await db.inventory.findOne({ userId: u.id, itemId: itemIdFor('arena_shield') }), null, 'Spark-bought items gone');
   assert.equal((await runInactivity({ force: true })).reset, 0, 'only reset once per absence');
 });
+
+test('Gold economy: exchange, tickets with guardrails, Premium gifts and the King of ChatLOL', async () => {
+  const a = await signUp('gold');
+  const b = await signUp('goldb');
+  const c2 = await signUp('goldc');
+  const c = as('gold');
+  await db.users.updateOne({ _id: a.id }, { $set: { sparks: 20_000, gems: 2_000, gold: 0 } });
+
+  // One-way exchange.
+  const w1 = await c.exchange('gems', 2);
+  assert.deepEqual([w1.sparks, w1.gems], [0, 2002]);
+  await assert.rejects(c.exchange('gems', 1), (e) => e.code === 'insufficient_sparks');
+  assert.equal((await c.exchange('gold', 2)).gold, 2);
+
+  // Tickets cost Gold only.
+  await db.users.updateOne({ _id: a.id }, { $set: { gold: 20_000 } });
+  await c.buy('ban_ticket', 'gold');
+  await c.buy('ban_ticket', 'gold');
+  await assert.rejects(c.useTicket('ban_ticket', a.id), (e) => e.status === 400, 'not on yourself');
+  await c.useTicket('ban_ticket', b.id);
+  await assert.rejects(as('goldb').me(), (e) => e.code === 'account_suspended');
+  await db.users.updateOne({ _id: b.id }, { $set: { moderation: { status: 'active' } } }); // staff lifted it
+  await assert.rejects(c.useTicket('ban_ticket', b.id), (e) => e.code === 'ticket_immune', 'no chaining');
+
+  // Premium gifts stack a day each.
+  await c.buy('premium_gift', 'gold');
+  await c.buy('premium_gift', 'gold');
+  await c.useTicket('premium_gift', c2.id);
+  await c.useTicket('premium_gift', c2.id);
+  const until = Date.parse((await db.users.findOne({ _id: c2.id })).premium.until);
+  assert.ok(until - Date.now() > 47 * 3_600_000, 'two days of Premium');
+
+  // The King: crowned, Premium, untouchable, gets a free daily mute; a new buyer dethrones.
+  await c.buy('king_crown', 'gold');
+  assert.equal((await c.king()).king.user.id, a.id);
+  assert.equal((await as('anon').user(a.handle)).user.isKing, true);
+  assert.ok((await c.me()).user.premiumUntil);
+  await db.users.updateOne({ _id: c2.id }, { $set: { gold: 20_000 } });
+  await as('goldc').buy('mute_ticket', 'gold');
+  await assert.rejects(as('goldc').useTicket('mute_ticket', a.id), (e) => e.code === 'ticket_protected');
+  assert.equal((await c.useTicket('mute_ticket', c2.id)).free, true);
+  await as('goldc').buy('king_crown', 'gold');
+  assert.equal((await c.king()).king.user.id, c2.id);
+  assert.ok((await db.users.findOne({ _id: a.id })).badges.includes('former_king'));
+});

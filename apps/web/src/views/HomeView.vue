@@ -26,7 +26,9 @@ const greeting = computed(() => {
   return hr < 5 ? 'Up late' : hr < 12 ? 'Good morning' : hr < 18 ? 'Good afternoon' : 'Good evening';
 });
 
+const king = ref<Awaited<ReturnType<typeof api.king>>['king']>(null);
 onMounted(async () => {
+  void api.king().then((r) => (king.value = r.king)).catch(() => {});
   h.value = await api.home();
   shouts.value = h.value.shouts;
   rateCard.value = h.value.rate;
@@ -53,6 +55,19 @@ async function nextRate() {
 
 <template>
   <div v-if="h" class="space-y-6 w-full">
+    <!-- The reigning King of ChatLOL -->
+    <RouterLink v-if="king" :to="`/u/${king.user.handle}`" class="block rounded-lg p-5 pt-8 shadow-float relative overflow-hidden text-[#3b2a00] bg-[linear-gradient(135deg,#fff3b0,#fcd34d_45%,#d4a017)] hover:brightness-105 transition">
+      <div class="absolute -right-6 -bottom-10 text-[140px] opacity-20 rotate-12 select-none">👑</div>
+      <div class="flex items-center gap-4 relative">
+        <Avatar :user="king.user" :size="84" />
+        <div class="min-w-0">
+          <p class="text-label-sm uppercase tracking-[.2em] font-bold">👑 King of ChatLOL</p>
+          <p class="text-headline-lg truncate">{{ king.user.displayName }}</p>
+          <p class="text-body-sm opacity-80">@{{ king.user.handle }} · reigns until {{ new Date(king.until).toLocaleDateString() }}</p>
+        </div>
+      </div>
+      <p class="text-label-md mt-3 relative">Think you can take the throne? <span class="underline">The crown is in the Vault.</span></p>
+    </RouterLink>
     <!-- Greeting -->
     <section class="rounded-lg bg-sunset-v text-white p-6 shadow-float relative overflow-hidden">
       <div class="absolute -right-12 -top-16 w-56 h-56 rounded-full bg-white/10" />

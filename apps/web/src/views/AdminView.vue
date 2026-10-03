@@ -45,7 +45,7 @@ const payments = ref<Awaited2<ReturnType<Api['payments']>> | null>(null);
 const payQuery = ref({ user: '', status: '', provider: '', days: '30' });
 const detail = ref<Awaited2<ReturnType<Api['user']>> | null>(null);
 const action = ref({ action: 'mute', minutes: 60, reason: '' });
-const wallet = ref({ sparks: 0, gems: 0, reason: '' });
+const wallet = ref({ sparks: 0, gems: 0, gold: 0, reason: '' });
 const storeItems = ref<Awaited2<ReturnType<Api['items']>>['items']>([]);
 const itemKey = ref('');
 const gates = ref<Awaited2<ReturnType<Api['levelGates']>> | null>(null);
@@ -81,7 +81,7 @@ async function openUser(id: string) {
   try {
     detail.value = await api.admin.user(id);
     action.value = { action: has('mute') ? 'mute' : 'ban', minutes: 60, reason: '' };
-    wallet.value = { sparks: 0, gems: 0, reason: '' };
+    wallet.value = { sparks: 0, gems: 0, gold: 0, reason: '' };
     if (has('items') && !storeItems.value.length) storeItems.value = (await api.admin.items()).items;
   } catch (e) { err(e); }
 }
@@ -116,9 +116,9 @@ async function togglePerm(p: Permission) {
 }
 async function sendWallet(sign: 1 | -1) {
   const w = wallet.value;
-  if (!w.sparks && !w.gems) return err(new Error('Enter an amount'));
-  await run(() => api.admin.wallet(detail.value!.user.id, { sparks: sign * Math.abs(w.sparks || 0), gems: sign * Math.abs(w.gems || 0), reason: w.reason }), sign > 0 ? 'Sent 🎁' : 'Taken away');
-  wallet.value = { sparks: 0, gems: 0, reason: '' };
+  if (!w.sparks && !w.gems && !w.gold) return err(new Error('Enter an amount'));
+  await run(() => api.admin.wallet(detail.value!.user.id, { sparks: sign * Math.abs(w.sparks || 0), gems: sign * Math.abs(w.gems || 0), gold: sign * Math.abs(w.gold || 0), reason: w.reason }), sign > 0 ? 'Sent 🎁' : 'Taken away');
+  wallet.value = { sparks: 0, gems: 0, gold: 0, reason: '' };
 }
 const grant = (days: number) => run(() => api.admin.grantPremium(detail.value!.user.id, days));
 const boost = (hours: number) => run(() => api.admin.boost(detail.value!.user.id, hours), hours ? 'Boosted 🚀' : 'Boost ended');
@@ -374,10 +374,11 @@ const INTEGRATION_LABELS: Record<string, string> = { database: 'Database', redis
 
         <div v-if="!detail.user.deleted" class="grid md:grid-cols-2 gap-4">
           <section v-if="has('wallet')" class="rounded-md bg-surface-container-low p-4 space-y-2.5">
-            <p class="label">Sparks & Gems <span class="normal-case font-normal text-on-surface-variant">· has ⚡{{ detail.user.sparks.toLocaleString() }} 💎{{ detail.user.gems.toLocaleString() }}</span></p>
-            <div class="grid grid-cols-2 gap-2">
+            <p class="label">Sparks & Gems <span class="normal-case font-normal text-on-surface-variant">· has ⚡{{ detail.user.sparks.toLocaleString() }} 💎{{ detail.user.gems.toLocaleString() }} 🪙{{ detail.user.gold.toLocaleString() }}</span></p>
+            <div class="grid grid-cols-3 gap-2">
               <label class="text-body-sm">⚡ Sparks<input v-model.number="wallet.sparks" type="number" min="0" class="input h-10 mt-1" /></label>
               <label class="text-body-sm">💎 Gems<input v-model.number="wallet.gems" type="number" min="0" class="input h-10 mt-1" /></label>
+              <label class="text-body-sm">🪙 Gold<input v-model.number="wallet.gold" type="number" min="0" class="input h-10 mt-1" /></label>
             </div>
             <div class="flex gap-1.5 flex-wrap"><button v-for="n in [100, 1000, 10000]" :key="n" class="chip h-7 text-label-sm" @click="wallet.sparks = (wallet.sparks || 0) + n">+{{ n.toLocaleString() }} ⚡</button><button v-for="n in [50, 500]" :key="'g' + n" class="chip h-7 text-label-sm" @click="wallet.gems = (wallet.gems || 0) + n">+{{ n }} 💎</button></div>
             <input v-model="wallet.reason" class="input h-10" placeholder="Note (shown to them when giving)" maxlength="200" />

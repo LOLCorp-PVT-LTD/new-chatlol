@@ -9,6 +9,7 @@ import { canPost } from './lib/enforcement.js';
 import { screen } from './lib/aiModeration.js';
 import { insertLoungeMessage, loungeKey, markRead, recentMessages } from './routes/social.js';
 import { streamKeys, endStream, insertStreamMessage } from './routes/live.js';
+import { kickKey } from './lib/tickets.js';
 import { bus } from './lib/events.js';
 import { assertEmojiOwned, resolveSticker, stickerInput } from './lib/stickers.js';
 import { shared, redisClient, duplicateRedis, sharedBackend } from './lib/shared.js';
@@ -94,6 +95,8 @@ export async function attachRealtime(server) {
       'lounge:join',
       safe(async (loungeId, ack) => {
         if (typeof loungeId !== 'string' || !(await db.lounges.findOne({ _id: loungeId }))) return;
+        // Kicked with a Kick Ticket: locked out of this lounge for a while.
+        if (userId && (await shared().get(kickKey(loungeId, userId)))) return ack?.({ kicked: true });
         socket.join(room.lounge(loungeId));
         joinedLounges.add(loungeId);
         // Ghost mode (Settings → Privacy): read the room without showing up in its presence list.
@@ -125,6 +128,7 @@ export async function attachRealtime(server) {
       'lounge:send',
       safe(async ({ loungeId, body, replyToId, sticker }) => {
         if (!userId || !joinedLounges.has(loungeId) || !allowChat()) return;
+        if (await shared().get(kickKey(loungeId, userId))) return void leaveLounge(loungeId);
         const text = String(body ?? '')
           .trim()
           .slice(0, 500);

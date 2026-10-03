@@ -133,3 +133,58 @@ export function stripPremiumLayout(layout) {
     .map((s) => (P.sectionStyles.includes(s.style) ? (removed.add('style'), { ...s, style: 'card' }) : s));
   return { layout: out, removed: [...removed] };
 }
+
+// ——— Currencies: Sparks (earned) → Gems → Gold ———
+/** One-way exchange rates. Gold is the top currency: tickets and the King's crown cost Gold. */
+export const EXCHANGE = { sparksPerGem: 10_000, gemsPerGold: 1_000 };
+
+/**
+ * Power tickets: used on another member. Staff and the reigning King can't be targeted, and a member who was just
+ * hit is protected for a while (`immunityHours`) so tickets can't be chained to keep someone out.
+ */
+export const TICKETS = [
+  {
+    key: 'ban_ticket',
+    name: 'Ban Ticket',
+    emoji: '🔨',
+    desc: 'Ban one member from ChatLOL for 24 hours. Single use.',
+    gold: 100,
+    minutes: 24 * 60,
+    immunityHours: 7 * 24,
+    rarity: 'legendary',
+  },
+  {
+    key: 'mute_ticket',
+    name: 'Mute Ticket',
+    emoji: '🔇',
+    desc: 'Mute one member for 1 hour — they can read but not post or chat.',
+    gold: 100,
+    minutes: 60,
+    immunityHours: 24,
+    rarity: 'epic',
+  },
+  {
+    key: 'kick_ticket',
+    name: 'Kick Ticket',
+    emoji: '🥾',
+    desc: 'Kick someone out of a lounge for 1 hour. Use it from the lounge: tap their name.',
+    gold: 100,
+    minutes: 60,
+    immunityHours: 0,
+    rarity: 'epic',
+  },
+  {
+    key: 'premium_gift',
+    name: 'Premium Gift',
+    emoji: '🎁',
+    desc: 'Gift a member 1 day of Premium. Stack them: every ticket adds another day.',
+    gold: 10,
+    minutes: 24 * 60,
+    immunityHours: 0,
+    rarity: 'rare',
+  },
+];
+export const ticketByKey = (key) => TICKETS.find((t) => t.key === key);
+
+/** King of ChatLOL: one reigning King at a time; buying the crown dethrones the current King. */
+export const KING = { key: 'king_crown', name: 'King of ChatLOL', emoji: '👑', gold: 10_000, reignDays: 30 };

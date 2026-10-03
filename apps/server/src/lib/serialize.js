@@ -1,3 +1,4 @@
+import { isKing } from './king.js';
 import { friendshipStatus } from './friends.js';
 import {
   summarizeRatings,
@@ -176,6 +177,7 @@ export async function userPublic(u, viewerId) {
     isAI: !!u.isAi,
     premium: isPremium(u),
     boosted: !!(u.boost?.until && u.boost.until > now()),
+    isKing: await isKing(u._id),
     createdAt: u.createdAt,
   };
   if (viewerId && viewerId !== u._id) {
@@ -207,6 +209,7 @@ export async function userPrivate(u) {
     emailVerified: !!u.emailVerifiedAt,
     sparks: u.sparks,
     gems: u.gems ?? 0,
+    gold: u.gold ?? 0,
     dailyGoal: { done: Math.min(done, REWARDS.questDailyOracle.target), target: REWARDS.questDailyOracle.target },
     comboCount: u.comboCount ?? 0,
     settings: { ...DEFAULT_SETTINGS, ...u.settings },
@@ -405,7 +408,9 @@ export function serializeStoreItem(i, owned, equipped, qty) {
     name: i.name,
     description: i.description,
     price: i.price,
-    gemPrice: gemPriceFor(i.kind, i.price),
+    gemPrice: i.goldPrice ? null : gemPriceFor(i.kind, i.price),
+    /** Gold-only items (tickets, the King's crown) have a Gold price and no Sparks / Gem price. */
+    goldPrice: i.goldPrice ?? null,
     rarity: i.rarity,
     emoji: i.emoji,
     preview: i.preview,

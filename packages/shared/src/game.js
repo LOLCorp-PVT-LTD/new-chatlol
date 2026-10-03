@@ -151,7 +151,7 @@ export function countdown(toIso, now = Date.now()) {
 /** Gems are sold for money and only buy cosmetics. Loot crates and anything wager-like stay earned-Sparks-only. */
 export function gemPriceFor(kind, sparksPrice) {
   // Crates, gifts, sticker & emoji packs and unlocks are Sparks-only.
-  if (['crate', 'gift', 'stickers', 'emojis', 'unlock'].includes(kind)) return null;
+  if (['crate', 'gift', 'stickers', 'emojis', 'unlock', 'ticket', 'king'].includes(kind)) return null;
   return Math.max(1, Math.ceil(sparksPrice / 10));
 }
 

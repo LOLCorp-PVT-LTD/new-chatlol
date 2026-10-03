@@ -118,6 +118,7 @@ async function adminUser(u) {
     birthdate: u.birthdate,
     sparks: u.sparks,
     gems: u.gems ?? 0,
+    gold: u.gold ?? 0,
     premiumUntil: isPremium(u) ? u.premium.until : null,
     standing: standing(u),
     strikes30d: strikes,
@@ -292,11 +293,12 @@ adminRouter.post('/admin/users/:id/wallet', requirePerm('wallet'), async (req, r
     z.object({
       sparks: z.number().int().min(-10_000_000).max(10_000_000).default(0),
       gems: z.number().int().min(-1_000_000).max(1_000_000).default(0),
+      gold: z.number().int().min(-100_000).max(100_000).default(0),
       reason: z.string().trim().max(200).default(''),
     }),
     req.body,
   );
-  if (!b.sparks && !b.gems) throw new HttpError(400, 'Enter an amount');
+  if (!b.sparks && !b.gems && !b.gold) throw new HttpError(400, 'Enter an amount');
   const target = await findTarget(req);
   if (target.deletedAt) throw new HttpError(400, 'That account is closed');
   await db.users.updateOne({ _id: target._id }, [
@@ -304,14 +306,15 @@ adminRouter.post('/admin/users/:id/wallet', requirePerm('wallet'), async (req, r
       $set: {
         sparks: { $max: [0, { $add: [{ $ifNull: ['$sparks', 0] }, b.sparks] }] },
         gems: { $max: [0, { $add: [{ $ifNull: ['$gems', 0] }, b.gems] }] },
+        gold: { $max: [0, { $add: [{ $ifNull: ['$gold', 0] }, b.gold] }] },
       },
     },
   ]);
   const fmt = (n, what) => `${n > 0 ? '+' : ''}${n.toLocaleString()} ${what}`;
-  const parts = [b.sparks && fmt(b.sparks, 'Sparks'), b.gems && fmt(b.gems, 'Gems')].filter(Boolean).join(', ');
-  const gifts = [b.sparks > 0 && fmt(b.sparks, 'Sparks'), b.gems > 0 && fmt(b.gems, 'Gems')].filter(Boolean).join(' and ');
-  await audit(target._id, 'wallet', `${parts}${b.reason ? ` — ${b.reason}` : ''}`, uid(req), { sparks: b.sparks, gems: b.gems });
-  if (b.sparks > 0 || b.gems > 0)
+  const parts = [b.sparks && fmt(b.sparks, 'Sparks'), b.gems && fmt(b.gems, 'Gems'), b.gold && fmt(b.gold, 'Gold')].filter(Boolean).join(', ');
+  const gifts = [b.sparks > 0 && fmt(b.sparks, 'Sparks'), b.gems > 0 && fmt(b.gems, 'Gems'), b.gold > 0 && fmt(b.gold, 'Gold')].filter(Boolean).join(' and ');
+  await audit(target._id, 'wallet', `${parts}${b.reason ? ` — ${b.reason}` : ''}`, uid(req), { sparks: b.sparks, gems: b.gems, gold: b.gold });
+  if (b.sparks > 0 || b.gems > 0 || b.gold > 0)
     await notify(target._id, { kind: 'system', title: `🎁 ${gifts} from the ChatLOL team`, body: b.reason || 'Enjoy!', link: '/vault' });
   await emitWallet(target._id);
   res.json({ user: await adminUser(await db.users.findOne({ _id: target._id })) });

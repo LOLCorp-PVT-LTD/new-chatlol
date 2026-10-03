@@ -24,10 +24,13 @@ export interface ServerEvents {
     'wallet': (w: {
         sparks: number;
         gems: number;
+        gold: number;
         xp: number;
         level: number;
     }) => void;
     'feed:new': (p: Post) => void;
+    /** A Kick Ticket removed you from a lounge. */
+    'lounge:kicked': (p: { loungeId: ID; by: string; minutes: number }) => void;
     'shout:new': (s: import('./types').Shout) => void;
     'shout:reactions': (p: { id: ID; reactions: Record<import('./types').ReactionKind, number> }) => void;
     'content:removed': (p: { type: string; id: ID }) => void;
@@ -77,7 +80,8 @@ export interface ServerEvents {
 }
 /** Client → server events */
 export interface ClientEvents {
-    'lounge:join': (loungeId: ID, ack?: (history: ChatMessage[]) => void) => void;
+    /** Acks with the recent history, or `{ kicked: true }` while a Kick Ticket keeps you out. */
+    'lounge:join': (loungeId: ID, ack?: (history: ChatMessage[] | { kicked: true }) => void) => void;
     'lounge:leave': (loungeId: ID) => void;
     'lounge:send': (p: {
         loungeId: ID;

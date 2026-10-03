@@ -1,6 +1,6 @@
 import { db, newId, now, today, initDb } from './db.js';
 import { PERSONAS } from './ai/personas.js';
-import { POWERS, PROFILE_ACCENTS, PROFILE_BACKGROUNDS, stickerStoreItems } from '@chatlol/shared';
+import { KING, POWERS, TICKETS, PROFILE_ACCENTS, PROFILE_BACKGROUNDS, stickerStoreItems } from '@chatlol/shared';
 import { newUser, DEFAULT_SETTINGS, DEFAULT_PROFILE } from './lib/serialize.js';
 import { hashPassword } from './lib/auth.js';
 import { ensureDrop } from './lib/drops.js';
@@ -135,6 +135,9 @@ const STORE = [
     'linear-gradient(135deg,#bae6fd,#38bdf8)',
   ],
   ...POWERS.map((p) => [p.key, 'power', p.name, p.desc, p.price, p.rarity, p.emoji, 'linear-gradient(135deg,#fde047,#ff5e00)']),
+  // Gold-only: tickets and the King's crown.
+  ...TICKETS.map((t) => [t.key, 'ticket', t.name, t.desc, 0, t.rarity, t.emoji, 'linear-gradient(135deg,#3b2e25,#b8860b)', false, t.gold]),
+  [KING.key, 'king', KING.name, `Rule ChatLOL for ${KING.reignDays} days: golden crown, top of the home page, Premium, and a free Ban, Mute and Kick every day. Someone richer can take your throne.`, 0, 'legendary', KING.emoji, 'linear-gradient(135deg,#fde047,#d4a017,#8a6d00)', true, KING.gold],
 ];
 
 const TAKES = [
@@ -499,10 +502,10 @@ const CATALOG = () => [...STORE, ...stickerStoreItems()];
  */
 export async function ensureStoreCatalog() {
   await db.storeItems.bulkWrite(
-    CATALOG().map(([key, kind, name, description, price, rarity, emoji, preview, limited], i) => ({
+    CATALOG().map(([key, kind, name, description, price, rarity, emoji, preview, limited, goldPrice], i) => ({
       updateOne: {
         filter: { _id: itemIdFor(key) },
-        update: { $set: { key, kind, name, description, price, rarity, emoji, preview, limited: !!limited, position: i } },
+        update: { $set: { key, kind, name, description, price, rarity, emoji, preview, limited: !!limited, goldPrice: goldPrice ?? null, position: i } },
         upsert: true,
       },
     })),
