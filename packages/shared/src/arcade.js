@@ -1,5 +1,7 @@
 import { rng } from './games/rng.js';
 import { towerX } from './games/tower.js';
+import { ARCADE_MORE } from './arcade2.js';
+export { brickRect } from './arcade2.js';
 
 /**
  * Single-player arcade games. Each is a deterministic, fixed-step simulation driven by a seed and the player's
@@ -83,7 +85,7 @@ function addPipe(s, x) {
 
 // ——— 2048 ———
 const g2048 = {
-  key: '2048', name: '2048', emoji: '🔢', desc: 'Slide and merge tiles. Reach 2048 — then keep going.', TICK_MS: 0,
+  key: '2048', name: '2048', emoji: '🔢', desc: 'Slide and merge tiles. Reach 2048 — then keep going.', TICK_MS: 0, TURN: true,
   init(seed) {
     const s = { seed, r: 0, grid: Array(16).fill(0), score: 0, moves: 0, dead: false };
     spawn(s);
@@ -150,7 +152,7 @@ const towerSolo = {
   score: (s) => (s.stack.length - 1) * 10 + s.perfects * 5,
 };
 
-export const ARCADE = { snake, flight, 2048: g2048, tower: towerSolo };
+export const ARCADE = { snake, flight, 2048: g2048, tower: towerSolo, ...ARCADE_MORE };
 export const ARCADE_KEYS = Object.keys(ARCADE);
 /** Longest run the server will replay (ticks). */
 export const ARCADE_MAX_TICKS = 60 * 60 * 30;
@@ -163,10 +165,11 @@ export function replayArcade(key, seed, inputs) {
   const g = ARCADE[key];
   if (!g) throw new Error('Unknown game');
   let s = g.init(seed);
-  if (key === '2048') {
-    for (const [, dir] of inputs) {
+  if (g.TURN) {
+    // Turn-based: one input per move, in order.
+    for (const [, v] of inputs) {
       if (g.over(s)) break;
-      s = g.step(s, dir);
+      s = g.step(s, v);
     }
     return { score: g.score(s), ticks: s.moves, over: g.over(s) };
   }

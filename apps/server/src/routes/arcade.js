@@ -44,8 +44,8 @@ arcadeRouter.post('/arcade/runs/:id/finish', requireAuth, async (req, res) => {
   const r = replayArcade(run.game, run.seed, inputs);
   const tickMs = ARCADE[run.game].TICK_MS;
   const elapsed = Date.now() - Date.parse(run.startedAt);
-  // Can't play faster than real time (2048 is turn-based: at most ~20 moves a second).
-  const minMs = tickMs ? r.ticks * tickMs * 0.9 : r.ticks * 50;
+  // Can't play faster than real time (turn-based games: at most ~20 inputs a second).
+  const minMs = tickMs ? r.ticks * tickMs * 0.9 : inputs.length * 50;
   const suspicious = elapsed + 3000 < minMs;
   const score = suspicious ? 0 : r.score;
   const prevBest = (await db.arcadeRuns.find({ userId: me, game: run.game, status: 'done' }).sort({ score: -1 }).limit(1).toArray())[0]?.score ?? 0;

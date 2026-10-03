@@ -8,6 +8,7 @@ import { api } from '../lib/api';
 import { useSession } from '../stores/session';
 import { confetti, ding } from '../lib/fx';
 import Avatar from '../components/Avatar.vue';
+import { ARCADE_DRAW, echoPlaying, type ArcadeUi } from '../lib/arcadeDraw';
 
 /**
  * Plays one arcade game. A fixed-step loop runs the shared simulation and records each input against its tick —
@@ -15,8 +16,10 @@ import Avatar from '../components/Avatar.vue';
  */
 const route = useRoute();
 const s = useSession();
-const key = route.params.game as 'snake' | 'flight' | '2048' | 'tower';
+const key = route.params.game as keyof typeof ARCADE;
 const g = ARCADE[key];
+/** Client-only presentation state for the newer games (Echo playback, last tapped cell). */
+const ui: ArcadeUi = { echoT0: 0, echoRound: 0, tap: null };
 const canvas = ref<HTMLCanvasElement>();
 const phase = ref<'ready' | 'playing' | 'over'>('ready');
 const score = ref(0);
@@ -53,6 +56,8 @@ async function start() {
   lastT = performance.now();
   score.value = 0;
   result.value = null;
+  ui.tap = null;
+  if (key === 'echo') (ui.echoT0 = performance.now() + 300), (ui.echoRound = 1);
   phase.value = 'playing';
   if (key === 'flight') press('flap');
 }
@@ -72,10 +77,20 @@ function press(v: string) {
     if (g.over(st)) void finish();
     return;
   }
+  if (g.TURN) {
+    if (key === 'echo' && echoPlaying(st, ui, performance.now())) return; // wait for the pattern to finish
+    inputs.push([inputs.length, v]);
+    const round = st.round;
+    st = g.step(st, v);
+    if (key === 'echo' && st.round !== round) (ui.echoT0 = performance.now() + 450), (ui.echoRound = st.round);
+    score.value = g.score(st);
+    if (g.over(st)) void finish();
+    return;
+  }
   queued = v;
 }
 function frame(t: number) {
-  if (phase.value === 'playing' && key !== '2048') {
+  if (phase.value === 'playing' && !g.TURN) {
     acc += Math.min(250, t - lastT);
     lastT = t;
     while (acc >= g.TICK_MS && phase.value === 'playing') {
@@ -151,6 +166,7 @@ function draw() {
     x.font = `${W / 6}px serif`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(g.emoji, W / 2, H / 2);
     return;
   }
+  if (ARCADE_DRAW[key]) return ARCADE_DRAW[key](x, st, W, H, performance.now(), ui);
   if (key === 'snake') {
     const n = g.N!;
     const k = W / n;
@@ -277,22 +293,51 @@ function onKey(e: KeyboardEvent) {
   if (phase.value !== 'playing') return;
   if ((key === 'snake' || key === '2048') && KEYS[e.key]) (e.preventDefault(), press(KEYS[e.key]));
   if ((key === 'flight' || key === 'tower') && (e.code === 'Space' || e.key === 'ArrowUp')) (e.preventDefault(), press(key === 'flight' ? 'flap' : 'drop'));
+  if (g.controls === 'tap' && (e.code === 'Space' || e.key === 'ArrowUp')) (e.preventDefault(), press(g.tapInput!));
+  if (g.controls === 'steer' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'a' || e.key === 'd'))
+    (e.preventDefault(), !e.repeat && press(e.key === 'ArrowLeft' || e.key === 'a' ? 'l' : 'r'));
 }
-let touch: { x: number; y: number } | null = null;
+function onKeyUp(e: KeyboardEvent) {
+  if (phase.value === 'playing' && g.controls === 'steer' && ['ArrowLeft', 'ArrowRight', 'a', 'd'].includes(e.key)) press('s');
+}
+/** Pointer position in the game's own coordinates (0…C.W) or as a 0…1 fraction. */
+function frac(e: PointerEvent) {
+  const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  return { fx: (e.clientX - r.left) / r.width, fy: (e.clientY - r.top) / r.height };
+}
+let touch: { x: number; y: number; t: number } | null = null;
 function onDown(e: PointerEvent) {
-  touch = { x: e.clientX, y: e.clientY };
+  touch = { x: e.clientX, y: e.clientY, t: performance.now() };
   if (key === 'flight' || key === 'tower') return press(key === 'flight' ? 'flap' : 'drop');
+  if (g.controls === 'tap') return press(g.tapInput!);
   // Keep receiving moves and the release even if the finger leaves the board.
   (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+  if (g.controls === 'steer') return press(`p${Math.round(frac(e).fx * (g.C?.W ?? 400))}`);
+  if (g.controls === 'grid') return;
   Object.assign(drag, { on: phase.value === 'playing', dx: 0, dy: 0 });
 }
+let lastSteer = 0;
 function onMove(e: PointerEvent) {
+  if (g.controls === 'steer' && phase.value === 'playing' && (touch || e.pointerType === 'mouse')) {
+    const now = performance.now();
+    if (now - lastSteer > 30) (lastSteer = now), press(`p${Math.round(frac(e).fx * (g.C?.W ?? 400))}`);
+    return;
+  }
   if (!touch || !drag.on) return;
   drag.dx = e.clientX - touch.x;
   drag.dy = e.clientY - touch.y;
 }
 function onUp(e: PointerEvent) {
   drag.on = false;
+  if (g.controls === 'grid' && touch) {
+    // Tap a cell; long-press (or right-click) is the alternate action (flag in Minesweeper).
+    const { fx, fy } = frac(e);
+    const i = Math.min(g.rows! - 1, Math.max(0, Math.floor(fy * g.rows!))) * g.cols! + Math.min(g.cols! - 1, Math.max(0, Math.floor(fx * g.cols!)));
+    const alt = e.button === 2 || performance.now() - touch.t > 450;
+    touch = null;
+    ui.tap = { i, t: performance.now() };
+    return press(g.gridInput!(i, alt));
+  }
   if (!touch || (key !== 'snake' && key !== '2048')) return;
   const dx = e.clientX - touch.x;
   const dy = e.clientY - touch.y;
@@ -305,12 +350,13 @@ function resize() {
   const c = canvas.value!;
   const w = c.clientWidth * devicePixelRatio;
   c.width = w;
-  c.height = key === 'flight' ? w * 1.5 : key === 'tower' ? w * 1.2 : w;
+  c.height = w * ratio.value;
 }
 onMounted(() => {
   resize();
   addEventListener('resize', resize);
   addEventListener('keydown', onKey);
+  addEventListener('keyup', onKeyUp);
   raf = requestAnimationFrame(frame);
   void loadBoard();
 });
@@ -318,17 +364,26 @@ onUnmounted(() => {
   cancelAnimationFrame(raf);
   removeEventListener('resize', resize);
   removeEventListener('keydown', onKey);
+  removeEventListener('keyup', onKeyUp);
 });
-const HOW: Record<string, string> = { snake: 'Arrow keys or swipe', flight: 'Space, click or tap to flap', '2048': 'Arrow keys or swipe', tower: 'Space, click or tap to drop' };
-const aspect = computed(() => (key === 'flight' ? '2 / 3' : key === 'tower' ? '5 / 6' : '1 / 1'));
+const HOW: Record<string, string> = {
+  snake: 'Arrow keys or swipe', flight: 'Space, click or tap to flap', '2048': 'Arrow keys or swipe', tower: 'Space, click or tap to drop',
+  breakout: 'Move the mouse / drag, or ← →', meteor: 'Move the mouse / drag, or ← →', runner: 'Space, click or tap to jump', whack: 'Tap the sparks',
+  memory: 'Tap two cards', mines: 'Tap to dig · long-press or right-click to flag', echo: 'Watch, then tap the pads in order', slide: 'Tap a tile next to (or in line with) the gap',
+};
+/** Canvas height ÷ width. */
+const ratio = computed(() => (key === 'flight' ? 1.5 : key === 'tower' ? 1.2 : g.C?.W && g.C?.H && ['breakout', 'meteor', 'runner'].includes(key) ? g.C.H / g.C.W : 1));
+const aspect = computed(() => `1 / ${ratio.value}`);
+/** Turn-based games can be cashed out early (scored as they stand). */
+const canCashOut = computed(() => !!g.TURN);
 </script>
 
 <template>
   <div class="max-w-[1000px] mx-auto grid lg:grid-cols-[1fr_300px] gap-4 items-start">
     <section class="card p-4 space-y-3">
       <div class="flex items-center justify-between"><h1 class="text-headline-md">{{ g.emoji }} {{ g.name }}</h1><span class="text-headline-md tabular-nums">{{ score.toLocaleString() }}</span></div>
-      <div class="relative mx-auto w-full" :style="{ maxWidth: key === 'flight' ? '380px' : '480px' }">
-        <canvas ref="canvas" class="w-full rounded-[22px] touch-none select-none shadow-float" :style="{ aspectRatio: aspect }" @pointerdown="onDown" @pointermove="onMove" @pointerup="onUp" @pointercancel="onCancel" />
+      <div class="relative mx-auto w-full" :style="{ maxWidth: key === 'flight' || key === 'meteor' ? '380px' : key === 'runner' ? '640px' : '480px' }">
+        <canvas ref="canvas" class="w-full rounded-[22px] touch-none select-none shadow-float" :style="{ aspectRatio: aspect }" @contextmenu.prevent @pointerdown="onDown" @pointermove="onMove" @pointerup="onUp" @pointercancel="onCancel" />
         <div v-if="phase !== 'playing'" class="absolute inset-0 rounded-[22px] bg-black/45 backdrop-blur-[2px] flex flex-col items-center justify-center text-white text-center p-6 gap-3">
           <template v-if="phase === 'over' && result">
             <p class="text-headline-lg">{{ result.newBest ? '🏆 New best!' : 'Game over' }}</p>
@@ -343,7 +398,10 @@ const aspect = computed(() => (key === 'flight' ? '2 / 3' : key === 'tower' ? '5
           <AdSlot v-if="phase === 'over'" placement="arcade_gameover" class="w-full max-w-[300px] bg-white/90" />
         </div>
       </div>
-      <RouterLink to="/arcade" class="text-label-md text-on-surface-variant">← All arcade games</RouterLink>
+      <div class="flex items-center justify-between gap-2">
+        <RouterLink to="/arcade" class="text-label-md text-on-surface-variant">← All arcade games</RouterLink>
+        <button v-if="canCashOut && phase === 'playing'" class="btn-secondary h-9" @click="finish">End run & collect ✦</button>
+      </div>
     </section>
     <aside class="card p-4 space-y-3">
       <div class="flex items-center gap-1.5"><p class="label flex-1">Leaderboard</p>
