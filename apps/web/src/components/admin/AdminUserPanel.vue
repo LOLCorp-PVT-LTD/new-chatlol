@@ -67,8 +67,8 @@ watch(tab, async (t) => {
 });
 
 // ——— Profile ———
-const edit = ref({ displayName: '', handle: '', bio: '', pronouns: '', city: '' });
-watch(u, (x) => x && (edit.value = { displayName: x.displayName, handle: x.handle, bio: x.bio, pronouns: x.pronouns, city: x.city }), { immediate: true });
+const edit = ref({ displayName: '', handle: '', bio: '', city: '' });
+watch(u, (x) => x && (edit.value = { displayName: x.displayName, handle: x.handle, bio: x.bio, city: x.city }), { immediate: true });
 async function saveProfile() {
   const x = u.value!;
   const b: Record<string, string> = {};
@@ -176,7 +176,6 @@ const FEATURE_LABEL: Record<string, string> = { post: 'Posts', shout: 'Shouts', 
       <div class="grid sm:grid-cols-2 gap-3">
         <label class="text-label-md">Display name<input v-model="edit.displayName" class="input h-10 mt-1" maxlength="40" :disabled="!has('profiles')" /></label>
         <label class="text-label-md">Username (@)<input v-model="edit.handle" class="input h-10 mt-1" maxlength="20" :disabled="!has('profiles')" /></label>
-        <label class="text-label-md">Pronouns<input v-model="edit.pronouns" class="input h-10 mt-1" maxlength="24" :disabled="!has('profiles')" /></label>
         <label class="text-label-md">City<input v-model="edit.city" class="input h-10 mt-1" maxlength="60" :disabled="!has('profiles')" /></label>
         <label class="text-label-md sm:col-span-2">Bio<textarea v-model="edit.bio" class="input min-h-[80px] mt-1 py-2" maxlength="280" :disabled="!has('profiles')" /></label>
       </div>

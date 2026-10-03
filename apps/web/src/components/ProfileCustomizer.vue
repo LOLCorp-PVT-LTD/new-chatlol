@@ -19,7 +19,7 @@ const busy = ref(false);
 /** Photo/colour backgrounds and the profile song are Premium perks. */
 const premium = computed(() => !!s.user?.premiumUntil);
 const look = ref({ background: { ...u.profile.background }, accent: u.profile.accent, coverUrl: u.profile.coverUrl, headline: u.profile.headline });
-const about = ref({ displayName: u.displayName, bio: u.bio, pronouns: u.pronouns, city: u.city, gender: u.gender as Gender | null, interests: [...u.interests] });
+const about = ref({ displayName: u.displayName, bio: u.bio, city: u.city, gender: u.gender as Gender | null, interests: [...u.interests] });
 const song = ref<ProfileSong | null>(u.profile.song);
 const songInput = ref('');
 const results = ref<ProfileSong[]>([]);
@@ -83,7 +83,7 @@ const toggleInterest = (i: string) =>
 async function save() {
   busy.value = true;
   try {
-    await api.updateMe({ displayName: about.value.displayName, bio: about.value.bio, pronouns: about.value.pronouns, city: about.value.city, interests: about.value.interests });
+    await api.updateMe({ displayName: about.value.displayName, bio: about.value.bio, city: about.value.city, interests: about.value.interests });
     const r = await api.updateProfile({
       ...look.value,
       gender: about.value.gender ?? undefined,
@@ -189,7 +189,7 @@ async function save() {
         <div class="grid grid-cols-2 gap-2">
           <button v-for="g in GENDERS" :key="g.key" type="button" class="h-11 rounded-full border font-bold" :class="about.gender === g.key ? 'is-on' : 'border-sandstone'" @click="about.gender = g.key">{{ g.emoji }} {{ g.label }}</button>
         </div>
-        <div class="grid grid-cols-2 gap-2"><input v-model="about.pronouns" class="input" placeholder="Pronouns" maxlength="24" /><input v-model="about.city" class="input" placeholder="City" maxlength="60" /></div>
+        <input v-model="about.city" class="input" placeholder="City" maxlength="60" />
         <textarea v-model="about.bio" class="textarea" rows="3" placeholder="Bio" maxlength="280" />
         <p class="label">Interests • {{ about.interests.length }}/{{ MAX_INTERESTS }}</p>
         <div class="space-y-3 max-h-64 overflow-y-auto">

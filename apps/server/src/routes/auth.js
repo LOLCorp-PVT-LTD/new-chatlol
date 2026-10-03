@@ -188,7 +188,6 @@ authRouter.patch('/me', requireAuth, async (req, res) => {
     z.object({
       displayName: z.string().trim().min(1).max(40).optional(),
       bio: z.string().max(280).optional(),
-      pronouns: z.string().max(24).optional(),
       city: z.string().max(60).optional(),
       interests: z.array(z.string().max(30)).max(MAX_INTERESTS).optional(),
       avatarUrl: z.string().url().max(500).optional(),

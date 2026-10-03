@@ -152,7 +152,7 @@ export async function userPublic(u, viewerId) {
     displayName: u.displayName,
     avatarUrl: u.avatarUrl,
     bio: u.bio ?? '',
-    pronouns: u.pronouns ?? '',
+    pronouns: '', // pronoun field removed from profiles
     city: settings.showCity ? (u.city ?? '') : '',
     gender: settings.showGender ? (u.gender ?? null) : null,
     // Premium looks only show while Premium is active.

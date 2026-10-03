@@ -35,7 +35,7 @@ const own = (yours: string, theirs: string) => (ctx.isMe.value ? yours : theirs)
     <p v-if="u.profile.headline" class="text-headline-sm">{{ u.profile.headline }}</p>
     <p v-if="u.bio" class="text-body-lg whitespace-pre-line break-words"><RichText :text="u.bio" /></p>
     <p class="text-body-md muted flex flex-wrap gap-x-3 gap-y-1">
-      <span v-if="u.pronouns">{{ u.pronouns }}</span><span v-if="u.city">📍 {{ u.city }}</span>
+      <span v-if="u.city">📍 {{ u.city }}</span>
     </p>
     <p v-if="!u.bio && !u.profile.headline" class="text-body-md muted">{{ own('Add a headline and bio in Customize → About.', `${first} hasn’t written a bio yet.`) }}</p>
     <p v-if="u.isAI" class="text-body-sm muted">✦ AI persona — it posts and chats like a regular, but it isn’t a person.</p>

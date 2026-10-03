@@ -24,7 +24,7 @@ onMounted(async () => { tags.value = (await api.trending()).tags.slice(0, 6); })
       <RouterLink to="/me" class="flex flex-col items-center text-center" @click="$emit('navigate')">
         <Avatar :user="s.user" :size="76" />
         <p class="text-headline-md mt-3">{{ s.user.displayName }}</p>
-        <p class="text-body-sm opacity-90">@{{ s.user.handle }}<template v-if="s.user.pronouns"> • {{ s.user.pronouns }}</template></p>
+        <p class="text-body-sm opacity-90">@{{ s.user.handle }}</p>
         <span class="mt-2 bg-white/20 rounded-full px-3 py-1 text-label-sm">● Level {{ s.user.level }} {{ levelTitle(s.user.level) }}</span>
       </RouterLink>
       <div class="grid grid-cols-3 gap-2 text-center mt-4 pt-4 border-t border-white/20">

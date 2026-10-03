@@ -46,7 +46,7 @@ export declare function createApi(opts: ApiClientOptions): {
     me: () => Promise<WithReward<{
         user: UserPrivate;
     }>>;
-    updateMe: (b: Partial<Pick<UserPrivate, "displayName" | "bio" | "pronouns" | "city" | "interests" | "avatarUrl">>) => Promise<{
+    updateMe: (b: Partial<Pick<UserPrivate, "displayName" | "bio" | "city" | "interests" | "avatarUrl">>) => Promise<{
         user: UserPrivate;
     }>;
     updateSettings: (b: Partial<UserSettings>) => Promise<{
@@ -397,7 +397,7 @@ export declare function createApi(opts: ApiClientOptions): {
         }>;
         resolveFlag: (id: ID, status: 'resolved' | 'dismissed') => Promise<{ ok: true }>;
         removeContent: (type: string, id: ID, reason?: string) => Promise<{ ok: true }>;
-        editProfile: (id: ID, b: { displayName?: string; handle?: string; bio?: string; pronouns?: string; city?: string; headline?: string; removeAvatar?: boolean; removeCover?: boolean; removeBackground?: boolean; removeSong?: boolean; reason?: string }) => Promise<{ user: AdminUser }>;
+        editProfile: (id: ID, b: { displayName?: string; handle?: string; bio?: string; city?: string; headline?: string; removeAvatar?: boolean; removeCover?: boolean; removeBackground?: boolean; removeSong?: boolean; reason?: string }) => Promise<{ user: AdminUser }>;
         userContent: (id: ID, kind: 'posts' | 'photos' | 'shouts' | 'comments' | 'threads' | 'replies' | 'wall' | 'messages', before?: string) => Promise<{
             items: { type: string; id: ID; text: string; title: string | null; mediaUrl: string | null; where: string | null; hidden: boolean; removed: { by: string; reason: string } | null; reactions: Record<string, number> | null; createdAt: string }[];
             nextBefore: string | null;

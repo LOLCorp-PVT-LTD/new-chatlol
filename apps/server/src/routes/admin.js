@@ -376,7 +376,6 @@ adminRouter.patch('/admin/users/:id/profile', requirePerm('profiles'), async (re
       displayName: z.string().trim().min(1).max(40).optional(),
       handle: z.string().regex(/^[a-zA-Z0-9_.]{3,20}$/, '3–20 letters, numbers, _ or .').optional(),
       bio: z.string().max(280).optional(),
-      pronouns: z.string().max(24).optional(),
       city: z.string().max(60).optional(),
       headline: z.string().max(80).optional(),
       removeAvatar: z.boolean().optional(),
@@ -391,7 +390,7 @@ adminRouter.patch('/admin/users/:id/profile', requirePerm('profiles'), async (re
   assertOutranks(req, target);
   const set = {};
   const changed = [];
-  for (const k of ['displayName', 'bio', 'pronouns', 'city']) if (b[k] !== undefined && b[k] !== target[k]) (set[k] = b[k]), changed.push(k);
+  for (const k of ['displayName', 'bio', 'city']) if (b[k] !== undefined && b[k] !== target[k]) (set[k] = b[k]), changed.push(k);
   if (b.headline !== undefined) (set['profile.headline'] = b.headline), changed.push('headline');
   if (b.handle && b.handle !== target.handle) {
     if (await db.users.findOne({ handleLower: b.handle.toLowerCase(), _id: { $ne: target._id } })) throw new HttpError(409, 'That handle is taken');
