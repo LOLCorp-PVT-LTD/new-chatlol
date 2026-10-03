@@ -14,11 +14,12 @@ void props;
       <div role="dialog" aria-modal="true" :aria-label="title"
         class="w-full bg-surface-container-lowest/80 backdrop-blur-2xl backdrop-saturate-150 border border-white/40 dark:border-white/10 shadow-float rounded-t-lg sm:rounded-lg max-h-[92dvh] overflow-y-auto animate-pop pb-[env(safe-area-inset-bottom)]"
         :class="wide ? 'sm:max-w-2xl' : 'sm:max-w-md'">
-        <div v-if="title" class="sticky top-0 z-10 flex items-center justify-between px-6 pt-5 pb-3 bg-surface-container-lowest/70 backdrop-blur-xl">
+        <div v-if="title" class="sticky top-0 z-10 flex items-center justify-between px-6 pt-5 pb-3 bg-surface-container-lowest/70 backdrop-blur-xl border-b border-sandstone/50 dark:border-white/[0.06]">
           <h2 class="text-headline-md">{{ title }}</h2>
           <button class="btn-icon -mr-2" aria-label="Close" @click="emit('close')"><Icon name="close" /></button>
         </div>
-        <slot />
+        <!-- Breathing room between a titled header and the content (content panels often start with a field). -->
+        <div :class="title ? 'pt-4' : ''"><slot /></div>
       </div>
     </div>
   </Teleport>

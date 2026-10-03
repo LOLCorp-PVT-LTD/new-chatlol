@@ -490,34 +490,82 @@ export async function nimVision(prompt, imageUrl, system) {
 }
 
 /** Generates a photo with a NIM visual model (FLUX.1-schnell by default) and stores it in uploads. */
+/**
+ * Image generation, made sturdy: the configured model first (NIM_IMAGE_URL, or a comma-separated NIM_IMAGE_URLS
+ * list), then other free NVIDIA image models. Each model gets its own request shape; a rejected request is retried
+ * once with the bare minimum (prompt + seed), a model that says it doesn't exist rests for 6 hours, and every
+ * failure logs NVIDIA's actual reason so it can be fixed.
+ */
+const IMAGE_MODELS = {
+  'black-forest-labs/flux.1-schnell': {
+    full: (p, seed) => ({ prompt: p, width: 768, height: 1024, steps: 4, seed }),
+    bare: (p, seed) => ({ prompt: p, seed }),
+  },
+  'black-forest-labs/flux.1-dev': {
+    full: (p, seed) => ({ prompt: p, mode: 'base', width: 768, height: 1024, cfg_scale: 3.5, steps: 30, seed }),
+    bare: (p, seed) => ({ prompt: p, seed }),
+  },
+  'stabilityai/stable-diffusion-3-medium': {
+    full: (p, seed) => ({ prompt: p, aspect_ratio: '4:5', cfg_scale: 5, steps: 28, seed, negative_prompt: 'text, watermark, deformed, blurry' }),
+    bare: (p, seed) => ({ prompt: p, seed }),
+  },
+  'stabilityai/stable-diffusion-xl': {
+    full: (p, seed) => ({ text_prompts: [{ text: p, weight: 1 }, { text: 'text, watermark, deformed', weight: -1 }], cfg_scale: 5, sampler: 'K_DPM_2_ANCESTRAL', seed, steps: 25 }),
+    bare: (p, seed) => ({ text_prompts: [{ text: p, weight: 1 }], seed }),
+  },
+};
+const GENAI = 'https://ai.api.nvidia.com/v1/genai/';
+const imageResting = new Map(); // url → rest until (ms)
+function imageUrls() {
+  const listed = (process.env.NIM_IMAGE_URLS ?? '').split(',').map((u) => u.trim()).filter(Boolean);
+  const first = listed.length ? listed : [config.nim.imageUrl].filter(Boolean);
+  return [...new Set([...first, ...Object.keys(IMAGE_MODELS).map((m) => GENAI + m)])].filter((u) => !(imageResting.get(u) > Date.now()));
+}
+const modelOf = (url) => Object.keys(IMAGE_MODELS).find((m) => url.endsWith(m)) ?? 'black-forest-labs/flux.1-schnell';
+
+/** Picks the image out of the different response shapes ({ artifacts: [{ base64 }] } or { image }). */
+function imageFrom(data) {
+  const art = data?.artifacts?.[0];
+  if (art?.finishReason === 'CONTENT_FILTERED' || data?.finish_reason === 'CONTENT_FILTERED') return { filtered: true };
+  return { b64: art?.base64 ?? data?.image ?? data?.images?.[0] ?? null };
+}
+
 export async function nimImage(prompt) {
   if (!nimEnabled() || !config.nim.imageUrl) return null;
-  try {
-    const res = await nimPost(
-      config.nim.imageUrl,
-      {
-        prompt: `${prompt}, candid smartphone photo, natural warm lighting, realistic, no text, no watermark`,
-        width: 768,
-        height: 960,
-        steps: 4,
-        seed: Math.floor(Math.random() * 1e9),
-        cfg_scale: 0,
-      },
-      { timeout: 60_000, maxQueue: 5 },
-    );
-    if (!res?.ok) {
-      if (res) console.warn('[nim] image', res.status);
-      return null;
+  const p = `${prompt}, candid smartphone photo, natural warm lighting, realistic, no text, no watermark`.slice(0, 600);
+  for (const url of imageUrls()) {
+    const shapes = IMAGE_MODELS[modelOf(url)];
+    for (const shape of ['full', 'bare']) {
+      const seed = Math.floor(Math.random() * 2 ** 31);
+      let res;
+      try {
+        res = await nimPost(url, shapes[shape](p, seed), { timeout: 90_000, maxQueue: 20 });
+      } catch (e) {
+        console.warn(`[nim] image ${modelOf(url)} ${e.name === 'TimeoutError' ? 'timed out' : `failed: ${e.message}`}`);
+        break; // try the next model
+      }
+      if (!res) {
+        console.warn('[nim] image: every API key is busy or rate-limited right now');
+        return null;
+      }
+      if (res.ok) {
+        const out = imageFrom(await res.json().catch(() => null));
+        if (out.filtered) return null; // the model refused this prompt: don't hammer others with it
+        if (out.b64) return await putImage(Buffer.from(out.b64, 'base64'), 'ai');
+        console.warn(`[nim] image ${modelOf(url)} answered without an image`);
+        break;
+      }
+      const why = (await res.text().catch(() => '')).slice(0, 300);
+      console.warn(`[nim] image ${modelOf(url)} (${shape} request) → ${res.status}: ${why}`);
+      if (res.status === 404 || res.status === 410) {
+        imageResting.set(url, Date.now() + 6 * 3_600_000); // retired / not in this account's catalogue
+        break;
+      }
+      if (res.status >= 500) break; // their side: next model
+      // 400 / 422: try the bare request once, then move on.
     }
-    const data = await res.json();
-    const art = data.artifacts?.[0];
-    const b64 = art?.base64 ?? data.image;
-    if (!b64 || art?.finishReason === 'CONTENT_FILTERED') return null;
-    return await putImage(Buffer.from(b64, 'base64'), 'ai');
-  } catch (e) {
-    console.warn('[nim] image failed:', e.message);
-    return null;
   }
+  return null;
 }
 
 /** Strips model artefacts: surrounding quotes, "Name:" prefixes, <think> blocks, trailing hashtags spam. */
