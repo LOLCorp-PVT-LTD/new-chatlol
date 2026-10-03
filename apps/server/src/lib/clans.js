@@ -1,4 +1,4 @@
-import { CLAN_EVENT_PRIZES, CLAN_WAR, REP_PER_SPARKS, clanEventFor, clanLevelFor } from '@chatlol/shared';
+import { CLAN_EVENT_PRIZES, CLAN_WAR, RECRUIT_DAYS, REP_PER_SPARKS, clanEventFor, clanLevelFor } from '@chatlol/shared';
 import { db, newId, now } from '../db.js';
 import { addReputation, checkAchievements, clanBonuses, clanBoost, scoreSiege, trackReward } from './clanWorld.js';
 
@@ -38,6 +38,11 @@ export async function addRepFromSparks(userId, sparks, reason) {
   if (sparks <= 0) return;
   const m = await membershipOf(userId);
   if (!m) return;
+  // Recruits graduate to Member after a few days of being around.
+  if (m.role === 'recruit' && Date.now() - Date.parse(m.joinedAt) > RECRUIT_DAYS * 86_400_000) {
+    await db.clanMembers.updateOne({ _id: m._id, role: 'recruit' }, { $set: { role: 'member' } });
+    forgetMember(userId);
+  }
   const b = await clanBonuses(m.clanId);
   const rep = (sparks / REP_PER_SPARKS) * multiplier(reason) * (1 + b.clanxp / 100);
   await addClanRep(m.clanId, rep, userId);

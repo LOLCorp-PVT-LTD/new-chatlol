@@ -4,12 +4,51 @@
  * from wars they win and from weekly events. Rep raises the clan's level, and each level unlocks a perk.
  */
 export const CLAN_FOUND = { gold: 5, minLevel: 8 };
+/** Recruitment modes. ('request' is the old name for 'application'.) */
 export const CLAN_JOIN_POLICIES = [
-  { key: 'open', label: 'Open — anyone can join' },
-  { key: 'request', label: 'Request — officers approve' },
+  { key: 'open', label: 'Open — anyone who meets the requirements joins' },
+  { key: 'application', label: 'Application — write why you want in, officers decide' },
   { key: 'invite', label: 'Invite only' },
+  { key: 'closed', label: 'Closed — not recruiting' },
 ];
-export const CLAN_ROLES = { leader: 'Leader', officer: 'Officer', member: 'Member' };
+export const normalizePolicy = (p) => (p === 'request' ? 'application' : p ?? 'open');
+
+/**
+ * Ranks, highest first. `perms` are what each rank can do by default. From clan level 5 the Founder can add custom
+ * roles (a name, an emoji, a place in the ladder and their own permissions).
+ */
+export const CLAN_PERMS = [
+  { key: 'invite', label: 'Invite people' },
+  { key: 'recruit', label: 'Accept or decline applications' },
+  { key: 'kick', label: 'Remove lower ranks' },
+  { key: 'promote', label: 'Promote and demote lower ranks' },
+  { key: 'treasury', label: 'Spend the treasury (upgrades, war stakes)' },
+  { key: 'wars', label: 'Declare and accept Clan Wars' },
+  { key: 'siege', label: 'Choose the Siege target' },
+  { key: 'settings', label: 'Edit the clan profile and recruitment' },
+];
+export const CLAN_RANKS = [
+  { key: 'founder', name: 'Founder', emoji: '👑', rank: 5, perms: CLAN_PERMS.map((p) => p.key) },
+  { key: 'commander', name: 'Commander', emoji: '🎖️', rank: 4, perms: ['invite', 'recruit', 'kick', 'promote', 'treasury', 'wars', 'siege', 'settings'] },
+  { key: 'officer', name: 'Officer', emoji: '🛡️', rank: 3, perms: ['invite', 'recruit', 'kick', 'wars', 'siege'] },
+  { key: 'veteran', name: 'Veteran', emoji: '⚔️', rank: 2, perms: ['invite'] },
+  { key: 'member', name: 'Member', emoji: '🙂', rank: 1, perms: [] },
+  { key: 'recruit', name: 'Recruit', emoji: '🌱', rank: 0, perms: [] },
+];
+/** Custom roles unlock at this clan level; at most this many. */
+export const CLAN_CUSTOM_ROLES = { minLevel: 5, max: 5 };
+/** Recruits become Members automatically after this many days. */
+export const RECRUIT_DAYS = 3;
+/** Old role names → ranks. */
+const LEGACY = { leader: 'founder' };
+/** The rank (built-in or one of the clan's custom roles) a member holds. */
+export function clanRank(role, customRoles = []) {
+  const key = LEGACY[role] ?? role;
+  return CLAN_RANKS.find((r) => r.key === key) ?? customRoles.find((r) => r.key === key) ?? CLAN_RANKS.find((r) => r.key === 'member');
+}
+export const clanCan = (role, perm, customRoles = []) => clanRank(role, customRoles).perms.includes(perm);
+/** Kept for older code: name per role key. */
+export const CLAN_ROLES = Object.fromEntries([...CLAN_RANKS.map((r) => [r.key, r.name]), ['leader', 'Founder']]);
 /** Sparks a member earns per 1 Rep for their clan. */
 export const REP_PER_SPARKS = 10;
 

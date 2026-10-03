@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { CLAN_ACHIEVEMENTS, CLAN_LEVELS, CLAN_ROLES, CLAN_WAR, HQ_BUILDINGS, HQ_LEVELS, TERRITORIES, clanEventFor, hqLevel, siegeFor, type HqKey } from '@chatlol/shared';
+import { CLAN_ACHIEVEMENTS, CLAN_CUSTOM_ROLES, CLAN_JOIN_POLICIES, CLAN_LEVELS, CLAN_PERMS, CLAN_RANKS, CLAN_WAR, clanRank, type ClanPerm, type ClanPolicy, type ClanRank, HQ_BUILDINGS, HQ_LEVELS, TERRITORIES, clanEventFor, hqLevel, siegeFor, type HqKey } from '@chatlol/shared';
 import { api } from '../lib/api';
 import { useSession } from '../stores/session';
 import { confirmDialog, promptDialog } from '../lib/dialog';
@@ -22,8 +22,22 @@ onMounted(load);
 watch(() => route.params.id, (id) => id && load());
 
 const c = computed(() => d.value?.clan);
-const officer = computed(() => d.value?.myRole === 'leader' || d.value?.myRole === 'officer');
-const leader = computed(() => d.value?.myRole === 'leader');
+const can = (p: ClanPerm) => !!d.value?.myPerms.includes(p);
+const officer = computed(() => can('recruit'));
+const leader = computed(() => !!d.value?.myRole && clanRank(d.value.myRole).key === 'founder');
+const rankOf = (role: string) => clanRank(role, c.value?.customRoles ?? []);
+const myRank = computed(() => (d.value?.myRole ? rankOf(d.value.myRole).rank : -1));
+/** Every rank (built-in and custom), highest first. */
+const allRanks = computed<ClanRank[]>(() => [...CLAN_RANKS, ...(c.value?.customRoles ?? [])].sort((a, b) => b.rank - a.rank));
+const members = computed(() => [...(d.value?.members ?? [])].sort((a, b) => rankOf(b.role).rank - rankOf(a.role).rank || b.rep - a.rep));
+/** Ranks I can give someone (below mine; the Founder can also hand over the clan). */
+const assignable = computed(() => allRanks.value.filter((r) => r.rank < myRank.value || (leader.value && r.key === 'founder')));
+const canManage = (role: string) => rankOf(role).rank < myRank.value;
+async function setRole(userId: string, role: string) {
+  if (role === 'founder' && !(await confirmDialog({ title: 'Hand over the clan?', body: 'They become Founder and you become a Commander.', danger: true }))) return void load();
+  await run(api.clanRole(c.value!.id, userId, role), 'Rank updated');
+}
+const policyLabel = (p: ClanPolicy) => CLAN_JOIN_POLICIES.find((x) => x.key === p)?.label.split(' —')[0] ?? p;
 const pct = computed(() => {
   const cl = c.value;
   if (!cl?.nextLevel) return 100;
@@ -36,9 +50,15 @@ async function run(p: Promise<unknown>, ok?: string) {
   try { await p; if (ok) s.toast({ kind: 'info', title: ok }); await load(); } catch (e) { s.toast({ kind: 'error', title: (e as Error).message }); }
 }
 async function join() {
+  let message: string | undefined;
+  if (c.value!.policy === 'application' && !d.value?.myRequest?.invited) {
+    const m = await promptDialog({ title: `Apply to ${c.value!.name}`, body: 'Tell the officers why you want to join.', placeholder: 'A few words about you…', confirmText: 'Send application', required: true });
+    if (m == null) return;
+    message = m;
+  }
   try {
-    const r = await api.joinClan(c.value!.id);
-    s.toast({ kind: 'reward', title: r.joined ? `🏰 Welcome to ${c.value!.name}!` : 'Request sent — an officer will review it' });
+    const r = await api.joinClan(c.value!.id, message);
+    s.toast({ kind: 'reward', title: r.joined ? `🏰 Welcome to ${c.value!.name}! You start as a Recruit.` : 'Application sent — an officer will review it' });
     await load();
   } catch (e) { s.toast({ kind: 'error', title: (e as Error).message }); }
 }
@@ -70,17 +90,30 @@ async function openLounge() {
 
 // Settings (leader)
 const editing = ref(false);
-const e = ref({ name: '', emoji: '', description: '', policy: 'open' as 'open' | 'request' | 'invite', color: '', minLevel: 0 });
+const e = ref({ name: '', emoji: '', description: '', policy: 'open' as ClanPolicy, color: '', minLevel: 0, minAgeDays: 0, minVibe: 0 });
 function startEdit() {
   const cl = c.value!;
-  e.value = { name: cl.name, emoji: cl.emoji, description: cl.description, policy: cl.policy, color: cl.color ?? '#7c3aed', minLevel: cl.minLevel };
+  e.value = { name: cl.name, emoji: cl.emoji, description: cl.description, policy: cl.policy, color: cl.color ?? '#7c3aed', ...cl.requirements };
   editing.value = true;
 }
 async function saveEdit() {
-  const body: Parameters<typeof api.updateClan>[1] = { name: e.value.name, emoji: e.value.emoji, description: e.value.description, policy: e.value.policy, minLevel: Math.max(0, Math.floor(e.value.minLevel || 0)) };
+  const body: Parameters<typeof api.updateClan>[1] = { name: e.value.name, emoji: e.value.emoji, description: e.value.description, policy: e.value.policy, minLevel: Math.max(0, Math.floor(e.value.minLevel || 0)), minAgeDays: Math.max(0, Math.floor(e.value.minAgeDays || 0)), minVibe: Math.min(5, Math.max(0, Number(e.value.minVibe) || 0)) };
   if (d.value?.perks.banner) body.color = e.value.color;
   await run(api.updateClan(c.value!.id, body), 'Saved');
   editing.value = false;
+}
+
+// Custom roles (Founder, clan level 5+)
+const SLOTS = [{ v: 3.5, label: 'Between Officer and Commander' }, { v: 2.5, label: 'Between Veteran and Officer' }, { v: 1.5, label: 'Between Member and Veteran' }, { v: 0.5, label: 'Between Recruit and Member' }];
+const rolesOpen = ref(false);
+const roles = ref<{ key?: string; name: string; emoji: string; rank: number; perms: ClanPerm[] }[]>([]);
+function editRoles() {
+  roles.value = (c.value?.customRoles ?? []).map((r) => ({ ...r, perms: [...r.perms] }));
+  rolesOpen.value = true;
+}
+async function saveRoles() {
+  await run(api.updateClanRoles(c.value!.id, roles.value), 'Roles saved');
+  rolesOpen.value = false;
 }
 
 // Tabs
@@ -127,7 +160,10 @@ async function declare() {
       <div class="flex flex-wrap gap-2 mt-3">
         <span class="chip h-8 bg-white/20 text-white border-white/30">⭐ {{ c.reputation.toLocaleString() }} Reputation</span>
         <span v-for="t in held" :key="t.key" class="chip h-8 bg-white/20 text-white border-white/30" :title="t.label">{{ t.emoji }} {{ t.name }}</span>
-        <span v-if="c.minLevel" class="chip h-8 bg-white/20 text-white border-white/30">Joins from level {{ c.minLevel }}</span>
+        <span class="chip h-8 bg-white/20 text-white border-white/30">{{ policyLabel(c.policy) }}</span>
+        <span v-if="c.requirements.minLevel" class="chip h-8 bg-white/20 text-white border-white/30">Level {{ c.requirements.minLevel }}+</span>
+        <span v-if="c.requirements.minAgeDays" class="chip h-8 bg-white/20 text-white border-white/30">Account {{ c.requirements.minAgeDays }}+ days</span>
+        <span v-if="c.requirements.minVibe" class="chip h-8 bg-white/20 text-white border-white/30">Vibe {{ c.requirements.minVibe }}+</span>
       </div>
       <p class="text-body-sm opacity-90 mt-2">{{ c.memberCount }}/{{ c.maxMembers }} members · {{ c.wins }} wars won · {{ c.losses }} lost · 🏦 {{ c.treasury.toLocaleString() }} ✦ treasury<template v-if="c.trophies.length"> · 🏆 {{ c.trophies.length }}</template></p>
       <div class="mt-3 max-w-md">
@@ -136,17 +172,18 @@ async function declare() {
       </div>
       <div class="flex flex-wrap gap-2 mt-4">
         <template v-if="!d.myRole && s.user">
-          <button v-if="d.myRequest && !d.myRequest.invited" class="btn bg-white/25 text-white" disabled>Request sent</button>
-          <button v-else-if="c.policy !== 'invite' || d.myRequest?.invited" class="btn bg-white text-[#3b0764]" @click="join">{{ c.policy === 'open' || d.myRequest?.invited ? 'Join clan' : 'Ask to join' }}</button>
-          <span v-else class="chip h-10 bg-white/20 text-white border-white/30">Invite only</span>
+          <button v-if="d.myRequest && !d.myRequest.invited" class="btn bg-white/25 text-white" disabled>Application sent</button>
+          <button v-else-if="d.myRequest?.invited || c.policy === 'open' || c.policy === 'application'" class="btn bg-white text-[#3b0764]" @click="join">{{ c.policy === 'open' || d.myRequest?.invited ? 'Join clan' : 'Apply to join' }}</button>
+          <span v-else class="chip h-10 bg-white/20 text-white border-white/30">{{ c.policy === 'closed' ? 'Not recruiting' : 'Invite only' }}</span>
         </template>
         <template v-if="d.myRole">
           <button class="btn bg-white text-[#3b0764]" @click="donate">🏦 Donate Sparks</button>
           <RouterLink v-if="c.loungeId" :to="`/lounges/${c.loungeId}`" class="btn bg-white/20 text-white">🛋️ Clan lounge</RouterLink>
-          <button v-else-if="leader && d.perks.lounge" class="btn bg-white/20 text-white" @click="openLounge">🛋️ Open the clan lounge</button>
-          <button v-if="officer" class="btn bg-white/20 text-white" @click="invite">➕ Invite</button>
-          <button v-if="officer && d.perks.wars" class="btn bg-white/20 text-white" @click="openWar">⚔️ Declare war</button>
-          <button v-if="leader" class="btn bg-white/20 text-white" @click="startEdit">⚙️ Settings</button>
+          <button v-else-if="can('settings') && d.perks.lounge" class="btn bg-white/20 text-white" @click="openLounge">🛋️ Open the clan lounge</button>
+          <button v-if="can('invite')" class="btn bg-white/20 text-white" @click="invite">➕ Invite</button>
+          <button v-if="can('wars') && d.perks.wars" class="btn bg-white/20 text-white" @click="openWar">⚔️ Declare war</button>
+          <button v-if="can('settings')" class="btn bg-white/20 text-white" @click="startEdit">⚙️ Settings</button>
+          <button v-if="leader && c.level >= CLAN_CUSTOM_ROLES.minLevel" class="btn bg-white/20 text-white" @click="editRoles">🎭 Roles</button>
           <button class="btn bg-white/10 text-white" @click="leave">Leave</button>
         </template>
       </div>
@@ -173,7 +210,7 @@ async function declare() {
       <section class="card p-5 space-y-2">
         <div class="flex items-center gap-2"><p class="text-headline-sm flex-1">🗺️ The Siege</p><RouterLink to="/clans/map" class="btn-secondary h-9">Open the Social Map</RouterLink></div>
         <p class="text-body-md">{{ siege.live ? '🔥 Siege live — ends in' : 'Next Siege in' }} <Countdown :to="siege.live ? siege.endsAt : siege.startsAt" /> · Saturday 18:00 → Sunday 18:00 UTC</p>
-        <p class="text-body-md">{{ target ? `Your clan fights for ${target.emoji} ${target.name}` : 'Your clan hasn’t picked a territory yet.' }}<template v-if="officer"> Officers pick on the map.</template></p>
+        <p class="text-body-md">{{ target ? `Your clan fights for ${target.emoji} ${target.name}` : 'Your clan hasn’t picked a territory yet.' }}<template v-if="can('siege')"> Pick the target on the map.</template></p>
       </section>
     </div>
 
@@ -187,7 +224,7 @@ async function declare() {
             <span class="flex gap-1"><span v-for="i in HQ_LEVELS.length" :key="i" class="w-3 h-3 rounded-full" :class="i <= lvlOf(b.key) ? 'bg-primary' : 'bg-surface-container-high'" /></span></div>
           <p class="text-body-sm text-on-surface-variant">{{ b.desc }} per level</p>
           <template v-if="HQ_LEVELS[lvlOf(b.key)]">
-            <button v-if="officer" class="btn-secondary h-9 w-full" :disabled="c.level < HQ_LEVELS[lvlOf(b.key)].clanLevel || c.treasury < HQ_LEVELS[lvlOf(b.key)].cost" @click="build(b.key, b.name)">
+            <button v-if="can('treasury')" class="btn-secondary h-9 w-full" :disabled="c.level < HQ_LEVELS[lvlOf(b.key)].clanLevel || c.treasury < HQ_LEVELS[lvlOf(b.key)].cost" @click="build(b.key, b.name)">
               Level {{ lvlOf(b.key) + 1 }} · ✦ {{ HQ_LEVELS[lvlOf(b.key)].cost.toLocaleString() }}<template v-if="c.level < HQ_LEVELS[lvlOf(b.key)].clanLevel"> · 🔒 clan Lv {{ HQ_LEVELS[lvlOf(b.key)].clanLevel }}</template>
             </button>
             <p v-else class="text-body-sm text-on-surface-variant">Next: ✦ {{ HQ_LEVELS[lvlOf(b.key)].cost.toLocaleString() }} (clan Lv {{ HQ_LEVELS[lvlOf(b.key)].clanLevel }})</p>
@@ -239,7 +276,7 @@ async function declare() {
               <template v-else>{{ w.status }}</template>
               <template v-if="w.stake"> · stake ✦ {{ w.stake.toLocaleString() }} each</template>
             </p>
-            <div v-if="w.incoming && officer" class="flex justify-center gap-2 mt-2">
+            <div v-if="w.incoming && can('wars')" class="flex justify-center gap-2 mt-2">
               <button class="btn-primary h-9" @click="run(api.answerWar(w.id, 'accept'), '⚔️ War on!')">Accept</button>
               <button class="btn-ghost h-9" @click="run(api.answerWar(w.id, 'decline'))">Decline</button>
             </div>
@@ -249,25 +286,28 @@ async function declare() {
         <!-- Members -->
         <section class="card p-5">
           <p class="text-headline-sm mb-2">Members</p>
-          <div v-for="m in d.members" :key="m.user.id" class="flex items-center gap-3 py-2 border-b border-sandstone last:border-0">
+          <div v-for="m in members" :key="m.user.id" class="flex items-center gap-3 py-2 border-b border-sandstone last:border-0">
             <Avatar :user="m.user" :size="38" />
-            <div class="flex-1 min-w-0"><UserName :user="m.user" /><p class="text-body-sm text-on-surface-variant">{{ CLAN_ROLES[m.role] }} · {{ m.rep.toLocaleString() }} Clan XP earned</p></div>
-            <template v-if="leader && m.user.id !== s.user?.id">
-              <button v-if="m.role === 'member'" class="btn-ghost h-8 px-3 text-label-sm" @click="run(api.clanRole(c.id, m.user.id, 'officer'), 'Promoted')">Promote</button>
-              <button v-else-if="m.role === 'officer'" class="btn-ghost h-8 px-3 text-label-sm" @click="run(api.clanRole(c.id, m.user.id, 'member'), 'Demoted')">Demote</button>
-            </template>
-            <button v-if="officer && m.role !== 'leader' && m.user.id !== s.user?.id && (leader || m.role === 'member')" class="btn-ghost h-8 px-3 text-label-sm text-error" @click="run(api.clanKick(c.id, m.user.id), 'Removed')">Remove</button>
+            <div class="flex-1 min-w-0"><UserName :user="m.user" /><p class="text-body-sm text-on-surface-variant">{{ rankOf(m.role).emoji }} {{ rankOf(m.role).name }} · {{ m.rep.toLocaleString() }} Clan XP earned</p></div>
+            <select v-if="can('promote') && m.user.id !== s.user?.id && canManage(m.role)" class="input h-8 w-auto text-label-sm py-0" :value="rankOf(m.role).key" :aria-label="`Rank for ${m.user.displayName}`" @change="setRole(m.user.id, ($event.target as HTMLSelectElement).value)">
+              <option v-for="r in assignable" :key="r.key" :value="r.key">{{ r.emoji }} {{ r.name }}</option>
+              <option v-if="!assignable.some((r) => r.key === rankOf(m.role).key)" :value="rankOf(m.role).key" disabled>{{ rankOf(m.role).name }}</option>
+            </select>
+            <button v-if="can('kick') && m.user.id !== s.user?.id && canManage(m.role)" class="btn-ghost h-8 px-3 text-label-sm text-error" @click="run(api.clanKick(c.id, m.user.id), 'Removed')">Remove</button>
           </div>
         </section>
       </div>
 
       <aside class="space-y-5">
         <section v-if="officer && d.requests.length" class="card p-5 space-y-2">
-          <p class="text-headline-sm">Join requests</p>
-          <div v-for="r in d.requests" :key="r.user.id" class="flex items-center gap-2">
-            <Avatar :user="r.user" :size="32" /><UserName :user="r.user" class="flex-1 min-w-0" />
-            <button class="btn-primary h-8 px-3 text-label-sm" @click="run(api.clanRequest(c.id, r.user.id, 'accept'), 'Accepted')">✓</button>
-            <button class="btn-ghost h-8 px-3 text-label-sm" @click="run(api.clanRequest(c.id, r.user.id, 'decline'))">✕</button>
+          <p class="text-headline-sm">Applications</p>
+          <div v-for="r in d.requests" :key="r.user.id" class="rounded-md bg-surface-container-low p-2 space-y-1">
+            <div class="flex items-center gap-2">
+              <Avatar :user="r.user" :size="32" /><UserName :user="r.user" class="flex-1 min-w-0" />
+              <button class="btn-primary h-8 px-3 text-label-sm" @click="run(api.clanRequest(c.id, r.user.id, 'accept'), 'Accepted')">✓</button>
+              <button class="btn-ghost h-8 px-3 text-label-sm" @click="run(api.clanRequest(c.id, r.user.id, 'decline'))">✕</button>
+            </div>
+            <p v-if="r.message" class="text-body-sm italic">“{{ r.message }}”</p>
           </div>
         </section>
         <section class="card p-5 space-y-1.5">
@@ -289,11 +329,32 @@ async function declare() {
       <form class="px-6 pb-6 space-y-3" @submit.prevent="saveEdit">
         <div class="flex gap-2"><input v-model="e.emoji" class="input w-16 text-center text-xl px-0" maxlength="8" /><input v-model="e.name" class="input" maxlength="24" /></div>
         <textarea v-model="e.description" class="textarea" rows="3" maxlength="300" />
-        <select v-model="e.policy" class="input"><option value="open">Open — anyone can join</option><option value="request">Request — officers approve</option><option value="invite">Invite only</option></select>
-        <label class="block text-label-lg">Minimum member level (0 = anyone)<input v-model.number="e.minLevel" type="number" min="0" max="100" class="input mt-1" /></label>
+        <select v-model="e.policy" class="input"><option v-for="p in CLAN_JOIN_POLICIES" :key="p.key" :value="p.key">{{ p.label }}</option></select>
+        <p class="label">Requirements (0 = none)</p>
+        <div class="grid grid-cols-3 gap-2">
+          <label class="text-label-md">Level<input v-model.number="e.minLevel" type="number" min="0" max="100" class="input mt-1" /></label>
+          <label class="text-label-md">Account days<input v-model.number="e.minAgeDays" type="number" min="0" max="3650" class="input mt-1" /></label>
+          <label class="text-label-md">Vibe (0–5)<input v-model.number="e.minVibe" type="number" min="0" max="5" step="0.5" class="input mt-1" /></label>
+        </div>
         <label v-if="d.perks.banner" class="flex items-center gap-3 text-label-lg">Clan colour <input v-model="e.color" type="color" class="w-12 h-9 rounded" /></label>
         <p v-else class="text-body-sm text-on-surface-variant">🔒 Custom colour unlocks at level 5.</p>
         <button class="btn-primary w-full">Save</button>
+      </form>
+    </Modal>
+
+    <Modal v-if="rolesOpen" title="🎭 Custom roles" @close="rolesOpen = false">
+      <form class="px-6 pb-6 space-y-3" @submit.prevent="saveRoles">
+        <p class="text-body-sm text-on-surface-variant">Up to {{ CLAN_CUSTOM_ROLES.max }} roles of your own, each placed in the ladder with its own permissions.</p>
+        <div v-for="(r, i) in roles" :key="i" class="rounded-md bg-surface-container-low p-3 space-y-2">
+          <div class="flex gap-2"><input v-model="r.emoji" class="input w-14 text-center px-0" maxlength="8" required /><input v-model="r.name" class="input" placeholder="Role name" maxlength="20" required minlength="2" />
+            <button type="button" class="btn-ghost h-11 px-3 text-error" aria-label="Delete role" @click="roles.splice(i, 1)">✕</button></div>
+          <select v-model.number="r.rank" class="input"><option v-for="sl in SLOTS" :key="sl.v" :value="sl.v">{{ sl.label }}</option></select>
+          <div class="flex flex-wrap gap-x-4 gap-y-1">
+            <label v-for="p in CLAN_PERMS" :key="p.key" class="flex items-center gap-1.5 text-body-sm"><input v-model="r.perms" type="checkbox" :value="p.key" /> {{ p.label }}</label>
+          </div>
+        </div>
+        <button v-if="roles.length < CLAN_CUSTOM_ROLES.max" type="button" class="btn-secondary w-full" @click="roles.push({ name: '', emoji: '⭐', rank: 1.5, perms: [] })">+ Add a role</button>
+        <button class="btn-primary w-full">Save roles</button>
       </form>
     </Modal>
 

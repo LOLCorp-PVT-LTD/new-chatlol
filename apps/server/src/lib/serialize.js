@@ -102,7 +102,7 @@ export function invalidateStats(userId) {
   statsCache.delete(userId);
 }
 
-async function stats(userId) {
+export async function stats(userId) {
   const c = statsCache.get(userId);
   if (c && Date.now() - c.at < STATS_TTL) return c;
   const [r = { r1: 0, r2: 0, r3: 0, r4: 0, r5: 0 }] = await db.posts

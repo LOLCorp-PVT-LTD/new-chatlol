@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { CLAN_JOIN_POLICIES, CLAN_LEVELS } from '@chatlol/shared';
+import { CLAN_JOIN_POLICIES, CLAN_LEVELS, type ClanPolicy } from '@chatlol/shared';
 import { api } from '../lib/api';
 import { useSession } from '../stores/session';
 import Modal from '../components/Modal.vue';
@@ -23,7 +23,7 @@ let t: ReturnType<typeof setTimeout>;
 watch([q, sort], () => { clearTimeout(t); t = setTimeout(() => void load(), 300); });
 
 const founding = ref(false);
-const f = ref({ name: '', tag: '', emoji: '🏰', description: '', policy: 'open' as 'open' | 'request' | 'invite' });
+const f = ref({ name: '', tag: '', emoji: '🏰', description: '', policy: 'open' as ClanPolicy });
 const busy = ref(false);
 async function found() {
   busy.value = true;
