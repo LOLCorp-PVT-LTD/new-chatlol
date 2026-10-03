@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { CLAN_ACHIEVEMENTS, CLAN_CUSTOM_ROLES, CLAN_JOIN_POLICIES, CLAN_LEVELS, CLAN_PERMS, CLAN_RANKS, CLAN_WAR, clanRank, type ClanPerm, type ClanPolicy, type ClanRank, HQ_BUILDINGS, HQ_LEVELS, TERRITORIES, clanEventFor, hqLevel, siegeFor, clanSeasonFor, CLAN_WAR_MODES, CLAN_PRESTIGE, WAR_HOURS, prestigeStars, type HqKey, type WarModeKey } from '@chatlol/shared';
+import { CLAN_ACHIEVEMENTS, CLAN_CUSTOM_ROLES, CLAN_JOIN_POLICIES, CLAN_LEVELS, CLAN_PERMS, CLAN_RANKS, CLAN_WAR, clanRank, type ClanPerm, type ClanPolicy, type ClanRank, HQ_BUILDINGS, HQ_LEVELS, TERRITORIES, clanEventFor, hqLevel, siegeFor, clanSeasonFor, CLAN_WAR_MODES, CLAN_PRESTIGE, WAR_HOURS, prestigeStars, clanCosmetic, type HqKey, type WarModeKey } from '@chatlol/shared';
 import { api } from '../lib/api';
 import { useSession } from '../stores/session';
 import { confirmDialog, promptDialog } from '../lib/dialog';
@@ -12,6 +12,7 @@ import Modal from '../components/Modal.vue';
 import Countdown from '../components/Countdown.vue';
 import ScrollRow from '../components/ScrollRow.vue';
 import ClanWarCard from '../components/ClanWarCard.vue';
+import ClanHQ from '../components/ClanHQ.vue';
 
 /** One clan: level and perks, members and roles, join requests, treasury, wars, and settings for its leader. */
 const route = useRoute();
@@ -124,6 +125,7 @@ const season = clanSeasonFor();
 // Tabs
 const TABS = [
   { key: 'overview', label: '🏰 Overview' },
+  { key: 'hq', label: '🏯 HQ' },
   { key: 'quests', label: '📜 Quests' },
   { key: 'upgrades', label: '🛠️ Upgrades' },
   { key: 'achievements', label: '🏅 Achievements' },
@@ -166,7 +168,7 @@ async function declare() {
 
 <template>
   <div v-if="d && c" class="max-w-[1000px] mx-auto space-y-5">
-    <section class="rounded-lg p-6 text-white shadow-float relative overflow-hidden" :style="{ background: c.color ? `linear-gradient(135deg, ${c.color}, #1b1036)` : 'linear-gradient(135deg,#5b21b6,#1b1036 60%,#ff5e00)' }">
+    <section class="rounded-lg p-6 text-white shadow-float relative overflow-hidden" :style="{ background: clanCosmetic(c.equipped.banner)?.css ?? (c.color ? `linear-gradient(135deg, ${c.color}, #1b1036)` : 'linear-gradient(135deg,#5b21b6,#1b1036 60%,#ff5e00)') }">
       <div class="absolute -right-4 -bottom-8 text-[140px] opacity-25 select-none">{{ c.emoji }}</div>
       <p class="label !text-white/80">Clan · level {{ c.level }}</p>
       <h1 class="text-headline-xl">{{ c.emoji }} {{ c.name }} <span class="opacity-80">[{{ c.tag }}]</span></h1>
@@ -210,8 +212,10 @@ async function declare() {
       <button v-for="t in TABS" :key="t.key" class="chip h-10 shrink-0" :class="{ 'chip-active': tab === t.key }" @click="tab = t.key">{{ t.label }}</button>
     </ScrollRow>
 
+    <ClanHQ v-if="tab === 'hq'" :d="d" :can="can" :founder="leader" @reload="load" @tab="(t) => (tab = t)" />
+
     <!-- Quests -->
-    <div v-if="tab === 'quests'" class="space-y-5">
+    <div v-else-if="tab === 'quests'" class="space-y-5">
       <section class="card p-5 space-y-3">
         <div class="flex items-center gap-2"><p class="text-headline-sm flex-1">📜 This week’s Clan Quests · tier {{ d.world.tier }}</p><span class="chip h-8">New quests in <Countdown :to="event.endsAt" /></span></div>
         <p v-if="!d.myRole" class="text-body-md text-on-surface-variant">Join the clan to see its quests.</p>

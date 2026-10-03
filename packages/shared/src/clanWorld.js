@@ -145,6 +145,7 @@ export const CLAN_BOARDS = [
   { key: 'territory', name: 'Territory', emoji: '🗺️' },
   { key: 'prestige', name: 'Prestige', emoji: '✦' },
   { key: 'members', name: 'Top contributors', emoji: '👤' },
+  { key: 'alliances', name: 'Alliances', emoji: '🤝' },
 ];
 
 /**
@@ -181,3 +182,35 @@ export const SPRINT_PRIZES = [{ reputation: 120, treasury: 30_000 }, { reputatio
  */
 export const CLAN_PRESTIGE = { max: 5, reputation: 500, minLevel: 8 };
 export const prestigeStars = (n) => '★'.repeat(n) + '☆'.repeat(Math.max(0, CLAN_PRESTIGE.max - n));
+
+/** The Clan HQ grows with the clan: each stage is a bigger, fancier home. */
+export const HQ_STAGES = [
+  { stage: 1, name: 'Camp', emoji: '⛺', minLevel: 1, desc: 'A campfire and a few tents — every legend starts somewhere.' },
+  { stage: 2, name: 'Hideout', emoji: '🏚️', minLevel: 3, desc: 'Your own hideout with a mission board and a war table.' },
+  { stage: 3, name: 'Fortress', emoji: '🏰', minLevel: 5, desc: 'Stone walls, a trophy room and a hall of fame.' },
+  { stage: 4, name: 'Citadel', emoji: '🏯', minLevel: 7, desc: 'A citadel the whole of ChatLOL can see from the map.' },
+  { stage: 5, name: 'Sky Palace', emoji: '🌌', minLevel: 8, prestige: 1, desc: 'Floating above the city — for Prestige clans only.' },
+];
+export const hqStageFor = (level, prestige = 0) => [...HQ_STAGES].reverse().find((s) => (s.prestige ? prestige >= s.prestige : level >= s.minLevel)) ?? HQ_STAGES[0];
+
+/**
+ * Clan cosmetics, bought once from the treasury. Badges style the clan chip on every member's profile; banners theme the
+ * clan page and HQ. Rarer ones need a clan level, the Prestige upgrade tree or actual Prestige — they show history and
+ * status, never a gameplay edge.
+ */
+export const CLAN_COSMETICS = [
+  { key: 'badge_flame', kind: 'badge', name: 'Flame badge', cost: 20_000, minLevel: 2 },
+  { key: 'badge_neon', kind: 'badge', name: 'Neon badge', cost: 40_000, minLevel: 4 },
+  { key: 'badge_gold', kind: 'badge', name: 'Gilded badge', cost: 80_000, minLevel: 6 },
+  { key: 'badge_aurora', kind: 'badge', name: 'Animated aurora badge', cost: 120_000, minLevel: 6, upgrade: 2 },
+  { key: 'badge_star', kind: 'badge', name: 'Prestige star badge', cost: 150_000, minLevel: 1, prestige: 1 },
+  { key: 'banner_sunset', kind: 'banner', name: 'Sunset banner', cost: 15_000, minLevel: 2, css: 'linear-gradient(135deg,#ff9900,#ff3d6e 55%,#5b21b6)' },
+  { key: 'banner_neon', kind: 'banner', name: 'Neon District banner', cost: 30_000, minLevel: 3, css: 'linear-gradient(135deg,#0b1026,#7c3aed 50%,#06b6d4)' },
+  { key: 'banner_toxic', kind: 'banner', name: 'Wasteland banner', cost: 30_000, minLevel: 3, css: 'linear-gradient(135deg,#052e16,#65a30d 55%,#facc15)' },
+  { key: 'banner_abyss', kind: 'banner', name: 'Void banner', cost: 50_000, minLevel: 5, css: 'radial-gradient(circle at 70% 30%,#7c3aed,#0b0716 60%)' },
+  { key: 'banner_royal', kind: 'banner', name: 'Gilded banner', cost: 100_000, minLevel: 6, upgrade: 3, css: 'linear-gradient(135deg,#3b0764,#a16207 50%,#fcd34d)' },
+];
+export const clanCosmetic = (key) => CLAN_COSMETICS.find((x) => x.key === key) ?? null;
+
+/** Alliances: up to three clans band together for big events; allies can't declare war on each other. */
+export const ALLIANCE = { maxClans: 3, minLevel: 5 };

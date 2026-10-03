@@ -26,7 +26,7 @@ export declare const CLAN_TAG_RE: RegExp;
 
 export interface ClanSummary {
   id: string; name: string; tag: string; emoji: string; description: string; color: string | null; bannerUrl: string | null;
-  policy: ClanPolicy; requirements: { minLevel: number; minAgeDays: number; minVibe: number }; customRoles: ClanRank[]; rep: number; level: number; nextLevel: ClanLevel | null; memberCount: number; maxMembers: number; reputation: number; prestige: number; minLevel: number;
+  policy: ClanPolicy; requirements: { minLevel: number; minAgeDays: number; minVibe: number }; customRoles: ClanRank[]; rep: number; level: number; nextLevel: ClanLevel | null; memberCount: number; maxMembers: number; reputation: number; prestige: number; minLevel: number; cosmetics: string[]; equipped: { badge: string | null; banner: string | null }; allianceId: string | null; stats: { quests: number; streak: number; bestStreak: number; captured: number };
   wins: number; losses: number; treasury: number; trophies: { week: number; place: number; at: string }[]; loungeId: string | null; createdAt: string;
 }
 /** `score` is War Points; `xp` the Clan XP earned; `done` the war missions completed. */

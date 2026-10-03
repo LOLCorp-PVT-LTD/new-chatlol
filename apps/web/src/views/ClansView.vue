@@ -88,7 +88,8 @@ async function found() {
       <p v-if="!rows.length" class="text-body-md text-on-surface-variant">Nobody on this board yet.</p>
       <component :is="r.clan ? 'RouterLink' : 'div'" v-for="r in rows" :key="r.rank" :to="r.clan ? `/clans/${r.clan.id}` : undefined" class="flex items-center gap-3 rounded-md px-2 py-2 hover:bg-surface-container-low">
         <span class="w-7 text-center font-bold">{{ ['🥇', '🥈', '🥉'][r.rank - 1] ?? r.rank }}</span>
-        <template v-if="r.user"><Avatar :user="r.user" :size="32" /><span class="flex-1 truncate text-label-lg">{{ r.user.displayName }} <span v-if="r.clan" class="text-on-surface-variant">{{ r.clan.emoji }} [{{ r.clan.tag }}]</span></span></template>
+        <template v-if="r.alliance"><span class="text-xl">{{ r.alliance.emoji }}</span><span class="flex-1 truncate text-label-lg">{{ r.alliance.name }} <span class="text-on-surface-variant">{{ r.alliance.tags.map((t) => `[${t}]`).join(' ') }}</span></span></template>
+        <template v-else-if="r.user"><Avatar :user="r.user" :size="32" /><span class="flex-1 truncate text-label-lg">{{ r.user.displayName }} <span v-if="r.clan" class="text-on-surface-variant">{{ r.clan.emoji }} [{{ r.clan.tag }}]</span></span></template>
         <template v-else-if="r.clan"><span class="text-xl">{{ r.clan.emoji }}</span><span class="flex-1 truncate text-label-lg">{{ r.clan.name }} <span class="text-on-surface-variant">[{{ r.clan.tag }}]</span> <span v-if="r.clan.prestige" class="text-primary" :title="`Prestige ${r.clan.prestige}`">{{ prestigeStars(r.clan.prestige) }}</span></span></template>
         <span class="text-right"><span class="block tabular-nums text-label-lg">{{ r.value.toLocaleString() }}</span><span v-if="r.sub" class="block text-body-sm text-on-surface-variant">{{ r.sub }}</span></span>
       </component>

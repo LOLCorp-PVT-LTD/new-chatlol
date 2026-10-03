@@ -78,6 +78,7 @@ export const COLLECTIONS = [
   'clanSprints',
   'clanDays',
   'clanBounties',
+  'alliances',
   'tournaments',
   'tournamentEntries',
 ];

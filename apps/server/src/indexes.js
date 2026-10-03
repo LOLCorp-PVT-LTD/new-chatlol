@@ -120,6 +120,7 @@ export async function ensureIndexes(db) {
     idx('clans', { bestStreak: -1 }),
     idx('clans', { wins: -1 }),
     idx('clans', { prestige: -1, rep: -1 }),
+    idx('alliances', { clanIds: 1 }),
     idx('kv', { exp: 1 }, { expireAfterSeconds: 0 }),
     idx('busEvents', { at: 1 }, { expireAfterSeconds: 300 }),
     idx('socketEvents', { createdAt: 1 }, { expireAfterSeconds: 300 }),

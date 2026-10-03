@@ -83,7 +83,7 @@ export async function syncMemberBadges(clanId) {
   const c = await db.clans.findOne({ _id: clanId });
   if (!c) return;
   const ids = (await db.clanMembers.find({ clanId }, { projection: { userId: 1 } }).toArray()).map((m) => m.userId);
-  await db.users.updateMany({ _id: { $in: ids } }, { $set: { clan: { id: c._id, tag: c.tag, name: c.name, emoji: c.emoji, color: c.color ?? null, level: clanLevelFor(c.rep).level, glow: c.hq?.prestige ?? 0, prestige: c.prestige ?? 0 } } });
+  await db.users.updateMany({ _id: { $in: ids } }, { $set: { clan: { id: c._id, tag: c.tag, name: c.name, emoji: c.emoji, color: c.color ?? null, level: clanLevelFor(c.rep).level, glow: c.hq?.prestige ?? 0, prestige: c.prestige ?? 0, badge: c.equipped?.badge ?? null } } });
 }
 
 // ——— Clan Wars ———

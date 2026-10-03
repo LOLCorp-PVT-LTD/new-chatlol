@@ -64,7 +64,7 @@ const btnStyle = computed(() => buttonStyleByKey(u.value.cosmetics.button)?.css 
           {{ u.displayName }} <span v-if="gender" class="text-headline-sm" :title="gender.label">{{ gender.emoji }}</span>
           <span class="rounded-full px-3 py-1 text-label-md hdr-chip">{{ tier.emoji }} {{ tier.label.toUpperCase() }}</span>
           <RouterLink v-if="u.clanMvp" :to="`/clans/${u.clanMvp.clanId}`" class="rounded-full px-3 py-1 text-label-md hdr-chip" :title="`Clan MVP of ${u.clanMvp.clan} last week`">🏅 CLAN MVP</RouterLink>
-          <RouterLink v-if="u.clan" :to="`/clans/${u.clan.id}`" class="rounded-full px-3 py-1 text-label-md hdr-chip hdr-clan" :class="{ 'hdr-clan-glow': u.clan.glow >= 2 }" :style="u.clan.color ? { '--clan': u.clan.color } : undefined" :title="`Member of ${u.clan.name} · clan level ${u.clan.level}`">{{ u.clan.emoji }} {{ u.clan.name }} <b>[{{ u.clan.tag }}]</b></RouterLink>
+          <RouterLink v-if="u.clan" :to="`/clans/${u.clan.id}`" class="rounded-full px-3 py-1 text-label-md hdr-chip hdr-clan" :class="[{ 'hdr-clan-glow': u.clan.glow >= 2 }, u.clan.badge ? `cb-${u.clan.badge}` : '']" :style="u.clan.color ? { '--clan': u.clan.color } : undefined" :title="`Member of ${u.clan.name} · clan level ${u.clan.level}`">{{ u.clan.emoji }} {{ u.clan.name }} <b>[{{ u.clan.tag }}]</b><span v-if="u.clan.prestige" class="ml-1">{{ '★'.repeat(u.clan.prestige) }}</span></RouterLink>
           <span v-if="style === 'compact' && u.premium" class="text-label-md">👑</span>
         </h1>
         <p class="text-body-md opacity-90">@{{ u.handle }} · {{ u.online ? '🟢 Online' : `Active ${timeAgo(u.lastSeenAt)} ago` }}<template v-if="style === 'compact' && u.isAI"> · ✦ AI persona</template></p>

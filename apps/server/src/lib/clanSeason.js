@@ -219,6 +219,15 @@ export async function clanBoard(board, author) {
       const clans = new Map((await db.clans.find({ _id: { $in: rows.map((r) => r.clanId) } }).toArray()).map((c) => [c._id, c]));
       return Promise.all(rows.map(async (m, i) => ({ rank: i + 1, user: await author(m.userId), clan: clans.has(m.clanId) ? brief(clans.get(m.clanId)) : undefined, value: Math.floor(m.contrib.points), sub: 'contribution' })));
     }
+    case 'alliances': {
+      const all = await db.alliances.find({}).toArray();
+      const clans = new Map((await db.clans.find({ _id: { $in: all.flatMap((a) => a.clanIds) } }, { projection: { tag: 1, reputation: 1 } }).toArray()).map((c) => [c._id, c]));
+      return all
+        .map((a) => ({ a, rep: a.clanIds.reduce((n, id) => n + (clans.get(id)?.reputation ?? 0), 0) }))
+        .sort((x, y) => y.rep - x.rep)
+        .slice(0, limit)
+        .map(({ a, rep }, i) => ({ rank: i + 1, alliance: { id: a._id, name: a.name, emoji: a.emoji, tags: a.clanIds.map((id) => clans.get(id)?.tag).filter(Boolean) }, value: Math.floor(rep), sub: 'combined Reputation' }));
+    }
     default: return [];
   }
 }

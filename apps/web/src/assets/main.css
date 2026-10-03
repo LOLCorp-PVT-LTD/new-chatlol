@@ -87,3 +87,14 @@
   background: rgb(var(--c-surface));
 }
 .game-fs .fs-fit { max-width: min(100%, calc((100dvh - 150px) * var(--fs-aspect, 1))) !important; }
+
+/* Clan badges (bought in the clan shop): the clan chip on profiles and in the shop. */
+.clan-badge-chip { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 2px 10px; font-weight: 700; font-size: 0.8rem; background: rgb(var(--c-surface-container-high)); }
+.cb-badge_flame { background: linear-gradient(135deg, #ff9900, #ff3d6e) !important; color: #fff !important; box-shadow: 0 0 12px rgb(255 94 0 / 0.5); }
+.cb-badge_neon { background: #0b1026 !important; color: #a5f3fc !important; box-shadow: inset 0 0 0 1.5px #22d3ee, 0 0 14px #22d3ee88; text-shadow: 0 0 6px #22d3ee; }
+.cb-badge_gold { background: linear-gradient(135deg, #a16207, #fcd34d 50%, #a16207) !important; color: #3b0764 !important; box-shadow: 0 0 10px #fcd34d88; }
+.cb-badge_aurora { background: linear-gradient(90deg, #22d3ee, #a855f7, #ff3d6e, #22d3ee) !important; background-size: 300% 100% !important; color: #fff !important; animation: cb-aurora 4s linear infinite; }
+.cb-badge_star { background: radial-gradient(circle at 30% 30%, #fde68a, #7c3aed 70%) !important; color: #fff !important; box-shadow: 0 0 16px #a855f7aa; }
+.cb-badge_star::after { content: ' ★'; color: #fde68a; }
+@keyframes cb-aurora { to { background-position: 300% 0; } }
+@media (prefers-reduced-motion: reduce) { .cb-badge_aurora { animation: none; } }

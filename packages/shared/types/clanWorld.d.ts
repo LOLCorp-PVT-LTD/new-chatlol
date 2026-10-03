@@ -41,7 +41,7 @@ export declare function clanSeasonFor(week?: number): { season: number; number: 
 export interface ClanContributor { user: import('./types').UserPublic; points: number; xp: number; reputation: number; quests: number; wars: number; recruits: number; donated: number }
 export declare const SEASON_POINTS: { perXp: number; quest: number; warWin: number; warLoss: number; capture: number; hold: number; bounty: number; event: number };
 export declare const SEASON_PRIZES: { place: number; reputation: number; gems: number; title: string }[];
-export type ClanBoardKey = 'season' | 'reputation' | 'level' | 'weekly' | 'active' | 'wins' | 'streak' | 'achievements' | 'territory' | 'prestige' | 'members';
+export type ClanBoardKey = 'season' | 'reputation' | 'level' | 'weekly' | 'active' | 'wins' | 'streak' | 'achievements' | 'territory' | 'prestige' | 'members' | 'alliances';
 export declare const CLAN_BOARDS: { key: ClanBoardKey; name: string; emoji: string }[];
 export type BountyKey = 'overtake' | 'xp' | 'quest' | 'recruit' | 'active';
 export declare const CLAN_BOUNTY_POOL: { key: BountyKey; emoji: string; label: (t: { name?: string; target: number }) => string }[];
@@ -54,4 +54,12 @@ export declare const CLAN_PRESTIGE: { max: number; reputation: number; minLevel:
 export declare function prestigeStars(n: number): string;
 export interface ClanBounty { key: BountyKey; emoji: string; label: string; target: number; progress: number; done: boolean }
 export interface ClanLiveEvent extends ClanLiveEventDef { startsAt: string; endsAt: string }
-export interface ClanBoardRow { rank: number; clan?: { id: string; name: string; tag: string; emoji: string; prestige: number }; user?: import('./types').UserPublic; value: number; sub?: string }
+export interface ClanBoardRow { rank: number; alliance?: { id: string; name: string; emoji: string; tags: string[] }; clan?: { id: string; name: string; tag: string; emoji: string; prestige: number }; user?: import('./types').UserPublic; value: number; sub?: string }
+export interface HqStage { stage: number; name: string; emoji: string; minLevel: number; prestige?: number; desc: string }
+export declare const HQ_STAGES: HqStage[];
+export declare function hqStageFor(level: number, prestige?: number): HqStage;
+export interface ClanCosmetic { key: string; kind: 'badge' | 'banner'; name: string; cost: number; minLevel: number; upgrade?: number; prestige?: number; css?: string }
+export declare const CLAN_COSMETICS: ClanCosmetic[];
+export declare function clanCosmetic(key: string | null | undefined): ClanCosmetic | null;
+export declare const ALLIANCE: { maxClans: number; minLevel: number };
+export interface AllianceSummary { id: string; name: string; emoji: string; leaderClanId: string; clans: { id: string; name: string; tag: string; emoji: string; reputation: number }[]; reputation: number; invites: string[] }
