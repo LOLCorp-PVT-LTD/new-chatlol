@@ -73,12 +73,17 @@ export const config = {
     /** Starting list. At startup the API checks NVIDIA's live catalogue, drops retired models and adds fast free ones. */
     models: (
       env.NIM_MODELS ??
-      'meta/llama-3.3-70b-instruct,meta/llama-4-scout-17b-16e-instruct,mistralai/mistral-small-3.1-24b-instruct-2503,google/gemma-3-27b-it,qwen/qwen2.5-7b-instruct'
+      'meta/llama-3.3-70b-instruct,openai/gpt-oss-120b,openai/gpt-oss-20b,meta/llama-4-scout-17b-16e-instruct,nvidia/nemotron-3-nano-30b-a3b'
     )
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean),
     /** Bigger model for one-to-one DMs and replies to people, where quality matters most. */
+    /** Used first whenever they work (in this order), on startup and after a failover; the sticky model only takes over when none of these answer. */
+    preferred: (env.NIM_PREFERRED_MODELS ?? 'nvidia/nemotron-3-super-120b-a12b')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
     chatModel: env.NIM_CHAT_MODEL ?? 'meta/llama-3.3-70b-instruct',
     safetyModel: env.NIM_SAFETY_MODEL ?? '',
     /** Requests per minute per key (NVIDIA's free tier allows 40). */
@@ -91,6 +96,9 @@ export const config = {
     activity: Number(env.AI_ACTIVITY ?? 1),
     /** Multiplies persona reply delays (read, typing). 1 = human-like; tests use a tiny value. */
     replyPace: Number(env.AI_REPLY_PACE ?? 1),
+    /** Personas can send generated photos in DMs when asked (needs NIM_IMAGE_URL). Per conversation per day. */
+    dmPhotos: (env.AI_DM_PHOTOS ?? '1') !== '0',
+    dmPhotosPerDay: Number(env.AI_DM_PHOTOS_PER_DAY ?? 5),
   },
   /**
    * Push notifications, straight to each platform's own free service (no third-party push provider):

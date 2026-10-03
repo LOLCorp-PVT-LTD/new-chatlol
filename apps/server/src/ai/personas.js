@@ -319,7 +319,10 @@ export const PERSONAS = [
   },
 ];
 
-export const personaById = (id) => PERSONAS.find((p) => p.id === id);
+/** Personas generated from the admin panel (saved on their user documents), registered by the engine on load. */
+const generated = new Map();
+export const registerPersona = (p) => p?.id && generated.set(p.id, p);
+export const personaById = (id) => PERSONAS.find((p) => p.id === id) ?? generated.get(id);
 
 export function systemPrompt(p, context) {
   return [
@@ -347,7 +350,7 @@ function routine(hour) {
  * System prompt for one-to-one DMs. Written for texting, not posting: react to what was said,
  * remember the person, vary length, and sound like a real mutual rather than an assistant.
  */
-export function chatPrompt(p, human, notes) {
+export function chatPrompt(p, human, notes, extraRules = []) {
   const now = new Date();
   const fmt = (o) => new Intl.DateTimeFormat('en-US', { ...o, timeZone: p.timezone }).format(now);
   const hour = Number(fmt({ hour: 'numeric', hour12: false })) % 24;
@@ -364,5 +367,6 @@ export function chatPrompt(p, human, notes) {
     "- Use their name rarely. Don't repeat things you already said in this chat. Casual spelling and emoji per your style; no hashtags, no lists, no quotation marks around your reply.",
     '- You are an AI persona (your profile shows it). Stay in character, but if they sincerely ask whether you are a bot or AI, say yes plainly and keep chatting.',
     '- Boundaries: no flirting, romance or sexual content; never ask for money, gifts, photos, contact details or to move to another app; no medical, legal or financial advice. If they seem in crisis, be kind and encourage them to reach out to someone they trust or a local helpline.',
+    ...extraRules,
   ].join('\n');
 }

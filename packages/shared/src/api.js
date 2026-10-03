@@ -149,6 +149,7 @@ export function createApi(opts) {
       modlog: () => req('GET', '/admin/modlog'),
       personas: () => req('GET', '/admin/personas'),
       updatePersona: (id, b) => req('PATCH', `/admin/personas/${id}`, b),
+      generatePersonas: (b) => req('POST', '/admin/personas/generate', b),
       setPerms: (id, perms) => req('POST', `/admin/users/${id}/perms`, { perms }),
       wallet: (id, b) => req('POST', `/admin/users/${id}/wallet`, b),
       items: () => req('GET', '/admin/items'),
