@@ -1,30 +1,32 @@
 import { Router } from 'express';
 import { randomInt } from 'node:crypto';
 import { z } from 'zod';
-import { ARCADE, ARCADE_KEYS, GAME_KEYS, replayArcade } from '@chatlol/shared';
-import { db, newId, now, today } from '../db.js';
+import { ARCADE, ARCADE_ECONOMY, ARCADE_KEYS, GAME_KEYS, replayArcade } from '@chatlol/shared';
+import { db, newId, now } from '../db.js';
 import { optionalAuth, requireAuth, uid } from '../lib/auth.js';
 import { HttpError, parse, rateLimit } from '../lib/http.js';
-import { authorCache } from '../lib/serialize.js';
-import { bumpCounter, grant } from '../lib/rewards.js';
+import { authorCache, isPremium } from '../lib/serialize.js';
+import { emitWallet, grant } from '../lib/rewards.js';
 import { track } from '../lib/activity.js';
 import { recordTournamentResult } from '../lib/tournaments.js';
 
 /**
  * Arcade: single-player games with leaderboards. A run starts on the server (which picks the seed); when it ends
  * the client sends its recorded inputs and the server replays the game to get the score — a posted number is
- * never trusted. Runs can't finish faster than real time. Good runs earn a few Sparks (capped per day).
+ * never trusted. Runs can't finish faster than real time. A run costs ARCADE_ECONOMY.entry Sparks to start; every
+ * verified point pays back perPoint Sparks (perPointPremium for Premium members), so skilled players can farm Sparks.
  */
 export const arcadeRouter = Router();
-const SPARKS_PER_DAY = 100;
-const sparksFor = { snake: (s) => s / 10, flight: (s) => s, 2048: (s) => s / 200, tower: (s) => s / 20 };
 
 arcadeRouter.post('/arcade/:game/start', requireAuth, async (req, res) => {
   const me = uid(req);
   const game = String(req.params.game);
   if (!ARCADE[game]) throw new HttpError(404, 'Unknown game');
   await rateLimit(`arcade:${me}`, 60);
-  const run = { _id: newId(), userId: me, game, seed: randomInt(2 ** 31), status: 'running', score: null, startedAt: now() };
+  const paid = await db.users.updateOne({ _id: me, sparks: { $gte: ARCADE_ECONOMY.entry } }, { $inc: { sparks: -ARCADE_ECONOMY.entry } });
+  if (!paid.modifiedCount) throw new HttpError(402, `A run costs ${ARCADE_ECONOMY.entry} Sparks`, 'insufficient_sparks');
+  void emitWallet(me);
+  const run = { _id: newId(), userId: me, game, seed: randomInt(2 ** 31), status: 'running', score: null, entry: ARCADE_ECONOMY.entry, startedAt: now() };
   await db.arcadeRuns.insertOne(run);
   res.status(201).json({ runId: run._id, seed: run.seed });
 });
@@ -52,13 +54,10 @@ arcadeRouter.post('/arcade/runs/:id/finish', requireAuth, async (req, res) => {
   if (score > 0) await recordTournamentResult('arcade', run.game, [me], score);
   let reward = null;
   if (score > 0) {
-    const want = Math.floor(sparksFor[run.game](score));
-    const used = (await db.dailyCounters.findOne({ userId: me, day: today(), key: 'arcade_sparks' }))?.n ?? 0;
-    const give = Math.max(0, Math.min(want, SPARKS_PER_DAY - used));
-    if (give) {
-      await bumpCounter(me, 'arcade_sparks', give);
-      reward = await grant(me, give, Math.min(30, give), `${ARCADE[run.game].name}: ${score.toLocaleString()} points`);
-    }
+    const u = await db.users.findOne({ _id: me }, { projection: { premium: 1 } });
+    const rate = isPremium(u) ? ARCADE_ECONOMY.perPointPremium : ARCADE_ECONOMY.perPoint;
+    const give = Math.floor(score * rate);
+    reward = await grant(me, give, Math.min(50, Math.ceil(give / 20)), `${ARCADE[run.game].name}: ${score.toLocaleString()} points × ${rate} ✦`);
   }
   const better = await db.arcadeRuns.distinct('userId', { game: run.game, status: 'done', score: { $gt: Math.max(score, prevBest) } });
   res.json({ score, best: Math.max(score, prevBest), newBest: score > prevBest, rank: better.length + 1, rejected: suspicious, reward });
@@ -83,7 +82,7 @@ arcadeRouter.get('/arcade', optionalAuth, async (req, res) => {
       return { key: k, name: g.name, emoji: g.emoji, desc: g.desc, myBest: mine?.score ?? null, top: await arcadeTop(k, 'all', req.userId, 3) };
     }),
   );
-  res.json({ games, sparksPerDay: SPARKS_PER_DAY });
+  res.json({ games, economy: ARCADE_ECONOMY });
 });
 
 arcadeRouter.get('/arcade/:game/leaderboard', optionalAuth, async (req, res) => {

@@ -3,7 +3,7 @@ import AdSlot from '../components/AdSlot.vue';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import type { UserPublic } from '@chatlol/shared';
-import { ARCADE, towerX } from '@chatlol/shared';
+import { ARCADE, ARCADE_ECONOMY, towerX } from '@chatlol/shared';
 import { api } from '../lib/api';
 import { useSession } from '../stores/session';
 import { confetti, ding } from '../lib/fx';
@@ -38,7 +38,10 @@ async function loadBoard() {
 }
 async function start() {
   if (!s.user) return s.toast({ kind: 'info', title: 'Sign in to play for the leaderboard' });
-  const r = await api.arcadeStart(key);
+  if ((s.user.sparks ?? 0) < ARCADE_ECONOMY.entry) return s.toast({ kind: 'error', title: `A run costs ✦${ARCADE_ECONOMY.entry}`, body: 'Earn a few more Sparks and come back!' });
+  let r: Awaited<ReturnType<typeof api.arcadeStart>>;
+  try { r = await api.arcadeStart(key); } catch (e) { return s.toast({ kind: 'error', title: (e as Error).message }); }
+  s.spend(ARCADE_ECONOMY.entry);
   runId = r.runId;
   st = g.init(r.seed);
   tick = 0;
@@ -330,12 +333,13 @@ const aspect = computed(() => (key === 'flight' ? '2 / 3' : key === 'tower' ? '5
           <template v-if="phase === 'over' && result">
             <p class="text-headline-lg">{{ result.newBest ? '🏆 New best!' : 'Game over' }}</p>
             <p class="text-headline-xl tabular-nums">{{ result.score.toLocaleString() }}</p>
-            <p class="text-body-md opacity-90">Best {{ result.best.toLocaleString() }} · rank #{{ result.rank }}<template v-if="result.reward"> · +{{ result.reward.sparks }} ✦</template></p>
+            <p class="text-body-md opacity-90">Best {{ result.best.toLocaleString() }} · rank #{{ result.rank }}<template v-if="result.reward"> · +{{ result.reward.sparks.toLocaleString() }} ✦</template></p>
             <p v-if="result.rejected" class="text-body-sm text-red-200">That run couldn’t be verified, so it wasn’t scored.</p>
           </template>
           <template v-else-if="phase === 'over'"><p class="text-headline-md">Scoring…</p></template>
           <template v-else><p class="text-headline-lg">{{ g.name }}</p><p class="text-body-md opacity-90">{{ g.desc }}</p><p class="text-label-md opacity-80">{{ HOW[key] }}</p></template>
-          <button class="btn bg-white text-flame h-11" @click="start">{{ phase === 'over' ? 'Play again' : 'Play' }}</button>
+          <button class="btn bg-white text-flame h-11" @click="start">{{ phase === 'over' ? 'Play again' : 'Play' }} · ✦{{ ARCADE_ECONOMY.entry }}</button>
+          <p class="text-label-sm opacity-80">Every point pays ✦{{ s.user?.premium ? ARCADE_ECONOMY.perPointPremium : ARCADE_ECONOMY.perPoint }}{{ s.user?.premium ? ' (Premium)' : ` · ✦${ARCADE_ECONOMY.perPointPremium} with Premium` }}</p>
           <AdSlot v-if="phase === 'over'" placement="arcade_gameover" class="w-full max-w-[300px] bg-white/90" />
         </div>
       </div>

@@ -76,3 +76,4 @@ export interface StatusRank {
 export declare const STATUS_RANKS: StatusRank[];
 export declare const statusFor: (level: number) => StatusRank;
 export declare const AD_SLOTS: { key: string; label: string; size: string; every?: number }[];
+export declare const ARCADE_ECONOMY: { entry: number; perPoint: number; perPointPremium: number };

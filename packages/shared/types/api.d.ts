@@ -274,7 +274,7 @@ export declare function createApi(opts: ApiClientOptions): {
     tournaments: () => Promise<{ tournaments: import('./games').Tournament[] }>;
     tournament: (id: ID) => Promise<{ tournament: import('./games').Tournament }>;
     joinTournament: (id: ID) => Promise<{ tournament: import('./games').Tournament }>;
-    arcade: () => Promise<{ games: { key: string; name: string; emoji: string; desc: string; myBest: number | null; top: { rank: number; user: UserPublic; score: number; at: string }[] }[]; sparksPerDay: number }>;
+    arcade: () => Promise<{ games: { key: string; name: string; emoji: string; desc: string; myBest: number | null; top: { rank: number; user: UserPublic; score: number; at: string }[] }[]; economy: { entry: number; perPoint: number; perPointPremium: number } }>;
     arcadeStart: (game: string) => Promise<{ runId: string; seed: number }>;
     arcadeFinish: (runId: string, inputs: [number, string][]) => Promise<{ score: number; best: number; newBest: boolean; rank: number; rejected: boolean; reward: RewardEvent | null }>;
     arcadeLeaderboard: (game: string, period?: 'day' | 'week' | 'all') => Promise<{ period: string; entries: { rank: number; user: UserPublic; score: number; at: string }[] }>;

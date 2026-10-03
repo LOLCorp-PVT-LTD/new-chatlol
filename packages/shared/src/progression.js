@@ -229,3 +229,6 @@ export const AD_SLOTS = [
   { key: 'arcade_gameover', label: 'Arcade — game over screen', size: '300×250' },
   { key: 'tournaments', label: 'Tournaments page', size: '728×90 / responsive' },
 ];
+
+/** Arcade (single-player) economy: a run costs Sparks to start, and every verified point pays Sparks back. */
+export const ARCADE_ECONOMY = { entry: 100, perPoint: 1, perPointPremium: 5 };
