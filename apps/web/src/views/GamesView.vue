@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AdSlot from '../components/AdSlot.vue';
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import type { Arena, GameInfo, GameKey, StakeCurrency } from '@chatlol/shared';
@@ -79,6 +80,7 @@ const stakeLabel = (a: Arena) => (a.stake.amount ? `${a.stake.amount.toLocaleStr
       </div>
     </section>
 
+    <AdSlot placement="games_lobby" />
     <section v-if="mine.length" class="space-y-2">
       <h2 class="text-headline-sm">Your games & invites</h2>
       <div class="grid sm:grid-cols-2 gap-3"><RouterLink v-for="a in mine" :key="a.id" :to="`/arenas/${a.id}`" class="card p-4 flex items-center gap-3 hover:shadow-pop transition">

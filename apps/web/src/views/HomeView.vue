@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AdSlot from '../components/AdSlot.vue';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import type { HomeData, Post, RatingSummary, Shout, VibeScore } from '@chatlol/shared';
 import { compact, tierByKey, toTen, timeAgo } from '@chatlol/shared';
@@ -87,6 +88,7 @@ async function nextRate() {
       </div>
     </section>
 
+    <AdSlot placement="home_top" />
     <!-- Birthdays today -->
     <section v-if="h.birthdays.length" class="card p-5 bg-[linear-gradient(135deg,rgb(var(--c-flame)/0.08),rgba(255,209,102,.18))]">
       <SectionHead title="Birthdays today 🎂" icon="cake" hint="Send them a wish!" />

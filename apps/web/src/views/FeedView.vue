@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import AdSlot from '../components/AdSlot.vue';
+import { adSlots } from '../lib/ads';
 import { onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { Post, Drop } from '@chatlol/shared';
@@ -93,7 +95,10 @@ watch(() => props.newPost, (p) => { if (p) posts.value.unshift(p); });
     </button>
 
     <TransitionGroup name="fade" tag="div" class="space-y-5">
-      <PostCard v-for="p in posts" :key="p.id" :post="p" @deleted="posts = posts.filter((x) => x.id !== $event)" />
+      <template v-for="(p, i) in posts" :key="p.id">
+        <PostCard :post="p" @deleted="posts = posts.filter((x) => x.id !== $event)" />
+        <AdSlot v-if="(i + 1) % (adSlots.feed_inline?.every ?? 6) === 0" placement="feed_inline" />
+      </template>
     </TransitionGroup>
     <div v-if="loading" class="space-y-5"><div v-for="i in 2" :key="i" class="card h-96 skeleton" /></div>
     <Empty v-if="!loading && !posts.length" emoji="📸" :title="tab === 'following' ? 'Follow some people to fill this up' : 'Nothing here yet'" body="Be the first to drop a vibe." />

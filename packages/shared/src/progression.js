@@ -217,3 +217,15 @@ export const STATUS_RANKS = [
   { key: 'legendary', label: 'Legendary', emoji: '🌟', minLevel: 40, checkInBoost: 2, color: '#ff5e00', badge: true },
 ];
 export const statusFor = (level) => [...STATUS_RANKS].reverse().find((r) => level >= r.minLevel) ?? STATUS_RANKS[0];
+
+// ——— Ads ———
+/** Ad placements across the app. Staff paste ad codes (or a house ad) per slot in the admin panel. */
+export const AD_SLOTS = [
+  { key: 'home_top', label: 'Home — under the greeting', size: '728×90 / responsive' },
+  { key: 'feed_inline', label: 'News feed — between posts', size: 'responsive', every: 6 },
+  { key: 'sidebar', label: 'Right sidebar', size: '300×250' },
+  { key: 'games_lobby', label: 'Game Arenas lobby', size: '728×90 / responsive' },
+  { key: 'arcade_lobby', label: 'Arcade lobby', size: '728×90 / responsive' },
+  { key: 'arcade_gameover', label: 'Arcade — game over screen', size: '300×250' },
+  { key: 'tournaments', label: 'Tournaments page', size: '728×90 / responsive' },
+];

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AdSlot from '../components/AdSlot.vue';
 import { computed, onMounted, ref } from 'vue';
 import type { Tournament } from '@chatlol/shared';
 import { api } from '../lib/api';
@@ -22,6 +23,7 @@ const groups = computed(() => [
       <h1 class="text-headline-lg">Compete for real prizes</h1>
       <p class="text-body-md opacity-90 max-w-lg">Top the leaderboard before the clock runs out. Gold, Gems, Premium and more for the winners.</p>
     </section>
+    <AdSlot placement="tournaments" />
     <template v-for="[label, items] in groups" :key="label">
       <section v-if="items.length" class="space-y-3">
         <h2 class="text-headline-sm">{{ label }}</h2>

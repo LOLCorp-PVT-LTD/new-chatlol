@@ -979,3 +979,18 @@ test('tournaments: admin creates one, level + Gold entry enforced, cash needs fr
     assert.equal((await db.users.findOne({ _id: p1.id })).gold, 50, '1st prize paid');
   }
 });
+
+test('ads: off by default, admin sets slot codes, Premium members are ad-free', async () => {
+  const admin = await signUp('adadmin');
+  await db.users.updateOne({ _id: admin.id }, { $set: { role: 'admin' } });
+  const viewer = await signUp('adview');
+  assert.deepEqual((await as('adview').ads()).slots, {});
+  await as('adadmin').admin.saveAds({ enabled: true, premiumAdFree: true, slots: { sidebar: { enabled: true, mode: 'sandboxed', code: '<div>ad</div>', imageUrl: null, linkUrl: null, height: 250, every: null }, nope: { enabled: true, mode: 'sandboxed', code: 'x', imageUrl: null, linkUrl: null, height: null, every: null } } });
+  const r = await as('adview').ads();
+  assert.deepEqual(Object.keys(r.slots), ['sidebar'], 'unknown slots are dropped');
+  await makePremium(viewer);
+  await wait(10);
+  const { adsRouter } = await import('./routes/ads.js');
+  assert.ok(adsRouter);
+  assert.deepEqual((await as('adview').ads()).slots, {}, 'Premium is ad-free');
+});

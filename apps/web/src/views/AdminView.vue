@@ -12,6 +12,7 @@ import Modal from '../components/Modal.vue';
 import Empty from '../components/Empty.vue';
 import AdminUserPanel from '../components/admin/AdminUserPanel.vue';
 import AdminTournaments from '../components/admin/AdminTournaments.vue';
+import AdminAds from '../components/admin/AdminAds.vue';
 
 type Api = typeof api.admin;
 type Awaited2<T> = T extends Promise<infer U> ? U : never;
@@ -31,6 +32,7 @@ const ALL_TABS = [
   ['personas', 'face', 'Personas', 'personas'],
   ['features', 'monitoring', 'Features', 'overview'],
   ['tournaments', 'military_tech', 'Tournaments', 'tournaments'],
+  ['ads', 'campaign', 'Ads', 'ads'],
   ['arenas', 'sports_esports', 'Arenas', 'overview'],
   ['gates', 'lock_open', 'Level gates', 'staff'],
 ] as const;
@@ -160,6 +162,7 @@ const INTEGRATION_LABELS: Record<string, string> = { database: 'Database', redis
     </template>
 
     <AdminTournaments v-else-if="section === 'tournaments'" />
+    <AdminAds v-else-if="section === 'ads'" />
 
     <!-- Feature adoption -->
     <section v-else-if="section === 'features' && features" class="card p-5 space-y-3">

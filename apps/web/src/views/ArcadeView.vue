@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AdSlot from '../components/AdSlot.vue';
 import { onMounted, ref } from 'vue';
 import { api } from '../lib/api';
 import Avatar from '../components/Avatar.vue';
@@ -17,6 +18,7 @@ const BG: Record<string, string> = { snake: 'linear-gradient(135deg,#0f172a,#16a
       <h1 class="text-headline-lg">Beat the high scores</h1>
       <p class="text-body-md opacity-90 max-w-lg">Quick solo games. Every score is replayed and checked on our side, so the leaderboards are real. Earn up to {{ data?.sparksPerDay ?? 100 }} ✦ a day.</p>
     </section>
+    <AdSlot placement="arcade_lobby" />
     <div v-if="data" class="grid sm:grid-cols-2 gap-4">
       <RouterLink v-for="g in data.games" :key="g.key" :to="`/arcade/${g.key}`" class="card overflow-hidden hover:shadow-pop hover:-translate-y-0.5 transition">
         <div class="h-32 flex items-center justify-center text-6xl relative" :style="{ background: BG[g.key] }"><span class="drop-shadow-xl">{{ g.emoji }}</span>

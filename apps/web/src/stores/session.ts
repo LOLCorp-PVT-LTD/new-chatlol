@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { computed, ref, watch } from 'vue';
 import type { NotificationItem, RewardEvent, UserPrivate, UserPublic, ChatMessage } from '@chatlol/shared';
 import { levelForXp } from '@chatlol/shared';
+import { loadAds } from '../lib/ads';
 import { api, tokenStore, setUnauthorizedHandler } from '../lib/api';
 import { getSocket, reconnectSocket, type AppSocket } from '../lib/socket';
 import { syncWebPush } from '../lib/webPush';
@@ -134,6 +135,7 @@ export const useSession = defineStore('session', () => {
     const r = await api.login({ login: loginId, password });
     tokenStore.set(r.token);
     applyUser(r.user);
+    void loadAds(true);
     wireSocket();
     const me = await api.me();
     applyUser(me.user);
@@ -155,6 +157,7 @@ export const useSession = defineStore('session', () => {
     const r = await api.register(b);
     tokenStore.set(r.token);
     applyUser(r.user);
+    void loadAds(true);
     wireSocket();
     const me = await api.me();
     applyUser(me.user);
@@ -163,6 +166,7 @@ export const useSession = defineStore('session', () => {
   }
 
   function logout() {
+    void loadAds(true);
     tokenStore.set(null);
     user.value = null;
     notifications.value = [];

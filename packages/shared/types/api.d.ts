@@ -268,6 +268,7 @@ export declare function createApi(opts: ApiClientOptions): {
     exchange: (to: 'gems' | 'gold', amount: number) => Promise<{ sparks: number; gems: number; gold: number }>;
     useTicket: (key: import('./progression').TicketKey, targetId: ID, loungeId?: ID) => Promise<{ used: string; free: boolean; target: { id: ID; handle: string } }>;
     gamesLeaderboard: (game?: string) => Promise<{ game: string | null; entries: { rank: number; user: UserPublic; wins: number; played: number }[] }>;
+    ads: () => Promise<{ slots: Record<string, Omit<{ enabled: boolean; mode: 'sandboxed' | 'direct'; code: string; imageUrl: string | null; linkUrl: string | null; height: number | null; every: number | null }, 'enabled'>> }>;
     tournaments: () => Promise<{ tournaments: import('./games').Tournament[] }>;
     tournament: (id: ID) => Promise<{ tournament: import('./games').Tournament }>;
     joinTournament: (id: ID) => Promise<{ tournament: import('./games').Tournament }>;
@@ -414,6 +415,8 @@ export declare function createApi(opts: ApiClientOptions): {
         boost: (id: ID, hours: number) => Promise<{ user: AdminUser }>;
         arenas: () => Promise<{ gemsGold: boolean; items: { id: string; name: string; game: string; status: string; hostId: string; playerIds: string[]; stake: { currency: string; amount: number }; payouts: { userId: string; amount: number }[]; outcome: unknown; createdAt: string; endedAt: string | null }[] }>;
         setWagers: (gemsGold: boolean) => Promise<{ gemsGold: boolean }>;
+        ads: () => Promise<{ enabled: boolean; premiumAdFree: boolean; slots: Record<string, { enabled: boolean; mode: 'sandboxed' | 'direct'; code: string; imageUrl: string | null; linkUrl: string | null; height: number | null; every: number | null }>; available: { key: string; label: string; size: string; every?: number }[] }>;
+        saveAds: (b: { enabled: boolean; premiumAdFree: boolean; slots: Record<string, { enabled: boolean; mode: 'sandboxed' | 'direct'; code: string; imageUrl: string | null; linkUrl: string | null; height: number | null; every: number | null }> }) => Promise<{ enabled: boolean; premiumAdFree: boolean; slots: Record<string, { enabled: boolean; mode: 'sandboxed' | 'direct'; code: string; imageUrl: string | null; linkUrl: string | null; height: number | null; every: number | null }>; available: { key: string; label: string; size: string; every?: number }[] }>;
         tournaments: () => Promise<{ tournaments: (import('./games').Tournament & { cancelled: boolean; cashToPay: { place: number; userId: string; prize: import('./games').TournamentPrize }[] })[] }>;
         createTournament: (b: import('./games').TournamentInput) => Promise<{ tournament: import('./games').Tournament }>;
         updateTournament: (id: ID, b: Partial<import('./games').TournamentInput>) => Promise<{ tournament: import('./games').Tournament }>;

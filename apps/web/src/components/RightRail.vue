@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AdSlot from './AdSlot.vue';
 import { onMounted, ref } from 'vue';
 import type { Lounge, LeaderboardEntry, LiveStream } from '@chatlol/shared';
 import { timeAgo } from '@chatlol/shared';
@@ -21,6 +22,7 @@ onMounted(async () => {
 
 <template>
   <aside class="w-[300px] 2xl:w-[320px] shrink-0 space-y-4">
+    <AdSlot placement="sidebar" />
     <div class="card p-5">
       <div class="flex items-center justify-between mb-3">
         <h3 class="text-headline-sm flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-online animate-pulse" />Live Raters</h3>

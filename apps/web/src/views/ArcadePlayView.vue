@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AdSlot from '../components/AdSlot.vue';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import type { UserPublic } from '@chatlol/shared';
@@ -224,6 +225,7 @@ const aspect = computed(() => (key === 'flight' ? '2 / 3' : key === 'tower' ? '5
           <template v-else-if="phase === 'over'"><p class="text-headline-md">Scoring…</p></template>
           <template v-else><p class="text-headline-lg">{{ g.name }}</p><p class="text-body-md opacity-90">{{ g.desc }}</p><p class="text-label-md opacity-80">{{ HOW[key] }}</p></template>
           <button class="btn bg-white text-flame h-11" @click="start">{{ phase === 'over' ? 'Play again' : 'Play' }}</button>
+          <AdSlot v-if="phase === 'over'" placement="arcade_gameover" class="w-full max-w-[300px] bg-white/90" />
         </div>
       </div>
       <RouterLink to="/arcade" class="text-label-md text-on-surface-variant">← All arcade games</RouterLink>
