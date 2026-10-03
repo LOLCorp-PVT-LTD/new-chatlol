@@ -142,7 +142,14 @@ usersRouter.post('/reports', requireAuth, async (req, res) => {
     req.body,
   );
   await rateLimit(`report:${uid(req)}`, 20);
+  // Whose content it is, so admins see every report against a person in one place.
+  const COL = { post: 'posts', comment: 'comments', message: 'messages', thread: 'threads', reply: 'replies', stream: 'streams', shout: 'shouts', wall: 'wallNotes' };
+  const owner =
+    b.targetType === 'user'
+      ? b.targetId
+      : ((await db[COL[b.targetType]].findOne({ _id: b.targetId }, { projection: { authorId: 1, hostId: 1 } }).catch(() => null)) ?? {});
   const report = {
+    targetUserId: typeof owner === 'string' ? owner : (owner.authorId ?? owner.hostId ?? null),
     _id: newId(),
     reporterId: uid(req),
     targetType: b.targetType,
@@ -152,7 +159,7 @@ usersRouter.post('/reports', requireAuth, async (req, res) => {
     createdAt: now(),
   };
   await db.reports.insertOne(report);
-  // SafeShield reviews it right away; anything it can't settle lands in the admin queue.
+  // LOLShield reviews it right away; anything it can't settle lands in the admin queue.
   void reviewReport(report);
   // Auto-hide posts that collect several distinct reports until a human reviews them.
   if (b.targetType === 'post') {

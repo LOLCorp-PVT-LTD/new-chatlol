@@ -178,7 +178,7 @@ export const spotifyOpenUrl = (song) => `https://open.spotify.com/${song.type}/$
 
 // ——— Moderation ———
 export const MOD_STATUSES = ['active', 'muted', 'suspended', 'banned'];
-/** What happens at each strike count within the rolling window (AI SafeShield escalation ladder). */
+/** What happens at each strike count within the rolling window (AI LOLShield escalation ladder). */
 export const STRIKE_LADDER = [
   { strikes: 1, action: 'warn' },
   { strikes: 2, action: 'mute', minutes: 60 },
@@ -204,4 +204,9 @@ export const PREMIUM_PERKS = [
   { emoji: '📣', title: 'See who mentioned you in shouts' },
   { emoji: '👑', title: 'Premium crown on your profile and shouts' },
   { emoji: '🔎', title: 'Full insights: when and how often people check you out' },
+  { emoji: '💎', title: '60% chance of bonus Gems every time you earn Sparks' },
+  { emoji: '🎨', title: 'All 30 app colour themes' },
+  { emoji: '🎵', title: 'A profile song that plays when people visit' },
+  { emoji: '🖼️', title: 'Photo and colour profile backgrounds' },
+  { emoji: '🧩', title: 'Extra page layouts, fonts, box styles and sections (video, currently)' },
 ];

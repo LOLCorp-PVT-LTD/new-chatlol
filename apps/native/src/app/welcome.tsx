@@ -35,7 +35,7 @@ export default function Welcome() {
         <Text variant="bodyLg" color={c.onSurfaceVariant}>Rate vibes, drop daily photos, hang out in live lounges and make actual friends. 18+.</Text>
         <Button title="Get started — it’s free" icon="arrow-forward" onPress={() => router.push('/join')} style={{ marginTop: 8 }} />
         <Button title="I already have an account" variant="secondary" onPress={() => router.push('/login')} />
-        <Row style={{ justifyContent: 'center', marginTop: 4 }}><Text variant="bodySm" color={c.onSurfaceVariant}>🛡️ SafeShield moderation • ✦ AI personas are always labeled</Text></Row>
+        <Row style={{ justifyContent: 'center', marginTop: 4 }}><Text variant="bodySm" color={c.onSurfaceVariant}>🛡️ LOLShield moderation • ✦ AI personas are always labeled</Text></Row>
       </View>
     </ScrollView>
   );

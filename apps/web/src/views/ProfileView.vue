@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { loadFont } from '../lib/fonts';
 import { confirmDialog, formDialog, reportDialog } from '../lib/dialog';
 import { computed, onBeforeUnmount, onMounted, provide, ref, watch, watchEffect } from 'vue';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
@@ -178,7 +179,7 @@ async function report() {
   const reason = await reportDialog(`@${user.value!.handle}`);
   if (!reason) return;
   await api.report({ targetType: 'user', targetId: user.value!.id, reason });
-  s.toast({ kind: 'info', title: 'Thanks — SafeShield is reviewing it 🛡️' });
+  s.toast({ kind: 'info', title: 'Thanks — LOLShield is reviewing it 🛡️' });
 }
 async function share() {
   const url = `${location.origin}/u/${user.value!.handle}`;
@@ -259,7 +260,8 @@ async function saveLayout() {
     user.value = { ...user.value!, profile: { ...user.value!.profile, layout: r.layout } };
     editing.value = false;
     selectedId.value = null;
-    s.toast({ kind: 'info', title: 'Your page is live ✨' });
+    if (r.premiumRemoved?.length) s.toast({ kind: 'info', title: 'Your page is live ✨', body: 'Premium-only looks and sections (👑) were left off. Get Premium to use them.' }, 6000);
+    else s.toast({ kind: 'info', title: 'Your page is live ✨' });
   } catch (e) { toastError(e); } finally { savingLayout.value = false; }
 }
 function onKey(e: KeyboardEvent) {
@@ -282,6 +284,8 @@ async function lookSaved() {
 }
 
 // ——— Page look ———
+// Vault fonts come from Google Fonts: load the one this page uses.
+watchEffect(() => loadFont(PROFILE_FONTS.find((f) => f.key === layout.value.font)?.family));
 const pageStyle = computed(() => ({
   maxWidth: `${PAGE_WIDTHS.find((w) => w.key === layout.value.width)?.px ?? 1040}px`,
   fontFamily: PROFILE_FONTS.find((f) => f.key === layout.value.font)?.css,

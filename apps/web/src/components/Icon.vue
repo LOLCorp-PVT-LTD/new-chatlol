@@ -1,6 +1,10 @@
 <script setup lang="ts">
-defineProps<{ name: string; fill?: boolean; size?: number }>();
+import { computed } from 'vue';
+import { iconClass } from '../lib/iconMap';
+/** Icon from the Iconsax font. Pass the app's icon name (see lib/iconMap); `size` in px. */
+const props = defineProps<{ name: string; fill?: boolean; size?: number }>();
+const cls = computed(() => iconClass(props.name));
 </script>
 <template>
-  <span class="icon" :class="{ 'icon-fill': fill }" :style="size ? { fontSize: size + 'px' } : undefined" aria-hidden="true">{{ name }}</span>
+  <i :class="[cls, 'icon']" :style="size ? { fontSize: size + 'px' } : undefined" aria-hidden="true" />
 </template>

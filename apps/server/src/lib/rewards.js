@@ -1,4 +1,4 @@
-import { levelForXp, levelTitle, REWARDS, STREAK_MILESTONES } from '@chatlol/shared';
+import { PREMIUM_GEM_DROP, gemDropFor, hasPower, levelForXp, levelTitle, REWARDS, STREAK_MILESTONES } from '@chatlol/shared';
 import { db, newId, now, today } from '../db.js';
 import { io, room } from './io.js';
 import { sendPush } from './push.js';
@@ -16,17 +16,31 @@ export async function bumpCounter(userId, key, by = 1) {
   return r.n;
 }
 
-export async function grant(userId, sparks, xp, reason, emit = true) {
-  const before = await db.users.findOne({ _id: userId }, { projection: { xp: 1, sparks: 1, isAi: 1 } });
+/**
+ * Pays Sparks / XP. Rewards are doubled by a running Spark Surge / XP Surge; pass `{ boost: false }` for
+ * payouts that aren't rewards (winnings, refunds).
+ */
+export async function grant(userId, sparks, xp, reason, emit = true, { boost = true } = {}) {
+  const before = await db.users.findOne({ _id: userId }, { projection: { xp: 1, sparks: 1, isAi: 1, powers: 1, premium: 1 } });
   if (!before) return { sparks: 0, xp: 0, reason };
+  let boosted = false;
+  if (boost && sparks > 0 && hasPower(before, 'boost_2x')) (sparks *= 2), (boosted = true);
+  if (boost && xp > 0 && hasPower(before, 'xp_surge')) (xp *= 2), (boosted = true);
   // Sparks never go below zero.
   await db.users.updateOne({ _id: userId }, [
     { $set: { sparks: { $max: [0, { $add: ['$sparks', sparks] }] }, xp: { $add: ['$xp', xp] } } },
   ]);
+  // Premium: a chance of bonus Gems on every Spark reward (not on winnings or refunds).
+  let gems = 0;
+  if (boost && sparks > 0 && !before.isAi && before.premium?.until > now() && Math.random() < PREMIUM_GEM_DROP.chance) {
+    gems = gemDropFor(sparks);
+    await db.users.updateOne({ _id: userId }, { $inc: { gems } });
+  }
   const from = levelForXp(before.xp);
   const to = levelForXp(before.xp + xp);
-  const ev = { sparks, xp, reason, levelUp: to > from ? { from, to } : null };
+  const ev = { sparks, xp, gems, reason, boosted, levelUp: to > from ? { from, to } : null };
   if (to > from && !before.isAi) {
+    void import('./referrals.js').then((m) => m.maybePayReferral(userId)).catch(() => {});
     await db.users.updateOne({ _id: userId }, { $inc: { sparks: to * 10 } });
     await notify(userId, {
       kind: 'level',
@@ -40,11 +54,11 @@ export async function grant(userId, sparks, xp, reason, emit = true) {
 }
 
 export async function emitWallet(userId, ev) {
-  const u = await db.users.findOne({ _id: userId }, { projection: { sparks: 1, gems: 1, xp: 1 } });
+  const u = await db.users.findOne({ _id: userId }, { projection: { sparks: 1, gems: 1, gold: 1, xp: 1 } });
   if (!u) return;
   io()
     ?.to(room.user(userId))
-    .emit('wallet', { sparks: u.sparks, gems: u.gems ?? 0, xp: u.xp, level: levelForXp(u.xp) });
+    .emit('wallet', { sparks: u.sparks, gems: u.gems ?? 0, gold: u.gold ?? 0, xp: u.xp, level: levelForXp(u.xp) });
   if (ev && (ev.sparks || ev.xp)) io()?.to(room.user(userId)).emit('reward', ev);
 }
 

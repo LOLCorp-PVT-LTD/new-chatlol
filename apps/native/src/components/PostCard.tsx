@@ -60,7 +60,7 @@ function PostCardImpl({ post: initial, onDeleted }: { post: Post; onDeleted?: (i
         : { label: 'Report', icon: 'flag', danger: true, onPress: async () => {
             const reason = await reportDialog('this post');
             if (!reason) return;
-            await api.report({ targetType: 'post', targetId: post.id, reason }); toast({ kind: 'info', title: 'Thanks — SafeShield will review it 🛡️' });
+            await api.report({ targetType: 'post', targetId: post.id, reason }); toast({ kind: 'info', title: 'Thanks — LOLShield will review it 🛡️' });
           } },
     ]);
   }

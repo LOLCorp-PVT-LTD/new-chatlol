@@ -8,6 +8,9 @@ export interface Cosmetics {
     flair: string | null;
     theme: string | null;
     banner: string | null;
+    /** Vault cover (designed art) and profile button style. */
+    cover?: string | null;
+    button?: string | null;
 }
 export interface UserPublic {
     id: ID;
@@ -40,6 +43,8 @@ export interface UserPublic {
     premium: boolean;
     /** Featured by staff: shown first in Browse Members and more often in Rate & Meet. */
     boosted?: boolean;
+    /** The reigning King of ChatLOL (golden crown). */
+    isKing?: boolean;
     isFollowing?: boolean;
     /** How you stand with them (only on other people). */
     friendship?: Friendship | null;
@@ -50,8 +55,14 @@ export interface UserPrivate extends UserPublic {
     emailVerified: boolean;
     /** Earned currency: Roulette, Drops, Arena, gifts. Never sold. */
     sparks: number;
-    /** Premium currency bought with real money. Cosmetics only — can't be staked or gambled. */
+    /** Premium currency bought with real money (or exchanged from Sparks). */
     gems: number;
+    /** Top currency, exchanged from Gems: buys tickets and the King's crown. */
+    gold: number;
+    /** Paid themes unlocked with Gold (kept even without Premium). */
+    unlockedThemes: string[];
+    /** False when the current Terms / Guidelines haven't been accepted yet. */
+    termsAccepted: boolean;
     dailyGoal: {
         done: number;
         target: number;
@@ -62,6 +73,12 @@ export interface UserPrivate extends UserPublic {
     /** Staff permissions (role defaults + grants). Empty for members. */
     perms: import('./permissions').Permission[];
     premiumUntil: ISODate | null;
+    /** Power-ups running right now: key → when it ends. */
+    powers: Partial<Record<import('./progression').PowerKey, ISODate>>;
+    /** Days in a row with a check-in. */
+    loginStreak: number;
+    /** When earned progress was last reset for inactivity. */
+    progressResetAt: ISODate | null;
     moderation: { status: import('./profile').ModStatus; until: ISODate | null; reason: string | null };
 }
 export interface ProfileSong {
@@ -133,6 +150,8 @@ export interface BattleOption {
 }
 export type PostKind = 'photo' | 'text' | 'battle' | 'drop' | 'roulette' | 'birthday';
 export interface Post {
+    /** Removed by staff: shown as a “removed by Admin for <reason>” card. */
+    removed?: { by: string; reason: string; at: string } | null;
     id: ID;
     author: UserPublic;
     kind: PostKind;
@@ -155,12 +174,17 @@ export interface Post {
     createdAt: ISODate;
 }
 export interface Comment {
+    /** Removed by staff: shown as a “removed by Admin for <reason>” card. */
+    removed?: { by: string; reason: string; at: string } | null;
     id: ID;
     postId: ID;
     author: UserPublic;
     body: string;
     sticker: import('./stickers').Sticker | null;
     rating: VibeScore | null;
+    /** Emoji reaction counts, and the viewer's own reaction. */
+    reactions: Partial<Record<ReactionKind, number>>;
+    myReaction: ReactionKind | null;
     createdAt: ISODate;
 }
 export interface Drop {
@@ -191,6 +215,8 @@ export interface HotTake {
     author: UserPublic | null;
 }
 export interface ShoutThread {
+    /** Removed by staff: shown as a “removed by Admin for <reason>” card. */
+    removed?: { by: string; reason: string; at: string } | null;
     id: ID;
     board: string;
     title: string;
@@ -204,11 +230,16 @@ export interface ShoutThread {
     createdAt: ISODate;
 }
 export interface ShoutReply {
+    /** Removed by staff: shown as a “removed by Admin for <reason>” card. */
+    removed?: { by: string; reason: string; at: string } | null;
     id: ID;
     threadId: ID;
     author: UserPublic;
     body: string;
     upvotes: number;
+    /** Emoji reaction counts, and the viewer's own reaction. */
+    reactions: Partial<Record<ReactionKind, number>>;
+    myReaction: ReactionKind | null;
     createdAt: ISODate;
 }
 export interface Lounge {
@@ -223,6 +254,8 @@ export interface Lounge {
     isLive: boolean;
 }
 export interface ChatMessage {
+    /** Removed by staff: shown as a “removed by Admin for <reason>” card. */
+    removed?: { by: string; reason: string; at: string } | null;
     id: ID;
     roomId: ID;
     author: UserPublic;
@@ -231,7 +264,8 @@ export interface ChatMessage {
     kind: 'text' | 'image' | 'gift' | 'system' | 'voice' | 'sticker';
     sticker?: import('./stickers').Sticker | null;
     replyToId: ID | null;
-    reactions: Record<string, number>;
+    reactions: Partial<Record<ReactionKind, number>>;
+    myReaction?: ReactionKind | null;
     createdAt: ISODate;
 }
 export interface Conversation {
@@ -255,7 +289,7 @@ export interface NotificationItem {
     read: boolean;
     createdAt: ISODate;
 }
-export type StoreItemKind = 'frame' | 'flair' | 'theme' | 'banner' | 'gift' | 'crate' | 'boost' | 'streak_freeze' | 'stickers' | 'emojis' | 'unlock';
+export type StoreItemKind = 'frame' | 'flair' | 'theme' | 'banner' | 'gift' | 'crate' | 'boost' | 'streak_freeze' | 'stickers' | 'emojis' | 'unlock' | 'power' | 'ticket' | 'king' | 'cover' | 'button' | 'font';
 export type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
 export interface StoreItem {
     id: ID;
@@ -265,12 +299,18 @@ export interface StoreItem {
     price: number;
     /** Price in Gems, or null when the item can only be bought with earned Sparks (e.g. loot crates). */
     gemPrice: number | null;
+    /** Gold-only items (tickets, the King's crown): their Gold price. */
+    goldPrice: number | null;
+    /** Rare cosmetics can also be bought with Gold. */
+    goldAltPrice?: number | null;
     rarity: Rarity;
     emoji: string;
     preview: string;
     owned?: boolean;
     equipped?: boolean;
     limited?: boolean;
+    /** How many you hold (stackable items like power-ups). */
+    qty?: number;
 }
 export interface LiveStream {
     id: ID;
@@ -317,6 +357,12 @@ export interface RewardEvent {
         to: number;
     } | null;
     questCompleted?: string | null;
+    /** Bonus Gems that dropped (Premium members). */
+    gems?: number;
+    /** Doubled by a running Spark Surge / XP Surge. */
+    boosted?: boolean;
+    /** Set on the daily check-in reward. */
+    loginStreak?: number;
 }
 export interface AuthResponse {
     token: string;
@@ -362,6 +408,8 @@ export interface RtcSignal {
 }
 
 export interface Shout {
+    /** Removed by staff: shown as a “removed by Admin for <reason>” card. */
+    removed?: { by: string; reason: string; at: string } | null;
     id: ID;
     author: UserPublic;
     body: string;
@@ -375,12 +423,17 @@ export interface Shout {
     createdAt: ISODate;
 }
 export interface WallNote {
+    /** Removed by staff: shown as a “removed by Admin for <reason>” card. */
+    removed?: { by: string; reason: string; at: string } | null;
     id: ID;
     profileId: ID;
     author: UserPublic;
     body: string;
     sticker: import('./stickers').Sticker | null;
     mood: import('./profile').WallMood | null;
+    /** Emoji reaction counts, and the viewer's own reaction. */
+    reactions: Partial<Record<ReactionKind, number>>;
+    myReaction: ReactionKind | null;
     createdAt: ISODate;
 }
 export interface ProfileRatings extends RatingSummary {
@@ -420,6 +473,7 @@ export interface AdminUser extends UserPublic {
     birthdate: string;
     sparks: number;
     gems: number;
+    gold: number;
     premiumUntil: ISODate | null;
     standing: { status: import('./profile').ModStatus; until: ISODate | null; reason: string | null };
     strikes30d: number;

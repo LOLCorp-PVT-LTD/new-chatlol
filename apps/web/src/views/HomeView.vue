@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AdSlot from '../components/AdSlot.vue';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import type { HomeData, Post, RatingSummary, Shout, VibeScore } from '@chatlol/shared';
 import { compact, tierByKey, toTen, timeAgo } from '@chatlol/shared';
@@ -13,7 +14,8 @@ import UserName from '../components/UserName.vue';
 import TierPad from '../components/TierPad.vue';
 import TierBars from '../components/TierBars.vue';
 import Icon from '../components/Icon.vue';
-import Countdown from '../components/Countdown.vue';
+import DropWidget from '../components/DropWidget.vue';
+import TournamentCard from '../components/TournamentCard.vue';
 
 /** Home: a slice of every part of ChatLOL, each with an arrow to its full page. */
 const s = useSession();
@@ -26,7 +28,12 @@ const greeting = computed(() => {
   return hr < 5 ? 'Up late' : hr < 12 ? 'Good morning' : hr < 18 ? 'Good afternoon' : 'Good evening';
 });
 
+const king = ref<Awaited<ReturnType<typeof api.king>>['king']>(null);
+// Featured tournaments double as the home page's promo banners.
+const promos = ref<Awaited<ReturnType<typeof api.tournaments>>['tournaments']>([]);
+void api.tournaments().then((r) => (promos.value = r.tournaments.filter((t) => t.featured && (t.status === 'live' || t.status === 'upcoming')).slice(0, 3))).catch(() => {});
 onMounted(async () => {
+  void api.king().then((r) => (king.value = r.king)).catch(() => {});
   h.value = await api.home();
   shouts.value = h.value.shouts;
   rateCard.value = h.value.rate;
@@ -53,6 +60,22 @@ async function nextRate() {
 
 <template>
   <div v-if="h" class="space-y-6 w-full">
+    <DropWidget :drop="h.drop" />
+    <!-- The reigning King of ChatLOL -->
+    <RouterLink v-if="king" :to="`/u/${king.user.handle}`" class="block rounded-lg p-5 pt-8 shadow-float relative overflow-hidden text-[#3b2a00] bg-[linear-gradient(135deg,#fff3b0,#fcd34d_45%,#d4a017)] hover:brightness-105 transition">
+      <div class="absolute -right-6 -bottom-10 text-[140px] opacity-20 rotate-12 select-none">👑</div>
+      <div class="flex items-center gap-4 relative">
+        <Avatar :user="king.user" :size="84" />
+        <div class="min-w-0">
+          <p class="text-label-sm uppercase tracking-[.2em] font-bold">👑 King of ChatLOL</p>
+          <p class="text-headline-lg truncate">{{ king.user.displayName }}</p>
+          <p class="text-body-sm opacity-80">@{{ king.user.handle }} · reigns until {{ new Date(king.until).toLocaleDateString() }}</p>
+        </div>
+      </div>
+      <p class="text-label-md mt-3 relative">Think you can take the throne? <span class="underline">The crown is in the Vault.</span></p>
+    </RouterLink>
+    <!-- Tournament banners -->
+    <div v-if="promos.length" class="grid gap-3" :class="promos.length > 1 ? 'sm:grid-cols-2' : ''"><TournamentCard v-for="t in promos" :key="t.id" :t="t" :wide="promos.length === 1" /></div>
     <!-- Greeting -->
     <section class="rounded-lg bg-sunset-v text-white p-6 shadow-float relative overflow-hidden">
       <div class="absolute -right-12 -top-16 w-56 h-56 rounded-full bg-white/10" />
@@ -66,6 +89,7 @@ async function nextRate() {
       </div>
     </section>
 
+    <AdSlot placement="home_top" />
     <!-- Birthdays today -->
     <section v-if="h.birthdays.length" class="card p-5 bg-[linear-gradient(135deg,rgb(var(--c-flame)/0.08),rgba(255,209,102,.18))]">
       <SectionHead title="Birthdays today 🎂" icon="cake" hint="Send them a wish!" />
@@ -142,16 +166,6 @@ async function nextRate() {
         </RouterLink>
       </section>
 
-
-      <!-- Today's drop -->
-      <section class="card p-5">
-        <SectionHead title="Today’s Sunset Drop" icon="wb_twilight" to="/drops" />
-        <p class="text-headline-sm">{{ h.drop.emoji }} “{{ h.drop.prompt }}”</p>
-        <p class="text-body-sm text-on-surface-variant mb-3"><Countdown :to="h.drop.endsAt" /> left</p>
-        <div class="grid grid-cols-3 gap-1.5">
-          <RouterLink v-for="p in h.drop.entries" :key="p.id" :to="`/p/${p.id}`" class="aspect-square rounded-md overflow-hidden"><img :src="p.mediaUrl!" alt="" class="w-full h-full object-cover" loading="lazy" /></RouterLink>
-        </div>
-      </section>
 
       <!-- Arena -->
       <section class="card p-5">

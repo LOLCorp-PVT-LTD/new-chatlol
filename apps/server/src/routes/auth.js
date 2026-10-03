@@ -1,18 +1,21 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { ageFrom, APP_THEMES, MAX_INTERESTS, MIN_AGE, REWARDS } from '@chatlol/shared';
+import { ageFrom, APP_THEMES, HANDLE_CHANGE_GOLD, LEGAL_VERSION, MAX_INTERESTS, MIN_AGE, THEME_UNLOCK_GOLD, appThemeByKey, themeAllowed } from '@chatlol/shared';
 import { db, newId, now, today, isDuplicateKey } from '../db.js';
 import { hashPassword, verifyPassword, signToken, requireAuth, uid, passwordVersion } from '../lib/auth.js';
 import { HttpError, parse, rateLimit } from '../lib/http.js';
-import { userPrivate, invalidateStats, newUser } from '../lib/serialize.js';
-import { grant, notify } from '../lib/rewards.js';
+import { userPrivate, invalidateStats, newUser, isPremium } from '../lib/serialize.js';
+import { grant, notify, emitWallet } from '../lib/rewards.js';
 import { assertClean } from '../lib/moderation.js';
 import { itemIdFor } from '../lib/ids.js';
 import { vapidKeys } from '../lib/push.js';
+import { dailyCheckIn } from '../lib/progression.js';
+import { attachReferrer, emailInvites, maybePayReferral, referralStats } from '../lib/referrals.js';
 import { consumeToken, sendPasswordReset, sendVerification, sendEmailChangedNotice } from '../lib/emailTokens.js';
 import { config } from '../config.js';
 import { closeAccount } from '../lib/accounts.js';
 import { assertNotBanned } from '../lib/enforcement.js';
+import { track } from '../lib/activity.js';
 
 export const authRouter = Router();
 
@@ -31,6 +34,10 @@ authRouter.post('/auth/register', async (req, res) => {
       birthdate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       gender: z.enum(['male', 'female'], { message: 'pick Male or Female' }),
       interests: z.array(z.string().max(30)).max(MAX_INTERESTS).optional(),
+      /** Referral code from an invite link. */
+      ref: z.string().max(16).optional(),
+      /** The legal version the member agreed to on the sign-up form. */
+      acceptTerms: z.string().max(20).optional(),
     }),
     req.body,
   );
@@ -53,6 +60,8 @@ authRouter.post('/auth/register', async (req, res) => {
     role: config.adminEmails.includes(email) ? 'admin' : 'user',
     interests: b.interests ?? [],
     badges: ['early_spark'],
+    acceptedTermsVersion: b.acceptTerms ?? null,
+    acceptedTermsAt: b.acceptTerms ? t : null,
     lastSeenAt: t,
     createdAt: t,
   });
@@ -64,6 +73,7 @@ authRouter.post('/auth/register', async (req, res) => {
       throw new HttpError(409, e.keyPattern?.email ? 'That email already has an account' : 'That handle is taken', 'taken');
     throw e;
   }
+  await attachReferrer(id, b.ref);
   // Starter social graph: follow a handful of active members so the feed is alive from minute one.
   const starters = await db.users
     .find({ _id: { $ne: id }, deletedAt: null }, { projection: { _id: 1 } })
@@ -108,6 +118,7 @@ authRouter.post('/auth/verify', async (req, res) => {
   if (!userId) throw new HttpError(400, 'That link has expired or was already used', 'invalid_token');
   const r = await db.users.updateOne({ _id: userId, emailVerifiedAt: null }, { $set: { emailVerifiedAt: now() } });
   if (r.modifiedCount) await grant(userId, 50, 25, 'Email verified ✅');
+  void maybePayReferral(userId);
   res.json({ ok: true });
 });
 
@@ -166,11 +177,8 @@ authRouter.post('/auth/password/change', requireAuth, async (req, res) => {
 // ——— Me ———
 authRouter.get('/me', requireAuth, async (req, res) => {
   const id = uid(req);
-  // Daily login bonus — first open of the day. The conditional UPDATE makes it race-safe across instances.
-  const claimed = await db.users.updateOne({ _id: id, lastDailyClaim: { $ne: today() } }, { $set: { lastDailyClaim: today() } });
-  const reward = claimed.modifiedCount
-    ? await grant(id, REWARDS.dailyLogin.sparks, REWARDS.dailyLogin.xp, 'Daily check-in bonus ☀️')
-    : null;
+  // Daily check-in — first open of the day; the bonus grows with the login streak.
+  const reward = await dailyCheckIn(id);
   res.json({ user: await me(id), reward });
 });
 
@@ -207,16 +215,8 @@ authRouter.patch('/me/settings', requireAuth, async (req, res) => {
         hapticsEnabled: z.boolean(),
         soundEnabled: z.boolean(),
         darkMode: z.enum(['system', 'light', 'dark']),
-        appTheme: z
-          .object({
-            preset: z.enum([...APP_THEMES.map((t) => t.key), 'custom']),
-            custom: z
-              .string()
-              .regex(/^#[0-9a-fA-F]{6}$/)
-              .nullable()
-              .default(null),
-          })
-          .refine((t) => t.preset !== 'custom' || !!t.custom, 'Pick a colour for your custom theme'),
+        // Fixed themes only (no custom colours).
+        appTheme: z.object({ preset: z.enum(APP_THEMES.map((t) => t.key)), custom: z.null().default(null) }),
         breakReminderMins: z.number().int().min(0).max(240),
         showAIPersonas: z.boolean(),
         whoCanComment: z.enum(['everyone', 'following']),
@@ -241,8 +241,69 @@ authRouter.patch('/me/settings', requireAuth, async (req, res) => {
       .partial(),
     req.body,
   );
+  if (b.appTheme) {
+    const u = await db.users.findOne({ _id: id }, { projection: { premium: 1, unlockedThemes: 1 } });
+    if (!themeAllowed(b.appTheme.preset, { premium: isPremium(u), unlocked: u.unlockedThemes ?? [] }))
+      throw new HttpError(402, `Unlock ${appThemeByKey(b.appTheme.preset).label} with Premium or 🪙 ${THEME_UNLOCK_GOLD} Gold`, 'theme_locked');
+  }
   const set = Object.fromEntries(Object.entries(b).map(([k, v]) => [`settings.${k}`, v]));
   if (Object.keys(set).length) await db.users.updateOne({ _id: id }, { $set: set });
+  res.json({ user: await me(id) });
+});
+
+/** Accept the current Terms / Guidelines (asked again whenever LEGAL_VERSION changes). */
+authRouter.post('/me/accept-terms', requireAuth, async (req, res) => {
+  const id = uid(req);
+  await db.users.updateOne({ _id: id }, { $set: { acceptedTermsVersion: LEGAL_VERSION, acceptedTermsAt: now() } });
+  res.json({ user: await me(id) });
+});
+
+// ——— Referrals ———
+authRouter.get('/me/referral', requireAuth, async (req, res) => {
+  res.json(await referralStats(uid(req)));
+});
+authRouter.post('/me/referral/invite', requireAuth, async (req, res) => {
+  const id = uid(req);
+  const { emails } = parse(z.object({ emails: z.array(z.string().email().max(200)).min(1).max(10) }), req.body);
+  await rateLimit(`invite:${id}`, 5);
+  res.json({ sent: await emailInvites(id, emails) });
+});
+
+/** Change your @handle: costs Gold (HANDLE_CHANGE_GOLD). */
+authRouter.post('/me/handle', requireAuth, async (req, res) => {
+  const id = uid(req);
+  await rateLimit(`handle:${id}`, 5);
+  const { handle } = parse(z.object({ handle: z.string().regex(handleRe, '3–20 letters, numbers, _ or .') }), req.body);
+  assertClean(handle);
+  const u = await db.users.findOne({ _id: id }, { projection: { handle: 1 } });
+  if (u.handle === handle) return res.json({ user: await me(id) });
+  if (await db.users.findOne({ handleLower: handle.toLowerCase(), _id: { $ne: id } })) throw new HttpError(409, 'That handle is taken', 'handle_taken');
+  const paid = await db.users.updateOne(
+    { _id: id, gold: { $gte: HANDLE_CHANGE_GOLD } },
+    { $inc: { gold: -HANDLE_CHANGE_GOLD }, $set: { handle, handleLower: handle.toLowerCase() }, $push: { handleHistory: { from: u.handle, at: now() } } },
+  );
+  if (!paid.modifiedCount) throw new HttpError(402, `Changing your username costs 🪙 ${HANDLE_CHANGE_GOLD} Gold`, 'insufficient_gold');
+  track(id, 'username_change');
+  await emitWallet(id);
+  res.json({ user: await me(id) });
+});
+
+/** Unlocks one app colour theme for good, for Gold. */
+authRouter.post('/me/themes/:key/unlock', requireAuth, async (req, res) => {
+  const id = uid(req);
+  const t = appThemeByKey(String(req.params.key));
+  if (!t) throw new HttpError(404, 'Theme not found');
+  if (t.free) throw new HttpError(400, 'That theme is free');
+  const paid = await db.users.updateOne(
+    { _id: id, gold: { $gte: THEME_UNLOCK_GOLD }, unlockedThemes: { $ne: t.key } },
+    { $inc: { gold: -THEME_UNLOCK_GOLD }, $addToSet: { unlockedThemes: t.key } },
+  );
+  if (!paid.modifiedCount) {
+    const u = await db.users.findOne({ _id: id }, { projection: { unlockedThemes: 1 } });
+    if (!(u.unlockedThemes ?? []).includes(t.key)) throw new HttpError(402, `You need 🪙 ${THEME_UNLOCK_GOLD} Gold`, 'insufficient_gold');
+  }
+  await emitWallet(id);
+  track(id, 'theme_unlock');
   res.json({ user: await me(id) });
 });
 
@@ -250,7 +311,14 @@ authRouter.post('/me/equip', requireAuth, async (req, res) => {
   const id = uid(req);
   const b = parse(
     z
-      .object({ frame: z.string().nullable(), flair: z.string().nullable(), theme: z.string().nullable(), banner: z.string().nullable() })
+      .object({
+        frame: z.string().nullable(),
+        flair: z.string().nullable(),
+        theme: z.string().nullable(),
+        banner: z.string().nullable(),
+        cover: z.string().nullable(),
+        button: z.string().nullable(),
+      })
       .partial(),
     req.body,
   );

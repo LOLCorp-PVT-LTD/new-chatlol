@@ -1,13 +1,21 @@
 <script setup lang="ts">
 import DialogHost from './components/DialogHost.vue';
+import Icon from './components/Icon.vue';
 import { computed, ref, watch, onUnmounted } from 'vue';
 import { useRoute } from 'vue-router';
+
+// Invite links (?ref=CODE): remember the code until sign-up, whichever page they land on.
+try {
+  const ref = new URLSearchParams(location.search).get('ref');
+  if (ref && /^[A-Za-z0-9]{4,16}$/.test(ref)) localStorage.setItem('chatlol.ref', ref);
+} catch { /* storage blocked */ }
 import type { Post } from '@chatlol/shared';
 import { useSession } from './stores/session';
 import TopBar from './components/TopBar.vue';
 import RightRail from './components/RightRail.vue';
 import TabBar from './components/TabBar.vue';
 import Toasts from './components/Toasts.vue';
+import ChatHeads from './components/ChatHeads.vue';
 import LevelUp from './components/LevelUp.vue';
 import Composer from './components/Composer.vue';
 import Notifications from './components/Notifications.vue';
@@ -16,6 +24,7 @@ import Modal from './components/Modal.vue';
 import VerifyBanner from './components/VerifyBanner.vue';
 import { appTheme, themeMode } from './stores/theme';
 import { COPYRIGHT } from '@chatlol/shared';
+import { api } from './lib/api';
 
 const route = useRoute();
 const s = useSession();
@@ -45,9 +54,13 @@ watch(() => s.user?.settings.breakReminderMins, (mins) => {
 onUnmounted(() => clearTimeout(breakTimer));
 
 function onPosted(p: Post) { posted.value = p; }
+async function acceptTerms() {
+  try { s.applyUser((await api.acceptTerms()).user); } catch (e) { s.toast({ kind: 'error', title: (e as Error).message }); }
+}
 </script>
 
 <template>
+  <ChatHeads v-if="s.user && !route.path.startsWith('/messages')" />
   <Toasts />
   <DialogHost />
   <LevelUp />
@@ -65,11 +78,18 @@ function onPosted(p: Post) { posted.value = p; }
     </div>
     <footer class="max-w-[1320px] mx-auto px-4 lg:px-10 pb-36 lg:pb-10 flex flex-col sm:flex-row items-center justify-between gap-3 text-body-sm text-on-surface-variant">
       <p class="flex items-center gap-2"><img src="/brand/mascot.webp" alt="" class="h-6 w-auto" /> {{ COPYRIGHT }}</p>
-      <nav class="flex gap-4" aria-label="Footer"><RouterLink to="/settings#safety" class="hover:text-primary">Community Guidelines</RouterLink><RouterLink to="/settings#privacy" class="hover:text-primary">Privacy</RouterLink><RouterLink to="/premium" class="hover:text-primary">Premium</RouterLink></nav>
+      <nav class="flex flex-wrap justify-center gap-4" aria-label="Footer"><RouterLink to="/guidelines" class="hover:text-primary">Community Guidelines</RouterLink><RouterLink to="/safety" class="hover:text-primary">Safety</RouterLink><RouterLink to="/terms" class="hover:text-primary">Terms</RouterLink><RouterLink to="/privacy" class="hover:text-primary">Privacy</RouterLink><RouterLink to="/premium" class="hover:text-primary">Premium</RouterLink></nav>
     </footer>
+    <!-- Updated Terms / Guidelines: members accept once per version. -->
+    <div v-if="s.user && s.user.termsAccepted === false" class="fixed inset-x-0 bottom-24 lg:bottom-6 z-[80] px-4 flex justify-center">
+      <div class="card p-4 max-w-[560px] w-full shadow-float flex flex-col sm:flex-row items-center gap-3">
+        <p class="text-body-md flex-1">We’ve updated our <RouterLink to="/terms" class="underline">Terms</RouterLink> and <RouterLink to="/guidelines" class="underline">Community Guidelines</RouterLink>. Please take a look and accept to keep using ChatLOL.</p>
+        <button class="btn-primary h-10 shrink-0" @click="acceptTerms">I accept</button>
+      </div>
+    </div>
     <TabBar @compose="composing = true" />
     <button v-if="s.user && route.path === '/feed'" class="lg:hidden fixed right-5 bottom-28 z-30 w-14 h-14 rounded-full bg-sunset text-white shadow-float flex items-center justify-center active:scale-95" aria-label="New post" @click="composing = true">
-      <span class="icon">add</span>
+      <Icon name="add" />
     </button>
     <Composer v-if="composing" @close="composing = false" @posted="onPosted" />
     <Notifications v-if="showNotifs" @close="showNotifs = false" />

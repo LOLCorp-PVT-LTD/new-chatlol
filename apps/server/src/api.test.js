@@ -24,7 +24,7 @@ const { initShared, redisClient, closeShared } = await import('./lib/shared.js')
 const { seed } = await import('./seed.js');
 const { attachRealtime } = await import('./realtime.js');
 const { outbox } = await import('./lib/mailer.js');
-const { createApi } = await import('@chatlol/shared');
+const { createApi, xpForLevel } = await import('@chatlol/shared');
 const { io: ioClient } = await import('socket.io-client');
 
 let server;
@@ -269,6 +269,9 @@ test('DMs with an AI persona + AI flag disclosed; deterministic 1:1 conversation
 
 test('shouts, lounges, leaderboard', async () => {
   const { boards } = await client.boards();
+  await db.users.updateOne({ handleLower: 'sam_sunset' }, { $set: { xp: 0 } });
+  await assert.rejects(client.createThread({ board: boards[0].id, title: 'Too early', body: 'hi' }), (e) => e.code === 'level_required');
+  await db.users.updateOne({ handleLower: 'sam_sunset' }, { $set: { xp: xpForLevel(10) } });
   const t = await client.createThread({ board: boards[0].id, title: 'Test thread title', body: 'hello' });
   await client.replyThread(t.thread.id, 'reply');
   assert.equal((await client.voteThread(t.thread.id, 1)).thread.myVote, 1);
@@ -296,6 +299,8 @@ test('live video: TURN creds, verified-only go-live, mesh signalling relay with 
   const hostApi = createApi({ baseUrl: base, getToken: () => host.token });
   await assert.rejects(hostApi.goLive({ title: 'sunset session', category: 'Music' }), (e) => e.code === 'email_unverified');
   await anon().verifyEmail(lastLink('/verify'));
+  await assert.rejects(hostApi.goLive({ title: 'sunset session', category: 'Music' }), (e) => e.code === 'level_required');
+  await db.users.updateOne({ handleLower: 'hostess' }, { $set: { xp: xpForLevel(10) } });
   const { stream } = await hostApi.goLive({ title: 'sunset session', category: 'Music', video: true });
   assert.equal(stream.video, true);
 

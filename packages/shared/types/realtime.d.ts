@@ -6,7 +6,12 @@ export interface ServerEvents {
         loungeId: ID;
         onlineCount: number;
         joined?: UserPublic;
-        left?: ID;
+        left?: UserPublic;
+    }) => void;
+    /** Sent to a member as they enter: who's in the room now. */
+    'lounge:members': (p: {
+        loungeId: ID;
+        members: UserPublic[];
     }) => void;
     'dm:message': (m: ChatMessage) => void;
     'dm:typing': (p: {
@@ -24,13 +29,18 @@ export interface ServerEvents {
     'wallet': (w: {
         sparks: number;
         gems: number;
+        gold: number;
         xp: number;
         level: number;
     }) => void;
     'feed:new': (p: Post) => void;
+    'arena:update': (p: { id: ID; version: number; status: string }) => void;
+    'message:reactions': (p: { id: ID; roomId: ID; reactions: Partial<Record<import('./types').ReactionKind, number>> }) => void;
+    /** A Kick Ticket removed you from a lounge. */
+    'lounge:kicked': (p: { loungeId: ID; by: string; minutes: number }) => void;
     'shout:new': (s: import('./types').Shout) => void;
     'shout:reactions': (p: { id: ID; reactions: Record<import('./types').ReactionKind, number> }) => void;
-    'content:removed': (p: { type: string; id: ID }) => void;
+    'content:removed': (p: { type: string; id: ID; reason?: string }) => void;
     moderation: (p: { action: string; until: string | null; reason: string | null }) => void;
     /** A message for the sender only (e.g. a locked sticker). */
     toast: (t: { kind: 'error' | 'info'; title: string }) => void;
@@ -77,7 +87,8 @@ export interface ServerEvents {
 }
 /** Client → server events */
 export interface ClientEvents {
-    'lounge:join': (loungeId: ID, ack?: (history: ChatMessage[]) => void) => void;
+    /** Acks with the recent history, or `{ kicked: true }` while a Kick Ticket keeps you out. */
+    'lounge:join': (loungeId: ID, ack?: (history: ChatMessage[] | { kicked: true }) => void) => void;
     'lounge:leave': (loungeId: ID) => void;
     'lounge:send': (p: {
         loungeId: ID;
@@ -93,6 +104,8 @@ export interface ClientEvents {
         conversationId: ID;
     }) => void;
     'stream:join': (streamId: ID) => void;
+    'arena:watch': (arenaId: ID) => void;
+    'arena:unwatch': (arenaId: ID) => void;
     'stream:leave': (streamId: ID) => void;
     'stream:chat': (p: {
         streamId: ID;

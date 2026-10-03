@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import RemovedNote from './RemovedNote.vue';
 import { confirmDialog, reportDialog } from '../lib/dialog';
 import RichText from './RichText.vue';
 import StickerView from './StickerView.vue';
@@ -34,7 +35,7 @@ async function report() {
   const reason = await reportDialog('this shout');
   if (!reason) return;
   await api.report({ targetType: 'shout', targetId: props.shout.id, reason });
-  s.toast({ kind: 'info', title: 'Thanks — SafeShield is reviewing it 🛡️' });
+  s.toast({ kind: 'info', title: 'Thanks — LOLShield is reviewing it 🛡️' });
 }
 </script>
 
@@ -51,7 +52,8 @@ async function report() {
       <RouterLink v-if="shout.replyTo" :to="`/shouts?focus=${shout.replyTo.id}`" class="mt-1.5 block border-l-4 border-flame/40 bg-surface-container-low rounded-r-md px-3 py-1.5 text-body-sm text-on-surface-variant truncate">
         ↪ <b>@{{ shout.replyTo.author.handle }}</b> {{ shout.replyTo.body }}
       </RouterLink>
-      <p v-if="shout.body" class="mt-1 break-words" :class="compact ? 'text-body-md' : 'text-body-lg'"><RichText :text="shout.body" tags /></p>
+      <RemovedNote v-if="shout.removed" what="shout" :removed="shout.removed" class="mt-1" />
+      <p v-else-if="shout.body" class="mt-1 break-words" :class="compact ? 'text-body-md' : 'text-body-lg'"><RichText :text="shout.body" tags /></p>
       <StickerView v-if="shout.sticker" :sticker="shout.sticker" :size="compact ? 96 : 128" class="mt-1" />
       <div class="flex items-center gap-1 mt-2 flex-wrap">
         <button v-for="r in REACTIONS" :key="r.key" class="rounded-full px-2 h-8 text-body-sm flex items-center gap-1 transition active:scale-90"

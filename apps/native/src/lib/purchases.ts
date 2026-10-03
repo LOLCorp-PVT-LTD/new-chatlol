@@ -28,10 +28,9 @@ export async function resetPurchases() {
 
 export interface PackOffer extends GemPack { priceLabel: string }
 
+/** Gems aren't sold any more (Premium members earn them as drops), so there are no Gem packs to offer. */
 export async function loadOffers(): Promise<PackOffer[]> {
-  if (!KEY) return GEM_PACKS.map((p) => ({ ...p, priceLabel: `$${p.usd.toFixed(2)}` }));
-  products = await Purchases.getProducts(GEM_PACKS.map((p) => p.id), PRODUCT_CATEGORY.NON_SUBSCRIPTION);
-  return GEM_PACKS.map((p) => ({ ...p, priceLabel: products.find((x) => x.identifier === p.id)?.priceString ?? `$${p.usd.toFixed(2)}` }));
+  return [];
 }
 
 /** Returns 'purchased' | 'cancelled'. Gems are credited server-side by the RevenueCat webhook. */

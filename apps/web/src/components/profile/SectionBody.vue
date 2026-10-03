@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import type { ProfileSection } from '@chatlol/shared';
-import { GENDERS, SPACER_HEIGHTS, compact, formatDate, levelProgress, levelTitle, tierByKey, timeAgo, toTen } from '@chatlol/shared';
+import { GENDERS, SPACER_HEIGHTS, compact, formatDate, levelProgress, levelTitle, statusFor, tierByKey, timeAgo, toTen } from '@chatlol/shared';
 import { BADGES } from '../../lib/cosmetics';
 import PostCard from '../PostCard.vue';
 import ShoutItem from '../ShoutItem.vue';
@@ -44,6 +44,7 @@ const own = (yours: string, theirs: string) => (ctx.isMe.value ? yours : theirs)
   <dl v-else-if="section.type === 'details'" class="space-y-2 text-body-md">
     <div v-if="gender" class="flex justify-between gap-3"><dt class="muted">Gender</dt><dd class="font-bold">{{ gender.emoji }} {{ gender.label }}</dd></div>
     <div class="flex justify-between gap-3"><dt class="muted">Level</dt><dd class="font-bold">{{ prog.level }} · {{ levelTitle(prog.level) }}</dd></div>
+    <div class="flex justify-between gap-3"><dt class="muted">Status</dt><dd class="font-bold" :style="{ color: statusFor(prog.level).color }">{{ statusFor(prog.level).emoji }} {{ statusFor(prog.level).label }}</dd></div>
     <div class="flex justify-between gap-3"><dt class="muted">Vibe</dt><dd class="font-bold">{{ tierByKey(u.vibeTier).emoji }} {{ tierByKey(u.vibeTier).label }}</dd></div>
     <div class="flex justify-between gap-3"><dt class="muted">Member since</dt><dd class="font-bold">{{ formatDate(u.createdAt.slice(0, 10)) }}</dd></div>
     <div class="flex justify-between gap-3"><dt class="muted">Last active</dt><dd class="font-bold">{{ u.online ? '🟢 Online now' : `${timeAgo(u.lastSeenAt)} ago` }}</dd></div>
@@ -104,7 +105,7 @@ const own = (yours: string, theirs: string) => (ctx.isMe.value ? yours : theirs)
   <!-- Level -->
   <div v-else-if="section.type === 'level'">
     <p class="text-headline-md">Level {{ prog.level }}</p>
-    <p class="text-body-md muted mb-3">{{ levelTitle(prog.level) }} · {{ compact(u.xp) }} XP</p>
+    <p class="text-body-md muted mb-3">{{ statusFor(prog.level).emoji }} {{ statusFor(prog.level).label }} · {{ levelTitle(prog.level) }} · {{ compact(u.xp) }} XP</p>
     <div class="h-2.5 rounded-full tile overflow-hidden"><div class="h-full rounded-full" :style="{ width: `${Math.round((prog.into / prog.needed) * 100)}%`, background: ctx.accent.value }" /></div>
     <p class="text-body-sm muted mt-1.5">{{ prog.needed - prog.into }} XP to level {{ prog.level + 1 }}</p>
   </div>

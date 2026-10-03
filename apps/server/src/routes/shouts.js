@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { REACTIONS, SHOUT_COOLDOWN_SEC, SHOUT_MAX, SHOUT_MOODS } from '@chatlol/shared';
+import { REACTIONS, SHOUT_COOLDOWN_SEC, SHOUT_MAX, SHOUT_MOODS, REACTION_KEYS } from '@chatlol/shared';
 import { db, newId, now } from '../db.js';
 import { assertEmojiOwned, resolveSticker, stickerInput } from '../lib/stickers.js';
 import { optionalAuth, requireAuth, uid } from '../lib/auth.js';
@@ -13,6 +13,7 @@ import { screen } from '../lib/aiModeration.js';
 import { bus } from '../lib/events.js';
 import { io, room } from '../lib/io.js';
 import { shared } from '../lib/shared.js';
+import { track } from '../lib/activity.js';
 
 /**
  * The Global Shoutbox: one live notice board for the whole app. A shout is just a message (no title),
@@ -21,7 +22,6 @@ import { shared } from '../lib/shared.js';
  */
 export const shoutsRouter = Router();
 
-const REACTION_KEYS = REACTIONS.map((r) => r.key);
 const emptyReactions = () => Object.fromEntries(REACTION_KEYS.map((k) => [k, 0]));
 
 export async function serializeShout(s, viewerId, author = authorCache(viewerId)) {
@@ -31,6 +31,8 @@ export async function serializeShout(s, viewerId, author = authorCache(viewerId)
   ]);
   return {
     id: s._id,
+    /** Set when staff removed it: shown as a 'removed by Admin for …' card. */
+    removed: s.removed ?? null,
     author: await author(s.authorId),
     body: s.body,
     sticker: s.sticker ?? null,
@@ -161,6 +163,7 @@ shoutsRouter.post('/shouts', requireAuth, async (req, res) => {
   const shout = await insertShout(me, { body: b.body, mood: b.mood ?? null, replyToId: b.replyToId ?? null, sticker });
   if (b.body) screen({ userId: me, text: b.body, ref: { type: 'shout', id: shout._id }, targetId: shout.mentions[0] ?? null });
   const reward = await grant(me, 2, 5, 'Shouted 📣');
+  track(me, 'shout');
   res.status(201).json({
     shout: await serializeShout(shout, me),
     nextShoutAt: new Date(Date.now() + SHOUT_COOLDOWN_SEC * 1000).toISOString(),

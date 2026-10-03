@@ -13,7 +13,7 @@ export type DialogField =
 export interface DialogOptions {
   title: string;
   body?: string;
-  /** Material Symbols icon name shown at the top. */
+  /** Icon name shown at the top (see lib/iconMap). */
   icon?: string;
   /** Red confirm button for destructive actions. */
   danger?: boolean;
@@ -70,7 +70,7 @@ export async function promptDialog(
 export async function reportDialog(what: string): Promise<string | null> {
   const r = await formDialog({
     title: `Report ${what}`,
-    body: 'SafeShield reviews every report. The person won’t know it was you.',
+    body: 'LOLShield reviews every report. The person won’t know it was you.',
     icon: 'flag',
     confirmText: 'Send report',
     fields: [

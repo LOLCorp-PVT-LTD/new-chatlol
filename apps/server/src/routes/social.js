@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { REWARDS } from '@chatlol/shared';
+import { DM_SPARK_COST, REWARDS } from '@chatlol/shared';
 import { db, newId, now, isDuplicateKey, isObjectIdHex } from '../db.js';
 import { assertEmojiOwned, resolveSticker, stickerInput, stickerPreview } from '../lib/stickers.js';
 import { optionalAuth, requireAuth, uid } from '../lib/auth.js';
@@ -15,7 +15,9 @@ import {
   DEFAULT_SETTINGS,
   isPremium,
 } from '../lib/serialize.js';
-import { grant, notify } from '../lib/rewards.js';
+import { grant, notify, emitWallet } from '../lib/rewards.js';
+import { assertLevel } from '../lib/progression.js';
+import { areFriends } from '../lib/friends.js';
 import { assertClean } from '../lib/moderation.js';
 import { assertCanPost } from '../lib/enforcement.js';
 import { screen } from '../lib/aiModeration.js';
@@ -23,6 +25,7 @@ import { bus } from '../lib/events.js';
 import { io, room } from '../lib/io.js';
 import { presence } from '../lib/presence.js';
 import { shared } from '../lib/shared.js';
+import { track } from '../lib/activity.js';
 
 export const socialRouter = Router();
 
@@ -134,11 +137,13 @@ socialRouter.post('/forums', requireAuth, async (req, res) => {
     req.body,
   );
   await assertCanPost(me);
+  await assertLevel(me, 'forum');
   assertClean(`${b.title} ${b.body}`);
   await assertEmojiOwned(me, b.title, b.body);
   const row = await insertThread(me, b.board, b.title, b.body);
   screen({ userId: me, text: `${b.title}\n${b.body}`, ref: { type: 'thread', id: row._id } });
   const reward = await grant(me, REWARDS.post.sparks, REWARDS.post.xp, 'Started a forum thread 📣');
+  track(me, 'forum');
   res.status(201).json({ thread: await serializeThread(row, me), reward });
 });
 
@@ -147,11 +152,13 @@ socialRouter.post('/forums/:id/replies', requireAuth, async (req, res) => {
   await rateLimit(`reply:${me}`, 20);
   const { body } = parse(z.object({ body: z.string().trim().min(1).max(2000) }), req.body);
   await assertCanPost(me);
+  await assertLevel(me, 'forum');
   assertClean(body);
   await assertEmojiOwned(me, body);
   const row = await insertReply(String(req.params.id), me, body);
   screen({ userId: me, text: body, ref: { type: 'reply', id: row._id } });
   await grant(me, REWARDS.comment.sparks, REWARDS.comment.xp, 'Replied in the forums');
+  track(me, 'forum');
   res.status(201).json({ reply: await serializeReply(row) });
 });
 
@@ -318,6 +325,9 @@ socialRouter.post('/conversations', requireAuth, async (req, res) => {
   const followsMe = await db.follows.findOne({ followerId: other._id, followeeId: me });
   if (s.dmFrom === 'nobody' || (s.dmFrom === 'following' && !followsMe))
     throw new HttpError(403, `@${other.handle} isn't taking new DMs right now`);
+  // New conversations with people who aren't friends need a minimum level. AI personas and existing chats are exempt.
+  if (!other.isAi && !(await areFriends(me, other._id)) && !(await db.conversations.findOne({ pairKey: [me, other._id].sort().join('|') })))
+    await assertLevel(me, 'dm');
   res.json({ conversation: await conversationFor(me, await getOrCreateDm(me, other._id)) });
 });
 
@@ -407,8 +417,20 @@ socialRouter.post('/conversations/:id/messages', requireAuth, async (req, res) =
     }))
   )
     throw new HttpError(403, "You can't message this person");
+  // DMs to real people cost Sparks (Premium members and chats with AI personas are free).
+  const [sender, other] = await Promise.all([
+    db.users.findOne({ _id: me }, { projection: { premium: 1 } }),
+    otherId ? db.users.findOne({ _id: otherId }, { projection: { isAi: 1 } }) : null,
+  ]);
+  if (other && !other.isAi && !isPremium(sender)) {
+    const paid = await db.users.updateOne({ _id: me, sparks: { $gte: DM_SPARK_COST } }, { $inc: { sparks: -DM_SPARK_COST } });
+    if (!paid.modifiedCount)
+      throw new HttpError(402, `Messages cost ${DM_SPARK_COST} Sparks — earn more, or go Premium to message free`, 'insufficient_sparks');
+    void emitWallet(me);
+  }
   const message = await insertDm(convId, me, b.body, b.mediaUrl ? (b.kind === 'text' ? 'image' : b.kind) : 'text', b.mediaUrl ?? null, sticker);
   screen({ userId: me, text: b.body, ref: { type: 'message', id: message.id }, targetId: otherId });
+  track(me, 'dm');
   res.status(201).json({ message });
 });
 

@@ -3,12 +3,13 @@ import { db, now } from './db.js';
 import { authenticate } from './lib/auth.js';
 import { setIo, room } from './lib/io.js';
 import { presence } from './lib/presence.js';
-import { serializeMessage } from './lib/serialize.js';
+import { authorCache, serializeMessage } from './lib/serialize.js';
 import { localCheck } from './lib/moderation.js';
 import { canPost } from './lib/enforcement.js';
 import { screen } from './lib/aiModeration.js';
 import { insertLoungeMessage, loungeKey, markRead, recentMessages } from './routes/social.js';
 import { streamKeys, endStream, insertStreamMessage } from './routes/live.js';
+import { kickKey } from './lib/tickets.js';
 import { bus } from './lib/events.js';
 import { assertEmojiOwned, resolveSticker, stickerInput } from './lib/stickers.js';
 import { shared, redisClient, duplicateRedis, sharedBackend } from './lib/shared.js';
@@ -94,28 +95,44 @@ export async function attachRealtime(server) {
       'lounge:join',
       safe(async (loungeId, ack) => {
         if (typeof loungeId !== 'string' || !(await db.lounges.findOne({ _id: loungeId }))) return;
+        // Kicked with a Kick Ticket: locked out of this lounge for a while.
+        if (userId && (await shared().get(kickKey(loungeId, userId)))) return ack?.({ kicked: true });
         socket.join(room.lounge(loungeId));
         joinedLounges.add(loungeId);
         // Ghost mode (Settings → Privacy): read the room without showing up in its presence list.
         const ghost = userId && (await db.users.findOne({ _id: userId }, { projection: { 'settings.ghostMode': 1 } }))?.settings?.ghostMode;
         if (userId && !ghost) {
+          // Another tab of the same member is already here: no second "joined" line.
+          const wasHere = (await shared().smembers(loungeKey(loungeId))).includes(userId);
           await shared().sadd(loungeKey(loungeId), userId);
-          io.to(room.lounge(loungeId)).emit('lounge:presence', { loungeId, onlineCount: await shared().scard(loungeKey(loungeId)) });
+          const joined = wasHere ? undefined : await authorCache(userId)(userId);
+          io.to(room.lounge(loungeId)).emit('lounge:presence', { loungeId, onlineCount: await shared().scard(loungeKey(loungeId)), joined });
         }
+        // Who's in the room right now (ghosts excluded).
+        const ids = (await shared().smembers(loungeKey(loungeId))).slice(0, 100);
+        const author = authorCache(userId);
+        socket.emit('lounge:members', { loungeId, members: await Promise.all(ids.map((id) => author(id))) });
         const rows = (await recentMessages('lounge', loungeId, 60)).reverse();
-        ack?.(await Promise.all(rows.map((m) => serializeMessage(m))));
+        ack?.(await Promise.all(rows.map((m) => serializeMessage(m, authorCache(userId)))));
       }),
     );
 
     const leaveLounge = async (loungeId) => {
       socket.leave(room.lounge(loungeId));
       joinedLounges.delete(loungeId);
-      if (userId) {
+      if (userId && (await shared().smembers(loungeKey(loungeId))).includes(userId)) {
+        // Still here in another tab: stay listed and say nothing.
+        const others = await io
+          .in(room.lounge(loungeId))
+          .fetchSockets()
+          .then((list) => list.some((x) => x.id !== socket.id && x.data.userId === userId))
+          .catch(() => false);
+        if (others) return;
         await shared().srem(loungeKey(loungeId), userId);
         io.to(room.lounge(loungeId)).emit('lounge:presence', {
           loungeId,
           onlineCount: await shared().scard(loungeKey(loungeId)),
-          left: userId,
+          left: await authorCache(userId)(userId),
         });
       }
     };
@@ -125,6 +142,7 @@ export async function attachRealtime(server) {
       'lounge:send',
       safe(async ({ loungeId, body, replyToId, sticker }) => {
         if (!userId || !joinedLounges.has(loungeId) || !allowChat()) return;
+        if (await shared().get(kickKey(loungeId, userId))) return void leaveLounge(loungeId);
         const text = String(body ?? '')
           .trim()
           .slice(0, 500);
@@ -179,6 +197,17 @@ export async function attachRealtime(server) {
       return true;
     };
     socket.on('stream:join', safe(joinStream));
+
+    // ——— Game arenas: live updates (clients refetch their own view on 'arena:update') ———
+    socket.on(
+      'arena:watch',
+      safe(async (arenaId) => {
+        if (typeof arenaId !== 'string') return;
+        const a = await db.arenas.findOne({ _id: arenaId }, { projection: { visibility: 1, playerIds: 1, invitedIds: 1 } });
+        if (a && (a.visibility === 'public' || a.playerIds.includes(userId) || a.invitedIds.includes(userId))) socket.join(room.arena(arenaId));
+      }),
+    );
+    socket.on('arena:unwatch', (arenaId) => typeof arenaId === 'string' && socket.leave(room.arena(arenaId)));
 
     const leaveStream = async (streamId) => {
       await stopWatching(streamId);

@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { computed, ref, watch } from 'vue';
 import type { NotificationItem, RewardEvent, UserPrivate, UserPublic, ChatMessage } from '@chatlol/shared';
 import { levelForXp } from '@chatlol/shared';
+import { loadAds } from '../lib/ads';
 import { api, tokenStore, setUnauthorizedHandler } from '../lib/api';
 import { getSocket, reconnectSocket, type AppSocket } from '../lib/socket';
 import { syncWebPush } from '../lib/webPush';
@@ -27,14 +28,18 @@ export const useSession = defineStore('session', () => {
   const isAuthed = computed(() => !!user.value);
 
   const recent = new Map<string, number>();
-  function toast(t: Omit<Toast, 'id'>, ms = 3200) {
+  function dismissToast(id: number) {
+    toasts.value = toasts.value.filter((x) => x.id !== id);
+  }
+  function toast(t: Omit<Toast, 'id'>, ms = 6500) {
     // HTTP responses and the socket can both report the same reward — show it once.
     const key = `${t.kind}:${t.title}`;
     if (Date.now() - (recent.get(key) ?? 0) < 2500) return;
     recent.set(key, Date.now());
     const id = ++toastId;
     toasts.value.push({ ...t, id });
-    setTimeout(() => (toasts.value = toasts.value.filter((x) => x.id !== id)), ms);
+    // Toasts stay up long enough to read (6.5s at least); the ✕ closes one early.
+    setTimeout(() => dismissToast(id), Math.max(ms, 6500));
   }
 
   function reward(r?: RewardEvent | null) {
@@ -68,7 +73,7 @@ export const useSession = defineStore('session', () => {
     socket.on('wallet', (w) => {
       if (!user.value) return;
       const before = user.value.level;
-      Object.assign(user.value, { sparks: w.sparks, gems: w.gems, xp: w.xp, level: w.level });
+      Object.assign(user.value, { sparks: w.sparks, gems: w.gems, gold: w.gold, xp: w.xp, level: w.level });
       if (w.level > before && !levelUp.value) levelUp.value = { from: before, to: w.level };
     });
     socket.on('reward', (r) => { if (r.reason !== 'rate') toast({ kind: 'reward', title: r.reason, sparks: r.sparks, xp: r.xp }, 2600); });
@@ -88,7 +93,7 @@ export const useSession = defineStore('session', () => {
     });
     socket.on('dm:typing', ({ conversationId, userId, typing: t }) => { typing.value = { ...typing.value, [conversationId]: t ? userId : null }; });
     socket.on('ticker', (t) => { ticker.value = [t, ...ticker.value].slice(0, 12); });
-    // SafeShield / moderator actions take effect immediately.
+    // LOLShield / moderator actions take effect immediately.
     socket.on('moderation', (m) => {
       if (m.action === 'suspend' || m.action === 'ban') {
         toast({ kind: 'error', title: m.action === 'ban' ? 'Your account was terminated' : 'Your account was suspended', body: m.reason ?? undefined }, 8000);
@@ -130,6 +135,7 @@ export const useSession = defineStore('session', () => {
     const r = await api.login({ login: loginId, password });
     tokenStore.set(r.token);
     applyUser(r.user);
+    void loadAds(true);
     wireSocket();
     const me = await api.me();
     applyUser(me.user);
@@ -151,6 +157,7 @@ export const useSession = defineStore('session', () => {
     const r = await api.register(b);
     tokenStore.set(r.token);
     applyUser(r.user);
+    void loadAds(true);
     wireSocket();
     const me = await api.me();
     applyUser(me.user);
@@ -159,6 +166,7 @@ export const useSession = defineStore('session', () => {
   }
 
   function logout() {
+    void loadAds(true);
     tokenStore.set(null);
     user.value = null;
     notifications.value = [];
@@ -178,7 +186,7 @@ export const useSession = defineStore('session', () => {
   watch(() => user.value?.xp, (xp) => { if (user.value && xp !== undefined) user.value.level = levelForXp(xp); });
 
   return {
-    user, ready, isAuthed, toasts, notifications, unread, unreadDms, ticker, levelUp, typing,
+    user, ready, isAuthed, toasts, dismissToast, notifications, unread, unreadDms, ticker, levelUp, typing,
     boot, login, register, logout, adoptSession, refresh, reward, toast, applyUser, spend, onDm, loadNotifications,
     socket: () => socket ?? getSocket(),
   };

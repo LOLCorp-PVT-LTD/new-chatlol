@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 /**
- * Profiles, Shoutbox, Premium, SafeShield moderation, admin panel and human-like persona DMs.
+ * Profiles, Shoutbox, Premium, LOLShield moderation, admin panel and human-like persona DMs.
  * NVIDIA NIM is replaced by a local mock so the persona DM path can be exercised offline.
  */
 const nimCalls = [];
@@ -49,7 +49,7 @@ const { initShared, closeShared } = await import('./lib/shared.js');
 const { seed } = await import('./seed.js');
 const { attachRealtime } = await import('./realtime.js');
 const { startPersonaEngine } = await import('./ai/engine.js');
-const { createApi } = await import('@chatlol/shared');
+const { createApi, xpForLevel } = await import('@chatlol/shared');
 const { personaUserId } = await import('./lib/ids.js');
 const MIA = personaUserId('mia');
 
@@ -68,6 +68,8 @@ async function until(fn, ms = 8000) {
     await wait(100);
   }
 }
+const levelUp = (u, level = 10) => db.users.updateOne({ _id: u.id }, { $set: { xp: xpForLevel(level) } });
+const makePremium = (u) => db.users.updateOne({ _id: u.id }, { $set: { premium: { until: new Date(Date.now() + 86_400_000).toISOString() } } });
 let n = 0;
 async function signUp(who, extra = {}) {
   n++;
@@ -135,6 +137,8 @@ test('news feed is newest-first: a new post is always at the top after a refresh
 test('profile customisation: background, accent, headline, Spotify song, gallery-only photos', async () => {
   const u = await signUp('pat');
   const c = as('pat');
+  await assert.rejects(c.updateProfile({ song: 'https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT' }), (e) => e.code === 'premium_required');
+  await makePremium(u);
   const r = await c.updateProfile({
     background: { kind: 'preset', value: 'ocean' },
     accent: '#9333ea',
@@ -222,7 +226,7 @@ test('profile wall respects the owner’s wall setting', async () => {
   await assert.rejects(as('visitor').postWall(owner.id, { body: 'hi again' }), (e) => e.status === 403);
 });
 
-test('SafeShield: threats suspend immediately; repeated insults escalate to a mute', async () => {
+test('LOLShield: threats suspend immediately; repeated insults escalate to a mute', async () => {
   await signUp('menace');
   const victim = await signUp('victim');
   await as('menace').shout({ body: `@${victim.handle} i will kill you` });
@@ -232,6 +236,7 @@ test('SafeShield: threats suspend immediately; repeated insults escalate to a mu
   assert.ok(await db.modFlags.findOne({ priority: 'high' }), 'flagged for a human to consider termination');
 
   const bully = await signUp('bully');
+  await levelUp(bully);
   const { conversation } = await as('bully').openConversation(victim.id);
   for (const body of ['you are so stupid', 'shut up', 'you are a loser']) await as('bully').sendMessage(conversation.id, { body });
   // Insulting the same person twice and three insults in an hour are two strikes: warned, then muted.
@@ -241,7 +246,7 @@ test('SafeShield: threats suspend immediately; repeated insults escalate to a mu
   assert.ok((await as('bully').feed({})).items.length > 0);
 });
 
-test('reports are reviewed by SafeShield automatically', async () => {
+test('reports are reviewed by LOLShield automatically', async () => {
   const rude = await signUp('rude');
   await signUp('reporter');
   const { post } = await as('rude').createPost({ body: 'normal post here' });
@@ -416,6 +421,7 @@ test('birthdays: one system post per year, a gift, follower alerts, wishes not r
 test('profile builder: layouts are cleaned, saved, moderated and shown to visitors', async () => {
   const u = await signUp('lay');
   const c = as('lay');
+  await makePremium(u);
   const fresh = await as('anon').user(u.handle);
   assert.equal(fresh.user.profile.layout.header, 'cover', 'new profiles start from the default layout');
   assert.ok(fresh.user.profile.layout.sections.some((s) => s.type === 'wall'));
@@ -504,7 +510,7 @@ test('profile showcase: friends, followers, following, shouts and top photos', a
 });
 
 test('song search is Spotify only: clear error without keys, Spotify results with keys, never Apple', async () => {
-  await signUp('song');
+  await makePremium(await signUp('song'));
   const c = as('song');
   const { config } = await import('./config.js');
   const keys = { ...config.spotify };
@@ -568,15 +574,23 @@ test('song search is Spotify only: clear error without keys, Spotify results wit
   }
 });
 
-test('app colour theme: presets, a custom colour, saved on the account', async () => {
-  await signUp('themer');
+test('app colour theme: 30 fixed themes, 3 free, the rest Premium or 1 Gold each; no custom colours', async () => {
+  const u = await signUp('themer');
   const c = as('themer');
+  const { APP_THEMES } = await import('@chatlol/shared');
+  assert.equal(APP_THEMES.length, 30);
+  assert.equal(APP_THEMES.filter((t) => t.free).length, 3);
+  await assert.rejects(c.updateSettings({ appTheme: { preset: 'lavender', custom: null } }), (e) => e.code === 'theme_locked');
+  await assert.rejects(c.unlockTheme('lavender'), (e) => e.code === 'insufficient_gold');
+  await db.users.updateOne({ _id: u.id }, { $set: { gold: 1 } });
+  assert.deepEqual((await c.unlockTheme('lavender')).user.unlockedThemes, ['lavender']);
+  assert.equal((await c.updateSettings({ appTheme: { preset: 'lavender', custom: null } })).user.settings.appTheme.preset, 'lavender');
   assert.deepEqual((await c.me()).user.settings.appTheme, { preset: 'sunset', custom: null });
   assert.deepEqual((await c.updateSettings({ appTheme: { preset: 'ocean', custom: null } })).user.settings.appTheme, {
     preset: 'ocean',
     custom: null,
   });
-  assert.equal((await c.updateSettings({ appTheme: { preset: 'custom', custom: '#7c5cff' } })).user.settings.appTheme.custom, '#7c5cff');
+  await assert.rejects(c.updateSettings({ appTheme: { preset: 'custom', custom: '#7c5cff' } }), (e) => e.status === 400);
   await assert.rejects(c.updateSettings({ appTheme: { preset: 'custom', custom: null } }), (e) => e.status === 400);
   await assert.rejects(c.updateSettings({ appTheme: { preset: 'neon', custom: null } }), (e) => e.status === 400);
   await assert.rejects(c.updateSettings({ appTheme: { preset: 'custom', custom: 'red; background:url(x)' } }), (e) => e.status === 400);
@@ -597,6 +611,7 @@ test('every _id and every reference is a real ObjectId in MongoDB', async () => 
   const { ObjectId } = await import('mongodb');
   const a = await signUp('oid');
   const b = await signUp('oidb');
+  await levelUp(a);
   await as('oid').follow(b.id);
   const { post } = await as('oid').createPost({ body: 'object ids!', mediaUrl: 'https://picsum.photos/seed/oid/600/800' });
   await as('oidb').comment(post.id, 'nice');
@@ -623,7 +638,7 @@ test('every _id and every reference is a real ObjectId in MongoDB', async () => 
   const counter = await raw('dailyCounters').findOne({ userId: new ObjectId(a.id), key: 'daily_chest' });
   assert.ok(isOid(counter._id));
   // Nothing anywhere still has a string _id (shared-state keys and locks are cache entries, not records).
-  for (const name of COLLECTIONS.filter((n) => !['kv', 'locks'].includes(n))) {
+  for (const name of COLLECTIONS.filter((n) => !['kv', 'locks', 'settings'].includes(n))) {
     const bad = await raw(name).countDocuments({ _id: { $type: 'string' } });
     assert.equal(bad, 0, `${name} has string _ids`);
   }
@@ -632,7 +647,7 @@ test('every _id and every reference is a real ObjectId in MongoDB', async () => 
 test('custom emoji and stickers: free starter packs, paid packs locked until bought with Sparks', async () => {
   const u = await signUp('stick');
   const c = as('stick');
-  await db.users.updateOne({ _id: u.id }, { $set: { sparks: 5000 } });
+  await db.users.updateOne({ _id: u.id }, { $set: { sparks: 5000, xp: xpForLevel(10) } });
   const cat = await c.stickers();
   assert.ok(cat.owned.includes('emoji_basics') && cat.owned.includes('stickers_feels'), 'starter packs are free');
   assert.ok(!cat.owned.includes('emoji_slang'));
@@ -735,4 +750,285 @@ test('friend requests: send, accept, decline, cancel, unfriend, privacy setting,
     8000,
   ).catch(() => false);
   assert.ok(mia, 'the persona responded to the request');
+});
+
+test('progression: power-ups, level gates, daily check-in streak and the 7-day inactivity reset', async () => {
+  const { runInactivity, setLevelGates } = await import('./lib/progression.js');
+  const { itemIdFor } = await import('./lib/ids.js');
+  const u = await signUp('pow');
+  const stranger = await signUp('powb');
+  const c = as('pow');
+  await db.users.updateOne({ _id: u.id }, { $set: { sparks: 5000 } });
+
+  // Level gate: a level-1 member can't open a DM with a stranger…
+  await assert.rejects(c.openConversation(stranger.id), (e) => e.status === 403 && e.code === 'level_required');
+  // …until an All-Access Pass is running.
+  await c.buy('gate_pass');
+  const used = await c.usePower('gate_pass');
+  assert.ok(used.powers.gate_pass > new Date().toISOString());
+  const { conversation } = await c.openConversation(stranger.id);
+  // DMs to real people cost Sparks.
+  const before = (await db.users.findOne({ _id: u.id })).sparks;
+  await c.sendMessage(conversation.id, { body: 'hey' });
+  assert.equal(before - (await db.users.findOne({ _id: u.id })).sparks, 5);
+  await assert.rejects(c.usePower('gate_pass'), (e) => e.code === 'power_missing');
+  await assert.rejects(c.usePower('wipe_shield'), (e) => e.code === 'power_auto');
+
+  // XP Surge doubles reward XP.
+  await c.buy('xp_surge');
+  await c.usePower('xp_surge');
+  const xp0 = (await db.users.findOne({ _id: u.id })).xp;
+  await c.createPost({ body: 'surging', mediaUrl: 'https://picsum.photos/seed/surge/600/800' });
+  assert.ok((await db.users.findOne({ _id: u.id })).xp - xp0 >= 60, 'post XP (30) doubled');
+
+  // Spotlight boosts the profile.
+  await c.buy('spotlight');
+  await c.usePower('spotlight');
+  assert.equal((await as('anon').user(u.handle)).user.boosted, true);
+
+  // Admin-adjustable gates.
+  await setLevelGates({ dm: 1 });
+  await as('powb').openConversation((await signUp('powc')).id);
+  await setLevelGates({ dm: 3 });
+
+  // Check-in streak: yesterday's claim → day 2 pays more than day 1.
+  const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+  await db.users.updateOne({ _id: u.id }, { $set: { lastDailyClaim: yesterday, loginStreak: 1 } });
+  const me = await c.me();
+  assert.equal(me.reward.loginStreak, 2);
+  assert.equal(me.user.loginStreak, 2);
+
+  // Inactivity: warned at 5 days away; reset at 7 unless a Comeback Shield saves them.
+  await c.buy('wipe_shield');
+  await c.buy('arena_shield');
+  await db.inventory.updateOne({ userId: u.id, itemId: itemIdFor('frame_sunset') }, { $set: { qty: 1, via: 'gems' } }, { upsert: true });
+  await wait(300); // let the last request's lastSeenAt write land first
+  const away = (days) => db.users.updateOne({ _id: u.id }, { $set: { lastSeenAt: new Date(Date.now() - days * 86_400_000).toISOString() } });
+  await away(5.5);
+  assert.ok((await runInactivity({ force: true })).warned >= 1);
+  await away(8);
+  await db.users.updateOne({ _id: u.id }, { $set: { inactivityWarnedAt: new Date(Date.now() - 2 * 86_400_000).toISOString() } });
+  assert.ok((await runInactivity({ force: true })).shielded >= 1);
+  assert.ok((await db.users.findOne({ _id: u.id })).xp > 0, 'the shield kept everything');
+  const longAgo = new Date(Date.now() - 2 * 86_400_000).toISOString();
+  await db.users.updateOne({ _id: u.id }, { $set: { wipeGraceUntil: null, gems: 40, inactivityWarned: ['final'], inactivityWarnedAt: longAgo } });
+  assert.ok((await runInactivity({ force: true })).reset >= 1);
+  const after = await db.users.findOne({ _id: u.id });
+  assert.deepEqual([after.xp, after.sparks, after.gems], [0, 0, 40], 'level and Sparks reset, Gems kept');
+  assert.ok(await db.inventory.findOne({ userId: u.id, itemId: itemIdFor('frame_sunset') }), 'Gem-bought items kept');
+  assert.equal(await db.inventory.findOne({ userId: u.id, itemId: itemIdFor('arena_shield') }), null, 'Spark-bought items gone');
+  assert.equal((await runInactivity({ force: true })).reset, 0, 'only reset once per absence');
+});
+
+test('Gold economy: exchange, tickets with guardrails, Premium gifts and the King of ChatLOL', async () => {
+  const a = await signUp('gold');
+  const b = await signUp('goldb');
+  const c2 = await signUp('goldc');
+  const c = as('gold');
+  await db.users.updateOne({ _id: a.id }, { $set: { sparks: 20_000, gems: 2_000, gold: 0 } });
+
+  // One-way exchange.
+  const w1 = await c.exchange('gems', 2);
+  assert.deepEqual([w1.sparks, w1.gems], [0, 2002]);
+  await assert.rejects(c.exchange('gems', 1), (e) => e.code === 'insufficient_sparks');
+  assert.equal((await c.exchange('gold', 2)).gold, 2);
+
+  // Tickets cost Gold only.
+  await db.users.updateOne({ _id: a.id }, { $set: { gold: 20_000 } });
+  await c.buy('ban_ticket', 'gold');
+  await c.buy('ban_ticket', 'gold');
+  await assert.rejects(c.useTicket('ban_ticket', a.id), (e) => e.status === 400, 'not on yourself');
+  await c.useTicket('ban_ticket', b.id);
+  await assert.rejects(as('goldb').me(), (e) => e.code === 'account_suspended');
+  await db.users.updateOne({ _id: b.id }, { $set: { moderation: { status: 'active' } } }); // staff lifted it
+  await assert.rejects(c.useTicket('ban_ticket', b.id), (e) => e.code === 'ticket_immune', 'no chaining');
+
+  // Premium gifts stack a day each.
+  await c.buy('premium_gift', 'gold');
+  await c.buy('premium_gift', 'gold');
+  await c.useTicket('premium_gift', c2.id);
+  await c.useTicket('premium_gift', c2.id);
+  const until = Date.parse((await db.users.findOne({ _id: c2.id })).premium.until);
+  assert.ok(until - Date.now() > 47 * 3_600_000, 'two days of Premium');
+
+  // The King: crowned, Premium, untouchable, gets a free daily mute; a new buyer dethrones.
+  await c.buy('king_crown', 'gold');
+  assert.equal((await c.king()).king.user.id, a.id);
+  assert.equal((await as('anon').user(a.handle)).user.isKing, true);
+  assert.ok((await c.me()).user.premiumUntil);
+  await db.users.updateOne({ _id: c2.id }, { $set: { gold: 20_000 } });
+  await as('goldc').buy('mute_ticket', 'gold');
+  await assert.rejects(as('goldc').useTicket('mute_ticket', a.id), (e) => e.code === 'ticket_protected');
+  assert.equal((await c.useTicket('mute_ticket', c2.id)).free, true);
+  await as('goldc').buy('king_crown', 'gold');
+  assert.equal((await c.king()).king.user.id, c2.id);
+  assert.ok((await db.users.findOne({ _id: a.id })).badges.includes('former_king'));
+});
+
+test('game arenas: level gate, invite-only, escrowed stakes, server-checked moves, winner paid minus rake', async () => {
+  const a = await signUp('ar');
+  const b = await signUp('arb');
+  const c = await signUp('arc');
+  await assert.rejects(as('ar').createArena({ name: 'gg', game: 'chess', visibility: 'private', stake: { currency: 'sparks', amount: 100 } }), (e) => e.code === 'level_required');
+  await levelUp(a);
+  await db.users.updateMany({ _id: { $in: [a.id, b.id] } }, { $set: { sparks: 1000 } });
+  const { arena } = await as('ar').createArena({ name: 'gg', game: 'chess', visibility: 'private', stake: { currency: 'sparks', amount: 100 } });
+  await assert.rejects(as('arc').joinArena(arena.id), (e) => e.code === 'arena_private');
+  await as('ar').inviteToArena(arena.id, [b.id]);
+  await as('arb').joinArena(arena.id);
+  await assert.rejects(as('arb').startArena(arena.id), (e) => e.status === 403, 'only the host starts');
+  let r = (await as('ar').startArena(arena.id)).arena;
+  assert.equal(r.status, 'playing');
+  assert.equal((await db.users.findOne({ _id: a.id })).sparks, 900, 'stake escrowed');
+  // Fool's mate: white = seat 0.
+  const white = r.playerIds[0] === a.id ? 'ar' : 'arb';
+  const black = white === 'ar' ? 'arb' : 'ar';
+  const sq = (n) => 'abcdefgh'.indexOf(n[0]) + (n[1] - 1) * 8;
+  await assert.rejects(as(black).arenaMove(arena.id, { from: sq('e7'), to: sq('e5') }), (e) => e.code === 'illegal_move', 'not their turn');
+  await assert.rejects(as(white).arenaMove(arena.id, { from: sq('e2'), to: sq('e5') }), (e) => e.code === 'illegal_move');
+  for (const [who, f, t] of [[white, 'f2', 'f3'], [black, 'e7', 'e5'], [white, 'g2', 'g4'], [black, 'd8', 'h4']]) r = (await as(who).arenaMove(arena.id, { from: sq(f), to: sq(t) })).arena;
+  assert.equal(r.status, 'finished');
+  const winner = black === 'ar' ? a.id : b.id;
+  assert.equal((await db.users.findOne({ _id: winner })).sparks, 900 + 190, 'pot 200 minus 5% rake');
+  assert.equal(c.id.length, 24);
+});
+
+test('referrals: invite link, friend joins, inviter gets 1 Gold once the friend is verified and level 3', async () => {
+  const inviter = await signUp('refa');
+  const { code, link } = await as('refa').referral();
+  assert.ok(link.endsWith(`?ref=${code}`));
+  n++;
+  const r = await as('anon').register({ email: `refb${n}@example.com`, password: 'password123', handle: `refb_${n}`, displayName: 'refb', birthdate: '1996-02-02', gender: 'female', ref: code });
+  tokens.refb = r.token;
+  const friendId = r.user.id;
+  assert.equal((await db.users.findOne({ _id: friendId })).referredById, inviter.id);
+  const { maybePayReferral } = await import('./lib/referrals.js');
+  assert.equal(await maybePayReferral(friendId), false, 'not verified / levelled yet');
+  await db.users.updateOne({ _id: friendId }, { $set: { emailVerifiedAt: new Date().toISOString(), xp: xpForLevel(3) } });
+  assert.equal(await maybePayReferral(friendId), true);
+  assert.equal(await maybePayReferral(friendId), false, 'pays once');
+  assert.equal((await db.users.findOne({ _id: inviter.id })).gold, 1);
+  assert.equal((await as('refa').referral()).paid, 1);
+});
+
+test('profile cosmetics: covers and buttons equip, Vault fonts need the item, rare ones also cost Gold', async () => {
+  const u = await signUp('cos');
+  const c = as('cos');
+  await db.users.updateOne({ _id: u.id }, { $set: { sparks: 10_000, gold: 5 } });
+  await c.buy('cover_aurora', 'gold');
+  assert.equal((await db.users.findOne({ _id: u.id })).gold, 4, 'Aurora cover for 1 Gold');
+  await assert.rejects(c.buy('cover_ocean', 'gold'), (e) => e.code === 'not_gold');
+  await c.buy('btn_neon');
+  const eq = await c.equip({ cover: 'cover_aurora', button: 'btn_neon' });
+  assert.deepEqual([eq.user.cosmetics.cover, eq.user.cosmetics.button], ['cover_aurora', 'btn_neon']);
+  const r1 = await c.updateLayout({ font: 'font_orbitron', sections: [] });
+  assert.equal(r1.layout.font, 'default', 'font not owned yet');
+  await c.buy('font_orbitron');
+  assert.equal((await c.updateLayout({ font: 'font_orbitron', sections: [] })).layout.font, 'font_orbitron');
+});
+
+test('arcade: runs are replayed on the server; impossible-speed runs are rejected; leaderboard keeps each best', async () => {
+  const { ARCADE } = await import('@chatlol/shared');
+  await signUp('arc');
+  const c = as('arc');
+  const { runId, seed } = await c.arcadeStart('2048');
+  const g = ARCADE['2048'];
+  let s = g.init(seed);
+  const inputs = [];
+  for (let i = 0; i < 40; i++) {
+    const d = ['left', 'down', 'right', 'up'][i % 4];
+    inputs.push([i, d]);
+    s = g.step(s, d);
+  }
+  await wait(2100); // 40 moves at ≥50 ms each
+  const r = await c.arcadeFinish(runId, inputs);
+  assert.equal(r.score, s.score, 'server replay matches the client');
+  assert.equal(r.rejected, false);
+  await assert.rejects(c.arcadeFinish(runId, inputs), (e) => e.status === 409, 'scored once');
+  const snake = await c.arcadeStart('snake');
+  const fast = await c.arcadeFinish(snake.runId, [[3000, 'up']]);
+  assert.equal(fast.rejected, true, '3000 ticks can’t happen in a few milliseconds');
+  const lb = await c.arcadeLeaderboard('2048');
+  assert.equal(lb.entries[0].score, s.score);
+});
+
+test('tournaments: admin creates one, level + Gold entry enforced, cash needs free entry, arcade scores count, prizes paid', async () => {
+  const { ARCADE } = await import('@chatlol/shared');
+  const { finishTournament } = await import('./lib/tournaments.js');
+  const admin = await signUp('tadmin');
+  await db.users.updateOne({ _id: admin.id }, { $set: { role: 'admin' } });
+  const p1 = await signUp('tplay');
+  const base = { title: 'Snake Cup', kind: 'arcade', game: 'snake', minLevel: 15, entryGold: 5, startsAt: new Date(Date.now() - 60_000).toISOString(), endsAt: new Date(Date.now() + 3_600_000).toISOString(), prizes: [{ gold: 50 }] };
+  await assert.rejects(as('tadmin').admin.createTournament({ ...base, prizes: [{ cash: '£50' }] }), (e) => e.code === 'cash_needs_free_entry');
+  const { tournament } = await as('tadmin').admin.createTournament(base);
+  await assert.rejects(as('tplay').joinTournament(tournament.id), (e) => e.code === 'level_required');
+  await db.users.updateOne({ _id: p1.id }, { $set: { xp: xpForLevel(15), gold: 5 } });
+  await as('tplay').joinTournament(tournament.id);
+  assert.equal((await db.users.findOne({ _id: p1.id })).gold, 0, 'entry paid');
+  // A verified snake run counts.
+  const { runId, seed } = await as('tplay').arcadeStart('snake');
+  const g = ARCADE.snake;
+  let s = g.init(seed);
+  for (let t = 0; t < 30 && !g.over(s); t++) s = g.step(s, null);
+  await wait(30 * g.TICK_MS + 200);
+  const r = await as('tplay').arcadeFinish(runId, []);
+  const t2 = (await as('tplay').tournament(tournament.id)).tournament;
+  assert.equal(t2.myScore, r.score);
+  if (r.score > 0) {
+    await finishTournament(await db.tournaments.findOne({ _id: tournament.id }));
+    assert.equal((await db.users.findOne({ _id: p1.id })).gold, 50, '1st prize paid');
+  }
+});
+
+test('ads: off by default, admin sets slot codes, Premium members are ad-free', async () => {
+  const admin = await signUp('adadmin');
+  await db.users.updateOne({ _id: admin.id }, { $set: { role: 'admin' } });
+  const viewer = await signUp('adview');
+  assert.deepEqual((await as('adview').ads()).slots, {});
+  await as('adadmin').admin.saveAds({ enabled: true, premiumAdFree: true, slots: { sidebar: { enabled: true, mode: 'sandboxed', code: '<div>ad</div>', imageUrl: null, linkUrl: null, height: 250, every: null }, nope: { enabled: true, mode: 'sandboxed', code: 'x', imageUrl: null, linkUrl: null, height: null, every: null } } });
+  const r = await as('adview').ads();
+  assert.deepEqual(Object.keys(r.slots), ['sidebar'], 'unknown slots are dropped');
+  await makePremium(viewer);
+  await wait(10);
+  const { adsRouter } = await import('./routes/ads.js');
+  assert.ok(adsRouter);
+  assert.deepEqual((await as('adview').ads()).slots, {}, 'Premium is ad-free');
+});
+
+test('LOLShield: strikes cite the broken rule, admins are never moderated', async () => {
+  const { rulesFor } = await import('./lib/moderation.js');
+  assert.deepEqual(rulesFor(['Hate/Identity Hate']), ['hate']);
+  assert.deepEqual(rulesFor(['Sexual', 'Sexual (minor)']), ['adults_only', 'sexual_content']);
+  const admin = await signUp('modadmin');
+  await db.users.updateOne({ _id: admin.id }, { $set: { role: 'admin' } });
+  // The word filter lets admins through…
+  await as('modadmin').shout({ body: 'kill yourself (quoting a report for the team)' });
+  await wait(300);
+  assert.equal((await db.modEvents.countDocuments({ userId: admin.id, kind: 'strike' })), 0, 'no strikes for admins');
+  // …but not members, and the strike names the rule.
+  await signUp('modmember');
+  await assert.rejects(as('modmember').shout({ body: 'kill yourself' }), (e) => e.status === 422);
+});
+
+test('LOLShield oversight: moderators get findings for vague reasons and no evidence; the third removes their role', async () => {
+  const { reviewStaffAction } = await import('./lib/oversight.js');
+  const mod = await signUp('ovmod');
+  await db.users.updateOne({ _id: mod.id }, { $set: { role: 'mod' } });
+  const victim = await signUp('ovvictim');
+  await reviewStaffAction({ staffId: mod.id, kind: 'mute', targetId: victim.id, reason: 'bad' });
+  const findings = await db.modEvents.find({ userId: mod.id, kind: 'mod_violation' }).toArray();
+  assert.deepEqual(findings.map((f) => f.category).sort(), ['no_evidence', 'no_reason']);
+  assert.equal((await db.users.findOne({ _id: mod.id })).role, 'mod', 'two findings: still a mod');
+  await reviewStaffAction({ staffId: mod.id, kind: 'wallet', targetId: mod.id, reason: '+1000 Sparks', meta: { positive: true } });
+  const after = await db.users.findOne({ _id: mod.id });
+  assert.equal(after.role, 'user', 'third finding: role removed');
+  assert.equal(after.staffRevokedFrom.role, 'mod');
+  // Admins are never reviewed.
+  const admin = await signUp('ovadmin');
+  await db.users.updateOne({ _id: admin.id }, { $set: { role: 'admin' } });
+  await reviewStaffAction({ staffId: admin.id, kind: 'ban', targetId: victim.id, reason: 'x' });
+  assert.equal(await db.modEvents.countDocuments({ userId: admin.id, kind: 'mod_violation' }), 0);
+  const { reinstateStaff } = await import('./lib/oversight.js');
+  assert.equal(await reinstateStaff(mod.id), true);
+  assert.equal((await db.users.findOne({ _id: mod.id })).role, 'mod');
 });

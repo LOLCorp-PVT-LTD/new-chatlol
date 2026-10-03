@@ -16,10 +16,10 @@ const search = () => q.value.trim() && router.push({ path: '/members', query: { 
 </script>
 
 <template>
-  <header data-topbar class="sticky top-0 z-40 glass shadow-[0_1px_8px_rgba(0,0,0,0.04)] pt-[env(safe-area-inset-top)]">
+  <header data-topbar class="sticky top-0 z-40 glass border-b border-white/40 dark:border-white/[0.06] shadow-[0_1px_8px_rgba(0,0,0,0.04)] pt-[env(safe-area-inset-top)]">
     <div class="max-w-[1320px] mx-auto h-16 lg:h-20 px-4 lg:px-10 flex items-center gap-3">
       <button class="btn-icon w-10 h-10 bg-surface-container-low shadow-warm" aria-label="Open navigation menu" @click="$emit('menu')"><Icon name="menu" /></button>
-      <RouterLink to="/" class="shrink-0" aria-label="ChatLOL home"><Logo /></RouterLink>
+      <RouterLink to="/" class="shrink-0" aria-label="ChatLOL home"><Logo header /></RouterLink>
       <form class="hidden md:flex flex-1 max-w-md relative ml-4" role="search" @submit.prevent="search">
         <Icon name="search" class="absolute left-5 top-1/2 -translate-y-1/2 text-flame" :size="20" />
         <input v-model="q" class="input h-12 pl-12 text-body-md shadow-warm border-transparent" placeholder="Find friends, lounges, vibes…" aria-label="Search" />

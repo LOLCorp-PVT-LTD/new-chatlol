@@ -11,8 +11,10 @@ import { io, room } from '../lib/io.js';
 import { bus } from '../lib/events.js';
 import { shared } from '../lib/shared.js';
 import { iceConfig } from '../lib/turn.js';
+import { assertLevel } from '../lib/progression.js';
 import { config } from '../config.js';
 import { recentMessages } from './social.js';
+import { track } from '../lib/activity.js';
 
 export const liveRouter = Router();
 
@@ -130,7 +132,9 @@ liveRouter.post('/live', requireAuth, async (req, res) => {
   );
   const u = await db.users.findOne({ _id: me }, { projection: { emailVerifiedAt: 1 } });
   if (!u.emailVerifiedAt) throw new HttpError(403, 'Verify your email to go live', 'email_unverified');
+  await assertLevel(me, 'live');
   assertClean(b.title);
+  track(me, 'live');
   res.status(201).json({ stream: await serializeStream(await startStream(me, b.title, b.category, b.video), authorCache(me)) });
 });
 

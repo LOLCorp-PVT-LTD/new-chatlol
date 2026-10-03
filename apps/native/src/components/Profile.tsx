@@ -82,7 +82,7 @@ export function ProfileHeader({ ctx, onUser, preview }: { ctx: ProfileCtx; onUse
         const reason = await reportDialog(`@${u.handle}`);
         if (!reason) return;
         await api.report({ targetType: 'user', targetId: u.id, reason });
-        toast({ kind: 'info', title: 'Thanks — SafeShield is reviewing it 🛡️' });
+        toast({ kind: 'info', title: 'Thanks — LOLShield is reviewing it 🛡️' });
       } },
       { label: 'Block', icon: 'block', danger: true, onPress: async () => {
         if (!(await confirmDialog({ title: `Block @${u.handle}?`, body: 'They won’t be able to message you or see you in feeds.', icon: 'block', danger: true, confirmText: 'Block' }))) return;

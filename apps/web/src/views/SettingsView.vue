@@ -93,7 +93,7 @@ const expToggles: { k: keyof UserSettings; label: string; hint: string; icon: st
   { k: 'soundEnabled', label: 'Sounds', hint: 'Reward chimes and match dings', icon: 'volume_up' },
   { k: 'hapticsEnabled', label: 'Haptics', hint: 'Vibration on supported devices', icon: 'vibration' },
   { k: 'reduceMotion', label: 'Reduce motion', hint: 'Fewer animations and confetti', icon: 'motion_photos_off' },
-  { k: 'safeMode', label: 'SafeShield strict mode', hint: 'Hide posts the community flagged', icon: 'shield' },
+  { k: 'safeMode', label: 'LOLShield strict mode', hint: 'Hide posts the community flagged', icon: 'shield' },
 ];
 const choice = <K extends keyof UserSettings>(k: K, options: [UserSettings[K], string][]) => ({ k, options });
 const privacyChoices = [
@@ -209,7 +209,7 @@ const go = (id: string) => document.getElementById(id)?.scrollIntoView({ behavio
           <template v-else-if="standing.status === 'muted'">🔇 You’re muted until {{ new Date(standing.until!).toLocaleString() }} — you can read but not post. <span class="text-on-surface-variant">{{ standing.reason }}</span></template>
           <template v-else>⚠️ {{ standing.status }} — {{ standing.reason }}</template>
         </p>
-        <p class="text-body-sm text-on-surface-variant">SafeShield AI screens posts, shouts, comments and messages 24/7. Harassment, threats and illegal activity lead to mutes, suspensions or termination. Block or report anyone from their profile.</p>
+        <p class="text-body-sm text-on-surface-variant">LOLShield AI screens posts, shouts, comments and messages 24/7. Harassment, threats and illegal activity lead to mutes, suspensions or termination. Block or report anyone from their profile.</p>
       </section>
 
       <section id="danger" class="card p-5 space-y-2 scroll-mt-28">

@@ -3,6 +3,10 @@ import { z } from 'zod';
 import {
   PROFILE_BACKGROUNDS,
   PREMIUM_PLANS,
+  PREMIUM_PROFILE,
+  hasPower,
+  shopFontByKey,
+  stripPremiumLayout,
   SHOWCASE_TYPES,
   WALL_MOODS,
   isApplePreviewUrl,
@@ -22,9 +26,13 @@ import { serializeShout } from './shouts.js';
 import { friendsFilter, otherOf } from '../lib/friends.js';
 import { emitWallet, notify } from '../lib/rewards.js';
 import { assertClean, classify } from '../lib/moderation.js';
+import { itemIdFor } from '../lib/ids.js';
+import { cleanCounts, myReaction, react } from '../lib/reactions.js';
+import { REACTION_KEYS } from '@chatlol/shared';
 import { assertCanPost } from '../lib/enforcement.js';
 import { screen } from '../lib/aiModeration.js';
 import { assertEmojiOwned, resolveSticker, stickerInput } from '../lib/stickers.js';
+import { track } from '../lib/activity.js';
 
 export const profileRouter = Router();
 
@@ -182,6 +190,10 @@ profileRouter.patch('/me/profile', requireAuth, async (req, res) => {
     req.body,
   );
   if (b.headline) assertClean(b.headline);
+  const premium = isPremium(await db.users.findOne({ _id: id }, { projection: { premium: 1 } }));
+  if (!premium && b.background && PREMIUM_PROFILE.backgroundKinds.includes(b.background.kind))
+    throw new HttpError(402, 'Custom photo and colour backgrounds are a Premium perk 👑', 'premium_required');
+  if (!premium && b.song) throw new HttpError(402, 'A profile song is a Premium perk 👑', 'premium_required');
   const set = {};
   if (b.gender) set.gender = b.gender;
   if (b.headline !== undefined) set['profile.headline'] = b.headline;
@@ -227,17 +239,27 @@ profileRouter.put('/me/profile/layout', requireAuth, async (req, res) => {
   await rateLimit(`layout:${id}`, 30);
   if (!req.body || typeof req.body !== 'object' || !Array.isArray(req.body.sections))
     throw new HttpError(400, 'Send a layout with sections');
-  const layout = normalizeLayout(req.body);
+  const owner = await db.users.findOne({ _id: id }, { projection: { premium: 1 } });
+  let layout = normalizeLayout(req.body);
+  // Premium-only looks and sections are dropped for free members (also covers a Premium pass that ran out).
+  let premiumRemoved = [];
+  if (!isPremium(owner)) ({ layout, removed: premiumRemoved } = stripPremiumLayout(layout));
+  // Vault fonts need the item.
+  const shopFont = shopFontByKey(layout.font);
+  if (shopFont && !(await db.inventory.findOne({ userId: id, itemId: itemIdFor(shopFont.key), qty: { $gt: 0 } }))) {
+    layout = { ...layout, font: 'default' };
+    premiumRemoved = [...premiumRemoved, 'font'];
+  }
   // Text boxes, quotes and links are public, so they get the full check (threats, scams, NemoGuard), not just the word list.
   const text = layoutText(layout);
   if (text) {
     assertClean(text);
     const verdict = await classify(text);
     if (!verdict.safe || verdict.severe)
-      throw new HttpError(422, 'SafeShield caught something on your page — keep it kind 🧡', 'moderation_layout');
+      throw new HttpError(422, 'LOLShield caught something on your page — keep it kind 🧡', 'moderation_layout');
   }
   await db.users.updateOne({ _id: id }, { $set: { 'profile.layout': layout } });
-  res.json({ user: await userPrivate(await db.users.findOne({ _id: id })), layout });
+  res.json({ user: await userPrivate(await db.users.findOne({ _id: id })), layout, premiumRemoved });
 });
 
 /**
@@ -387,6 +409,7 @@ profileRouter.post('/users/:id/rate', requireAuth, async (req, res) => {
 /** Records a profile view (once per viewer per day) and tells the owner. AI personas never "view" profiles. */
 export async function recordProfileView(profileId, viewerId) {
   if (!viewerId || viewerId === profileId) return;
+  if (hasPower(await db.users.findOne({ _id: viewerId }, { projection: { powers: 1 } }), 'ghost_mode')) return; // Ghost Mode
   const day = today();
   const fresh = await db.profileViews.insertIfMissing({ profileId, viewerId, day }, { at: now() });
   if (!fresh) {
@@ -404,14 +427,26 @@ export async function recordProfileView(profileId, viewerId) {
   });
 }
 
+/** Emoji reactions on comments, forum replies, wall notes and chat messages. `kind: null` removes yours. */
+profileRouter.post('/react/:type/:id', requireAuth, async (req, res) => {
+  const me = uid(req);
+  await rateLimit(`react:${me}`, 60);
+  const { kind } = parse(z.object({ kind: z.enum(REACTION_KEYS).nullable() }), req.body);
+  track(me, 'reaction');
+  res.json(await react(String(req.params.type), String(req.params.id), me, kind));
+});
+
 // ——— Wall (guest notes) ———
 const serializeNote = async (n, author) => ({
   id: n._id,
+  removed: n.removed ?? null,
   profileId: n.profileId,
   author: await author(n.authorId),
   body: n.body,
   sticker: n.sticker ?? null,
   mood: n.mood ?? null,
+  reactions: cleanCounts(n.reactions),
+  myReaction: await myReaction('wall', n._id, author.viewerId),
   createdAt: n.createdAt,
 });
 

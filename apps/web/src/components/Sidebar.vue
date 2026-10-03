@@ -66,6 +66,6 @@ onMounted(async () => { tags.value = (await api.trending()).tags.slice(0, 6); })
         <RouterLink v-for="t in tags" :key="t.tag" :to="`/feed?tag=${t.tag}`" class="chip h-8 hover:border-flame" @click="$emit('navigate')">#{{ t.tag }} <span class="text-on-surface-variant font-medium">{{ compact(t.count) }}</span></RouterLink>
       </div>
     </div>
-    <p class="text-body-sm text-on-surface-variant px-3">ChatLOL is moderated in real time by SafeShield 🛡️ • <RouterLink to="/settings" class="underline" @click="$emit('navigate')">Settings</RouterLink></p>
+    <p class="text-body-sm text-on-surface-variant px-3">ChatLOL is moderated in real time by LOLShield 🛡️ • <RouterLink to="/settings" class="underline" @click="$emit('navigate')">Settings</RouterLink></p>
   </aside>
 </template>

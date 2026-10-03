@@ -1,5 +1,21 @@
+import { isKing } from './king.js';
+import { cleanCounts, myReaction } from './reactions.js';
 import { friendshipStatus } from './friends.js';
-import { summarizeRatings, levelForXp, tierByScore, REWARDS, gemPriceFor, normalizeLayout, permissionsOf } from '@chatlol/shared';
+import {
+  summarizeRatings,
+  levelForXp,
+  tierByScore,
+  REWARDS,
+  gemPriceFor,
+  normalizeLayout,
+  permissionsOf,
+  activePowers,
+  stripPremiumLayout,
+  PREMIUM_PROFILE,
+  themeAllowed,
+  DEFAULT_APP_THEME,
+  LEGAL_VERSION,
+} from '@chatlol/shared';
 import { db, now, today } from '../db.js';
 import { presence } from './presence.js';
 
@@ -124,7 +140,7 @@ async function stats(userId) {
   return s;
 }
 
-const NO_COSMETICS = { frame: null, flair: null, theme: null, banner: null };
+const NO_COSMETICS = { frame: null, flair: null, theme: null, banner: null, cover: null, button: null };
 
 export async function userPublic(u, viewerId) {
   const s = await stats(u._id);
@@ -139,9 +155,11 @@ export async function userPublic(u, viewerId) {
     pronouns: u.pronouns ?? '',
     city: settings.showCity ? (u.city ?? '') : '',
     gender: settings.showGender ? (u.gender ?? null) : null,
+    // Premium looks only show while Premium is active.
     profile: {
-      song: profile.song,
-      background: profile.background,
+      song: isPremium(u) ? profile.song : null,
+      background:
+        isPremium(u) || !PREMIUM_PROFILE.backgroundKinds.includes(profile.background?.kind) ? profile.background : DEFAULT_PROFILE.background,
       accent: profile.accent,
       headline: profile.headline,
       coverUrl: profile.coverUrl,
@@ -163,6 +181,7 @@ export async function userPublic(u, viewerId) {
     isAI: !!u.isAi,
     premium: isPremium(u),
     boosted: !!(u.boost?.until && u.boost.until > now()),
+    isKing: await isKing(u._id),
     createdAt: u.createdAt,
   };
   if (viewerId && viewerId !== u._id) {
@@ -181,7 +200,8 @@ export function effectiveStreak(u) {
 
 /** Adds the profile page layout — only where a whole profile is shown, so feeds don't carry it on every author. */
 export function withLayout(pub, u) {
-  return { ...pub, profile: { ...pub.profile, layout: normalizeLayout(u.profile?.layout) } };
+  const layout = normalizeLayout(u.profile?.layout);
+  return { ...pub, profile: { ...pub.profile, layout: isPremium(u) ? layout : stripPremiumLayout(layout).layout } };
 }
 
 export async function userPrivate(u) {
@@ -193,16 +213,29 @@ export async function userPrivate(u) {
     emailVerified: !!u.emailVerifiedAt,
     sparks: u.sparks,
     gems: u.gems ?? 0,
+    gold: u.gold ?? 0,
     dailyGoal: { done: Math.min(done, REWARDS.questDailyOracle.target), target: REWARDS.questDailyOracle.target },
     comboCount: u.comboCount ?? 0,
-    settings: { ...DEFAULT_SETTINGS, ...u.settings },
+    settings: { ...DEFAULT_SETTINGS, ...u.settings, appTheme: effectiveTheme(u) },
+    unlockedThemes: u.unlockedThemes ?? [],
+    /** False when the member hasn't accepted the current Terms / Guidelines yet. */
+    termsAccepted: (u.acceptedTermsVersion ?? null) === LEGAL_VERSION || !!u.isAi,
     gender: u.gender ?? null,
     city: u.city ?? '',
     role: u.role ?? 'user',
     perms: permissionsOf(u),
     premiumUntil: isPremium(u) ? u.premium.until : null,
+    powers: activePowers(u),
+    loginStreak: u.loginStreak ?? 0,
+    progressResetAt: u.progressResetAt ?? null,
     moderation: { status: 'active', until: null, reason: null, ...u.moderation },
   };
+}
+
+/** The theme a member actually gets: custom colours are gone, and a locked theme (Premium ran out) falls back to Sunset. */
+function effectiveTheme(u) {
+  const t = u.settings?.appTheme;
+  return t && themeAllowed(t.preset, { premium: isPremium(u), unlocked: u.unlockedThemes ?? [] }) ? { preset: t.preset, custom: null } : DEFAULT_APP_THEME;
 }
 
 export const userById = (id) => db.users.findOne({ _id: id });
@@ -210,7 +243,7 @@ export const userById = (id) => db.users.findOne({ _id: id });
 /** Per-request cache so a feed page doesn't re-query the same author 20 times. */
 export function authorCache(viewerId) {
   const m = new Map();
-  return (id) => {
+  const get = (id) => {
     let u = m.get(id);
     if (!u) {
       u = userById(id).then((row) => (row ? userPublic(row, viewerId) : ghostUser(id)));
@@ -218,6 +251,8 @@ export function authorCache(viewerId) {
     }
     return u;
   };
+  get.viewerId = viewerId; // lets serializers add the viewer's own reaction
+  return get;
 }
 
 function ghostUser(id) {
@@ -265,6 +300,8 @@ export async function serializePost(p, viewerId, author = authorCache(viewerId))
   const battle = p.battle?.map((o) => ({ id: o.id, label: o.label, mediaUrl: o.mediaUrl ?? undefined, votes: o.votes })) ?? null;
   return {
     id: p._id,
+    /** Set when staff removed it: shown as a 'removed by Admin for …' card. */
+    removed: p.removed ?? null,
     author: await author(p.authorId),
     kind: p.kind,
     body: p.body,
@@ -293,12 +330,26 @@ export const serializePosts = (rows, viewerId) => {
 
 export async function serializeComment(c, author = authorCache()) {
   const rating = (await db.ratings.findOne({ postId: c.postId, userId: c.authorId }))?.score ?? null;
-  return { id: c._id, postId: c.postId, author: await author(c.authorId), body: c.body, sticker: c.sticker ?? null, rating, createdAt: c.createdAt };
+  return {
+    id: c._id,
+    /** Set when staff removed it: shown as a 'removed by Admin for …' card. */
+    removed: c.removed ?? null,
+    postId: c.postId,
+    author: await author(c.authorId),
+    body: c.body,
+    sticker: c.sticker ?? null,
+    rating,
+    reactions: cleanCounts(c.reactions),
+    myReaction: await myReaction('comment', c._id, author.viewerId),
+    createdAt: c.createdAt,
+  };
 }
 
 export async function serializeMessage(m, author = authorCache()) {
   return {
     id: m._id,
+    /** Set when staff removed it: shown as a 'removed by Admin for …' card. */
+    removed: m.removed ?? null,
     roomId: m.roomId,
     author: await author(m.authorId),
     body: m.body,
@@ -306,7 +357,8 @@ export async function serializeMessage(m, author = authorCache()) {
     kind: m.kind ?? 'text',
     sticker: m.sticker ?? null,
     replyToId: m.replyToId ?? null,
-    reactions: {},
+    reactions: cleanCounts(m.reactions),
+    myReaction: await myReaction('message', m._id, author.viewerId),
     createdAt: m.createdAt,
   };
 }
@@ -334,6 +386,8 @@ export async function serializeThread(t, viewerId, author = authorCache(viewerId
   const v = viewerId ? ((await db.threadVotes.findOne({ threadId: t._id, userId: viewerId }))?.v ?? 0) : 0;
   return {
     id: t._id,
+    /** Set when staff removed it: shown as a 'removed by Admin for …' card. */
+    removed: t.removed ?? null,
     board: t.boardId,
     title: t.title,
     body: t.body,
@@ -350,10 +404,14 @@ export async function serializeThread(t, viewerId, author = authorCache(viewerId
 export async function serializeReply(r, author = authorCache()) {
   return {
     id: r._id,
+    /** Set when staff removed it: shown as a 'removed by Admin for …' card. */
+    removed: r.removed ?? null,
     threadId: r.threadId,
     author: await author(r.authorId),
     body: r.body,
     upvotes: r.upvotes,
+    reactions: cleanCounts(r.reactions),
+    myReaction: await myReaction('reply', r._id, author.viewerId),
     createdAt: r.createdAt,
   };
 }
@@ -380,7 +438,7 @@ export async function serializeNotification(n, author = authorCache(), viewerPre
   };
 }
 
-export function serializeStoreItem(i, owned, equipped) {
+export function serializeStoreItem(i, owned, equipped, qty) {
   return {
     // Store items are addressed by their key (frame_sunset…), which is also what cosmetics store.
     id: i.key,
@@ -388,12 +446,17 @@ export function serializeStoreItem(i, owned, equipped) {
     name: i.name,
     description: i.description,
     price: i.price,
-    gemPrice: gemPriceFor(i.kind, i.price),
+    gemPrice: i.goldPrice ? null : gemPriceFor(i.kind, i.price),
+    /** Gold-only items (tickets, the King's crown) have a Gold price and no Sparks / Gem price. */
+    goldPrice: i.goldPrice ?? null,
+    /** Rare cosmetics can also be bought with Gold. */
+    goldAltPrice: i.goldAltPrice ?? null,
     rarity: i.rarity,
     emoji: i.emoji,
     preview: i.preview,
     limited: !!i.limited,
     owned,
     equipped,
+    qty: qty ?? (owned ? 1 : 0),
   };
 }

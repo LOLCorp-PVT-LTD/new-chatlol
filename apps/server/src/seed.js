@@ -1,6 +1,6 @@
 import { db, newId, now, today, initDb } from './db.js';
 import { PERSONAS } from './ai/personas.js';
-import { PROFILE_ACCENTS, PROFILE_BACKGROUNDS, stickerStoreItems } from '@chatlol/shared';
+import { BUTTON_STYLES, KING, POWERS, PROFILE_COVERS, SHOP_FONTS, TICKETS, PROFILE_ACCENTS, PROFILE_BACKGROUNDS, stickerStoreItems } from '@chatlol/shared';
 import { newUser, DEFAULT_SETTINGS, DEFAULT_PROFILE } from './lib/serialize.js';
 import { hashPassword } from './lib/auth.js';
 import { ensureDrop } from './lib/drops.js';
@@ -134,7 +134,14 @@ const STORE = [
     '🧊',
     'linear-gradient(135deg,#bae6fd,#38bdf8)',
   ],
-  ['boost_2x', 'boost', '2x Vibe Boost', 'Double roulette Sparks for 1 hour', 350, 'rare', '⚡', 'linear-gradient(135deg,#fde047,#ff9900)'],
+  ...POWERS.map((p) => [p.key, 'power', p.name, p.desc, p.price, p.rarity, p.emoji, 'linear-gradient(135deg,#fde047,#ff5e00)']),
+  // Profile cosmetics: designed covers, button styles and fonts (Sparks, Gems, and Gold for the rare ones).
+  ...PROFILE_COVERS.map((c) => [c.key, 'cover', c.label, 'Designed profile cover', c.price, c.rarity, '🖼️', c.css, false, null, c.gold]),
+  ...BUTTON_STYLES.map((b) => [b.key, 'button', b.label, 'Style for the buttons on your profile', b.price, b.rarity, '🔘', null, false, null, b.gold]),
+  ...SHOP_FONTS.map((f) => [f.key, 'font', f.label, 'Font for your profile page', f.price, f.rarity, 'Aa', null, false, null, f.gold]),
+  // Gold-only: tickets and the King's crown.
+  ...TICKETS.map((t) => [t.key, 'ticket', t.name, t.desc, 0, t.rarity, t.emoji, 'linear-gradient(135deg,#3b2e25,#b8860b)', false, t.gold]),
+  [KING.key, 'king', KING.name, `Rule ChatLOL for ${KING.reignDays} days: golden crown, top of the home page, Premium, and a free Ban, Mute and Kick every day. Someone richer can take your throne.`, 0, 'legendary', KING.emoji, 'linear-gradient(135deg,#fde047,#d4a017,#8a6d00)', true, KING.gold],
 ];
 
 const TAKES = [
@@ -499,10 +506,10 @@ const CATALOG = () => [...STORE, ...stickerStoreItems()];
  */
 export async function ensureStoreCatalog() {
   await db.storeItems.bulkWrite(
-    CATALOG().map(([key, kind, name, description, price, rarity, emoji, preview, limited], i) => ({
+    CATALOG().map(([key, kind, name, description, price, rarity, emoji, preview, limited, goldPrice, goldAltPrice], i) => ({
       updateOne: {
         filter: { _id: itemIdFor(key) },
-        update: { $set: { key, kind, name, description, price, rarity, emoji, preview, limited: !!limited, position: i } },
+        update: { $set: { key, kind, name, description, price, rarity, emoji, preview, limited: !!limited, goldPrice: goldPrice ?? null, goldAltPrice: goldAltPrice ?? null, position: i } },
         upsert: true,
       },
     })),

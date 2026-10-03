@@ -10,3 +10,8 @@ export * from './profileLayout';
 export * from './stickers';
 export * from './permissions';
 export * from './themes';
+export * from './progression';
+export * from './games';
+export * from './cosmetics';
+export * from './arcade';
+export * from './legal';

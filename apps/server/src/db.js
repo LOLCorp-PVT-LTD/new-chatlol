@@ -59,6 +59,12 @@ export const COLLECTIONS = [
   'kv',
   'busEvents',
   'socketEvents',
+  'settings',
+  'contentReactions',
+  'arenas',
+  'arcadeRuns',
+  'tournaments',
+  'tournamentEntries',
 ];
 
 const txStore = new AsyncLocalStorage();

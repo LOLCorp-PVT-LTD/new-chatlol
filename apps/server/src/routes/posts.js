@@ -14,6 +14,7 @@ import { screen } from '../lib/aiModeration.js';
 import { bus } from '../lib/events.js';
 import { io, room } from '../lib/io.js';
 import { ensureDrop } from '../lib/drops.js';
+import { track } from '../lib/activity.js';
 
 export const postsRouter = Router();
 
@@ -189,6 +190,7 @@ postsRouter.post('/posts', requireAuth, async (req, res) => {
   const row = await insertPost(me, b);
   screen({ userId: me, text, ref: { type: 'post', id: row._id } });
   const reward = await grant(me, REWARDS.post.sparks, REWARDS.post.xp, 'Posted a vibe ✨');
+  track(me, 'post');
   res.status(201).json({ post: await serializePost(row, me), reward });
 });
 
@@ -350,6 +352,7 @@ postsRouter.post('/posts/:id/comments', requireAuth, async (req, res) => {
   const row = await insertComment(String(req.params.id), me, body, sticker);
   if (body) screen({ userId: me, text: body, ref: { type: 'comment', id: row._id } });
   const reward = await grant(me, REWARDS.comment.sparks, REWARDS.comment.xp, 'Dropped a comment');
+  track(me, 'comment');
   res.status(201).json({ comment: await serializeComment(row), reward });
 });
 
@@ -447,6 +450,7 @@ postsRouter.post('/drops/today', requireAuth, async (req, res) => {
     const h = await db.users.findOne({ _id: me }, { projection: { handle: 1 } });
     void ticker(`@${h?.handle} hit a ${milestone}-day Sunset streak 🔥`, me);
   }
+  track(me, 'post');
   res.status(201).json({ post: await serializePost(row, me), reward });
 });
 

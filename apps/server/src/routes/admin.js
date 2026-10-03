@@ -2,12 +2,17 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { db, escapeRegex, newId, now, today } from '../db.js';
 import { config } from '../config.js';
-import { PERMISSION_KEYS, permissionsOf } from '@chatlol/shared';
+import { LEVEL_GATES, PERMISSION_KEYS, activePowers, levelForXp, permissionsOf } from '@chatlol/shared';
+import { featureTotals, userFeatureUse } from '../lib/activity.js';
+import { dismissFinding, reinstateStaff, reviewStaffAction } from '../lib/oversight.js';
+import { getLevelGates, setLevelGates } from '../lib/progression.js';
+import { gemGoldWagers, setGemGoldWagers } from '../lib/arenas.js';
 import { requireAuth, requirePerm, uid } from '../lib/auth.js';
 import { HttpError, parse } from '../lib/http.js';
 import { authorCache, userPublic, isPremium } from '../lib/serialize.js';
 import { applyAction, standing } from '../lib/enforcement.js';
-import { removeContent } from '../lib/aiModeration.js';
+import { removeByStaff } from '../lib/aiModeration.js';
+import { io, room } from '../lib/io.js';
 import { presence } from '../lib/presence.js';
 import { redisClient, shared, sharedBackend } from '../lib/shared.js';
 import { apnsConfigured, fcmConfigured } from '../lib/push.js';
@@ -38,8 +43,21 @@ async function findTarget(req) {
   return u;
 }
 /** Staff actions that aren't moderation (grants, boosts, roles) go in the same log, so everything is accountable. */
-const audit = (userId, kind, reason, by, extra = {}) =>
-  db.modEvents.insertOne({ _id: newId(), userId, kind, reason, byUserId: by, createdAt: now(), ...extra });
+const audit = async (userId, kind, reason, by, { review, ...extra } = {}) => {
+  await db.modEvents.insertOne({ _id: newId(), userId, kind, reason, byUserId: by, createdAt: now(), ...extra });
+  // LOLShield oversight: non-admin staff actions are checked for missing reasons, missing evidence and self-dealing.
+  void reviewStaffAction({ staffId: by, kind, targetId: userId, reason: review?.reason ?? reason, meta: review ?? {} });
+};
+/** Staff removal: leaves a "removed by Admin" card, logs it on the author's record and tells them. */
+async function staffRemove(ref, reason, staffId) {
+  const doc = await removeByStaff(ref, reason, staffId);
+  if (!doc) throw new HttpError(404, 'Content not found');
+  if (doc.authorId) {
+    await audit(doc.authorId, 'content_removed', `${ref.type} removed: ${reason}`, staffId, { ref, review: { reason } });
+    await notify(doc.authorId, { kind: 'system', title: `🛡️ Your ${ref.type} was removed by an Admin`, body: `Reason: ${reason}`, link: '/settings' });
+  }
+  io()?.to(room.global).emit('content:removed', { type: ref.type, id: ref.id, reason });
+}
 const boostUntil = (u) => (u.boost?.until && u.boost.until > now() ? u.boost.until : null);
 
 const since = (days) => new Date(Date.now() - days * 86_400_000).toISOString();
@@ -117,6 +135,7 @@ async function adminUser(u) {
     birthdate: u.birthdate,
     sparks: u.sparks,
     gems: u.gems ?? 0,
+    gold: u.gold ?? 0,
     premiumUntil: isPremium(u) ? u.premium.until : null,
     standing: standing(u),
     strikes30d: strikes,
@@ -162,7 +181,7 @@ adminRouter.get('/admin/users/:id', async (req, res) => {
   const [events, reports, posts, shouts, messages] = await Promise.all([
     db.modEvents.find({ userId: u._id }).sort({ createdAt: -1 }).limit(50).toArray(),
     db.reports
-      .find({ $or: [{ targetType: 'user', targetId: u._id }, { reporterId: u._id }] })
+      .find({ $or: [{ targetType: 'user', targetId: u._id }, { targetUserId: u._id }, { reporterId: u._id }] })
       .sort({ createdAt: -1 })
       .limit(30)
       .toArray(),
@@ -170,7 +189,7 @@ adminRouter.get('/admin/users/:id', async (req, res) => {
     db.shouts.find({ authorId: u._id }).sort({ createdAt: -1 }).limit(10).toArray(),
     db.messages.find({ authorId: u._id }).sort({ createdAt: -1 }).limit(20).toArray(),
   ]);
-  const byName = async (id) => (id === 'ai' ? 'SafeShield AI' : `@${(await author(id)).handle}`);
+  const byName = async (id) => (id === 'ai' ? 'LOLShield AI' : `@${(await author(id)).handle}`);
   res.json({
     user: await adminUser(u),
     events: await Promise.all(
@@ -193,7 +212,7 @@ adminRouter.get('/admin/users/:id', async (req, res) => {
       targetId: r.targetId,
       reason: r.reason,
       status: r.status,
-      against: r.targetId === u._id,
+      against: r.targetId === u._id || r.targetUserId === u._id,
       createdAt: r.createdAt,
     })),
     recent: [
@@ -281,7 +300,7 @@ adminRouter.post('/admin/users/:id/premium', requirePerm('premium'), async (req,
       link: '/insights',
     });
   } else await db.users.updateOne({ _id: target._id }, { $set: { 'premium.until': null } });
-  await audit(target._id, 'premium', days > 0 ? `+${days} days of Premium` : 'Premium removed', uid(req));
+  await audit(target._id, 'premium', days > 0 ? `+${days} days of Premium` : 'Premium removed', uid(req), { review: { positive: days > 0 } });
   res.json({ user: await adminUser(await db.users.findOne({ _id: target._id })) });
 });
 
@@ -291,11 +310,12 @@ adminRouter.post('/admin/users/:id/wallet', requirePerm('wallet'), async (req, r
     z.object({
       sparks: z.number().int().min(-10_000_000).max(10_000_000).default(0),
       gems: z.number().int().min(-1_000_000).max(1_000_000).default(0),
+      gold: z.number().int().min(-100_000).max(100_000).default(0),
       reason: z.string().trim().max(200).default(''),
     }),
     req.body,
   );
-  if (!b.sparks && !b.gems) throw new HttpError(400, 'Enter an amount');
+  if (!b.sparks && !b.gems && !b.gold) throw new HttpError(400, 'Enter an amount');
   const target = await findTarget(req);
   if (target.deletedAt) throw new HttpError(400, 'That account is closed');
   await db.users.updateOne({ _id: target._id }, [
@@ -303,14 +323,15 @@ adminRouter.post('/admin/users/:id/wallet', requirePerm('wallet'), async (req, r
       $set: {
         sparks: { $max: [0, { $add: [{ $ifNull: ['$sparks', 0] }, b.sparks] }] },
         gems: { $max: [0, { $add: [{ $ifNull: ['$gems', 0] }, b.gems] }] },
+        gold: { $max: [0, { $add: [{ $ifNull: ['$gold', 0] }, b.gold] }] },
       },
     },
   ]);
   const fmt = (n, what) => `${n > 0 ? '+' : ''}${n.toLocaleString()} ${what}`;
-  const parts = [b.sparks && fmt(b.sparks, 'Sparks'), b.gems && fmt(b.gems, 'Gems')].filter(Boolean).join(', ');
-  const gifts = [b.sparks > 0 && fmt(b.sparks, 'Sparks'), b.gems > 0 && fmt(b.gems, 'Gems')].filter(Boolean).join(' and ');
-  await audit(target._id, 'wallet', `${parts}${b.reason ? ` — ${b.reason}` : ''}`, uid(req), { sparks: b.sparks, gems: b.gems });
-  if (b.sparks > 0 || b.gems > 0)
+  const parts = [b.sparks && fmt(b.sparks, 'Sparks'), b.gems && fmt(b.gems, 'Gems'), b.gold && fmt(b.gold, 'Gold')].filter(Boolean).join(', ');
+  const gifts = [b.sparks > 0 && fmt(b.sparks, 'Sparks'), b.gems > 0 && fmt(b.gems, 'Gems'), b.gold > 0 && fmt(b.gold, 'Gold')].filter(Boolean).join(' and ');
+  await audit(target._id, 'wallet', `${parts}${b.reason ? ` — ${b.reason}` : ''}`, uid(req), { sparks: b.sparks, gems: b.gems, gold: b.gold, review: { positive: b.sparks > 0 || b.gems > 0 || b.gold > 0 } });
+  if (b.sparks > 0 || b.gems > 0 || b.gold > 0)
     await notify(target._id, { kind: 'system', title: `🎁 ${gifts} from the ChatLOL team`, body: b.reason || 'Enjoy!', link: '/vault' });
   await emitWallet(target._id);
   res.json({ user: await adminUser(await db.users.findOne({ _id: target._id })) });
@@ -319,7 +340,7 @@ adminRouter.post('/admin/users/:id/wallet', requirePerm('wallet'), async (req, r
 adminRouter.get('/admin/items', requirePerm('items'), async (_req, res) => {
   const rows = await db.storeItems.find({}).sort({ kind: 1, price: 1 }).toArray();
   res.json({
-    items: rows.map((i) => ({ key: i.key, name: i.name, kind: i.kind, emoji: i.emoji ?? null, rarity: i.rarity ?? null, price: i.price })),
+    items: rows.map((i) => ({ key: i.key, name: i.name, kind: i.kind, emoji: i.emoji ?? null, rarity: i.rarity ?? null, price: i.price, goldPrice: i.goldPrice ?? null, preview: i.preview ?? null, description: i.description ?? '' })),
   });
 });
 
@@ -329,10 +350,12 @@ adminRouter.post('/admin/users/:id/items', requirePerm('items'), async (req, res
   const target = await findTarget(req);
   const item = await db.storeItems.findOne({ key: b.key });
   if (!item) throw new HttpError(404, 'Item not found');
-  const stackable = ['streak_freeze', 'boost', 'gift', 'crate'].includes(item.kind);
+  const stackable = ['streak_freeze', 'boost', 'gift', 'crate', 'power'].includes(item.kind);
   await db.inventory.updateOne(
     { userId: target._id, itemId: item._id },
-    stackable ? { $inc: { qty: b.qty }, $setOnInsert: { acquiredAt: now() } } : { $set: { qty: 1 }, $setOnInsert: { acquiredAt: now() } },
+    stackable
+      ? { $inc: { qty: b.qty }, $set: { via: 'admin' }, $setOnInsert: { acquiredAt: now() } }
+      : { $set: { qty: 1, via: 'admin' }, $setOnInsert: { acquiredAt: now() } },
     { upsert: true },
   );
   await audit(target._id, 'item', `Given ${stackable && b.qty > 1 ? `${b.qty}× ` : ''}${item.name}`, uid(req));
@@ -343,6 +366,170 @@ adminRouter.post('/admin/users/:id/items', requirePerm('items'), async (req, res
     link: '/locker',
   });
   res.json({ ok: true });
+});
+
+/** Edit someone's profile, or remove their picture / cover / background. Every change is logged. */
+adminRouter.patch('/admin/users/:id/profile', requirePerm('profiles'), async (req, res) => {
+  const b = parse(
+    z.object({
+      displayName: z.string().trim().min(1).max(40).optional(),
+      handle: z.string().regex(/^[a-zA-Z0-9_.]{3,20}$/, '3–20 letters, numbers, _ or .').optional(),
+      bio: z.string().max(280).optional(),
+      pronouns: z.string().max(24).optional(),
+      city: z.string().max(60).optional(),
+      headline: z.string().max(80).optional(),
+      removeAvatar: z.boolean().optional(),
+      removeCover: z.boolean().optional(),
+      removeBackground: z.boolean().optional(),
+      removeSong: z.boolean().optional(),
+      reason: z.string().trim().max(200).default(''),
+    }),
+    req.body,
+  );
+  const target = await findTarget(req);
+  assertOutranks(req, target);
+  const set = {};
+  const changed = [];
+  for (const k of ['displayName', 'bio', 'pronouns', 'city']) if (b[k] !== undefined && b[k] !== target[k]) (set[k] = b[k]), changed.push(k);
+  if (b.headline !== undefined) (set['profile.headline'] = b.headline), changed.push('headline');
+  if (b.handle && b.handle !== target.handle) {
+    if (await db.users.findOne({ handleLower: b.handle.toLowerCase(), _id: { $ne: target._id } })) throw new HttpError(409, 'That handle is taken');
+    Object.assign(set, { handle: b.handle, handleLower: b.handle.toLowerCase() });
+    changed.push(`handle @${target.handle} → @${b.handle}`);
+  }
+  if (b.removeAvatar) (set.avatarUrl = null), changed.push('picture removed');
+  if (b.removeCover) (set['profile.coverUrl'] = null), changed.push('cover removed');
+  if (b.removeBackground) (set['profile.background'] = { kind: 'preset', value: 'sunset' }), changed.push('background reset');
+  if (b.removeSong) (set['profile.song'] = null), changed.push('song removed');
+  if (!changed.length) throw new HttpError(400, 'Nothing changed');
+  await db.users.updateOne({ _id: target._id }, { $set: set });
+  await audit(target._id, 'profile_edit', `${changed.join(', ')}${b.reason ? ` — ${b.reason}` : ''}`, uid(req), { review: { reason: b.reason } });
+  if (b.removeAvatar || b.removeCover || b.handle)
+    await notify(target._id, { kind: 'system', title: '🛡️ An Admin updated your profile', body: `${changed.join(', ')}${b.reason ? ` — ${b.reason}` : ''}`, link: '/settings' });
+  res.json({ user: await adminUser(await db.users.findOne({ _id: target._id })) });
+});
+
+/** Everything someone has posted, removed and hidden items included (with the original text), newest first. */
+const CONTENT = {
+  posts: ['posts', {}],
+  photos: ['posts', { mediaUrl: { $ne: null } }],
+  shouts: ['shouts', {}],
+  comments: ['comments', {}],
+  threads: ['threads', {}],
+  replies: ['replies', {}],
+  wall: ['wallNotes', {}],
+  messages: ['messages', {}],
+};
+adminRouter.get('/admin/users/:id/content', requirePerm('reports'), async (req, res) => {
+  const kind = String(req.query.kind ?? 'posts');
+  if (!CONTENT[kind]) throw new HttpError(400, 'Unknown content type');
+  const [col, extra] = CONTENT[kind];
+  const before = req.query.before ? { createdAt: { $lt: String(req.query.before) } } : {};
+  const rows = await db[col].find({ authorId: String(req.params.id), ...extra, ...before }).sort({ createdAt: -1 }).limit(40).toArray();
+  const type = { posts: 'post', photos: 'post', shouts: 'shout', comments: 'comment', threads: 'thread', replies: 'reply', wall: 'wall', messages: 'message' }[kind];
+  res.json({
+    items: rows.map((r) => ({
+      type,
+      id: r._id,
+      text: r.removedOriginal?.body ?? r.body ?? '',
+      title: r.removedOriginal?.title ?? r.title ?? null,
+      mediaUrl: r.removedOriginal?.mediaUrl ?? r.mediaUrl ?? null,
+      where: r.roomId ?? r.postId ?? r.threadId ?? r.profileId ?? null,
+      hidden: !!r.hidden,
+      removed: r.removed ?? (r.kind === 'removed' ? { by: 'LOLShield', reason: r.removedReason ?? '' } : null),
+      reactions: r.reactions ?? null,
+      createdAt: r.createdAt,
+    })),
+    nextBefore: rows.length === 40 ? rows.at(-1).createdAt : null,
+  });
+});
+
+/** Feature usage, wallet, progression and game history for one person. */
+adminRouter.get('/admin/users/:id/activity', async (req, res) => {
+  const u = await findTarget(req);
+  const [features, inventory, arenas, ticketsOn, ticketsBy] = await Promise.all([
+    userFeatureUse(u._id),
+    db.inventory.find({ userId: u._id, qty: { $gt: 0 } }).toArray(),
+    db.arenas.find({ playerIds: u._id }).sort({ createdAt: -1 }).limit(20).toArray(),
+    db.modEvents.find({ userId: u._id, category: { $regex: '^ticket_' } }).sort({ createdAt: -1 }).limit(20).toArray(),
+    db.modEvents.find({ byUserId: u._id, category: { $regex: '^ticket_' } }).sort({ createdAt: -1 }).limit(20).toArray(),
+  ]);
+  const items = new Map((await db.storeItems.find({ _id: { $in: inventory.map((i) => i.itemId) } }).toArray()).map((i) => [i._id, i]));
+  res.json({
+    features,
+    progression: {
+      level: levelForXp(u.xp ?? 0),
+      xp: u.xp ?? 0,
+      loginStreak: u.loginStreak ?? 0,
+      lastDailyClaim: u.lastDailyClaim ?? null,
+      lastSeenAt: u.lastSeenAt,
+      progressResetAt: u.progressResetAt ?? null,
+      powers: activePowers(u),
+      unlockedThemes: u.unlockedThemes ?? [],
+      handleHistory: u.handleHistory ?? [],
+      gameStats: u.gameStats ?? { played: 0, wins: 0 },
+    },
+    inventory: inventory.map((i) => ({ key: items.get(i.itemId)?.key, name: items.get(i.itemId)?.name, emoji: items.get(i.itemId)?.emoji, kind: items.get(i.itemId)?.kind, qty: i.qty, via: i.via ?? null, acquiredAt: i.acquiredAt })),
+    arenas: arenas.map((a) => ({ id: a._id, name: a.name, game: a.game, status: a.status, stake: a.stake, payout: a.payouts?.find((p) => p.userId === u._id)?.amount ?? 0, createdAt: a.createdAt })),
+    tickets: {
+      against: ticketsOn.map((e) => ({ kind: e.category.slice(7), reason: e.reason, at: e.createdAt })),
+      used: ticketsBy.map((e) => ({ kind: e.category.slice(7), targetId: e.userId, at: e.createdAt })),
+    },
+  });
+});
+
+/** Network-wide feature adoption (last 7 and 30 days). */
+adminRouter.get('/admin/features', requirePerm('overview'), async (_req, res) => {
+  res.json({ week: await featureTotals(7), month: await featureTotals(30) });
+});
+
+// ——— LOLShield oversight of moderators ———
+adminRouter.get('/admin/oversight', requirePerm('staff'), async (_req, res) => {
+  const author = authorCache();
+  const rows = await db.modEvents.find({ kind: { $in: ['mod_violation', 'staff_revoked'] } }).sort({ createdAt: -1 }).limit(200).toArray();
+  const revoked = await db.users.find({ staffRevokedFrom: { $exists: true } }, { projection: { _id: 1, staffRevokedFrom: 1, staffRevokedAt: 1 } }).toArray();
+  res.json({
+    items: await Promise.all(rows.map(async (e) => ({ id: e._id, kind: e.kind, code: e.category ?? null, reason: e.reason, action: e.ref ?? null, cleared: !!e.cleared, staff: await author(e.userId), createdAt: e.createdAt }))),
+    revoked: await Promise.all(revoked.map(async (u) => ({ user: await author(u._id), from: u.staffRevokedFrom, at: u.staffRevokedAt }))),
+  });
+});
+adminRouter.post('/admin/oversight/:id/dismiss', requirePerm('staff'), async (req, res) => {
+  if (req.userRole !== 'admin') throw new HttpError(403, 'Only admins can dismiss oversight findings');
+  await dismissFinding(String(req.params.id));
+  await audit(uid(req), 'settings', 'Dismissed a LOLShield oversight finding', uid(req));
+  res.json({ ok: true });
+});
+adminRouter.post('/admin/oversight/reinstate/:userId', requirePerm('staff'), async (req, res) => {
+  if (req.userRole !== 'admin') throw new HttpError(403, 'Only admins can reinstate staff');
+  if (!(await reinstateStaff(String(req.params.userId)))) throw new HttpError(404, 'Nothing to reinstate');
+  await audit(String(req.params.userId), 'role', 'Staff role reinstated after LOLShield revoked it', uid(req));
+  res.json({ ok: true });
+});
+
+/** Level gates: the level members need before they can DM non-friends, post in forums, go live, make arenas. */
+adminRouter.get('/admin/level-gates', requirePerm('staff'), async (_req, res) => {
+  res.json({ gates: LEVEL_GATES, values: await getLevelGates() });
+});
+adminRouter.put('/admin/level-gates', requirePerm('staff'), async (req, res) => {
+  const values = parse(z.record(z.string(), z.number().int().min(1).max(100)), req.body ?? {});
+  const saved = await setLevelGates(values);
+  await audit(uid(req), 'settings', `Level gates: ${LEVEL_GATES.map((g) => `${g.key} ${saved[g.key]}`).join(', ')}`, uid(req));
+  res.json({ gates: LEVEL_GATES, values: saved });
+});
+
+/** Arenas: the Gem/Gold wager switch, and every recent game with its stakes and payouts. */
+adminRouter.get('/admin/arenas', requirePerm('overview'), async (_req, res) => {
+  const rows = await db.arenas.find({}).sort({ createdAt: -1 }).limit(100).toArray();
+  res.json({
+    gemsGold: await gemGoldWagers(),
+    items: rows.map((a) => ({ id: a._id, name: a.name, game: a.game, status: a.status, hostId: a.hostId, playerIds: a.playerIds, stake: a.stake, payouts: a.payouts, outcome: a.outcome, createdAt: a.createdAt, endedAt: a.endedAt })),
+  });
+});
+adminRouter.put('/admin/arenas/wagers', requirePerm('staff'), async (req, res) => {
+  const { gemsGold } = parse(z.object({ gemsGold: z.boolean() }), req.body);
+  await setGemGoldWagers(gemsGold);
+  await audit(uid(req), 'settings', `Gem/Gold arena stakes ${gemsGold ? 'on' : 'off'}`, uid(req));
+  res.json({ gemsGold });
 });
 
 /** Boost: feature someone first in Browse Members and more often in Rate & Meet, for a while. 0 hours ends it. */
@@ -361,7 +548,7 @@ adminRouter.post('/admin/users/:id/boost', requirePerm('boost'), async (req, res
   if (target.deletedAt) throw new HttpError(400, 'That account is closed');
   const until = hours ? new Date(Math.max(Date.now(), Date.parse(boostUntil(target) ?? 0)) + hours * 3_600_000).toISOString() : null;
   await db.users.updateOne({ _id: target._id }, { $set: { boost: until ? { until, by: uid(req) } : null } });
-  await audit(target._id, 'boost', until ? `Boosted until ${new Date(until).toUTCString()}` : 'Boost ended', uid(req), { until });
+  await audit(target._id, 'boost', until ? `Boosted until ${new Date(until).toUTCString()}` : 'Boost ended', uid(req), { until, review: { positive: !!until } });
   if (until && !target.isAi)
     await notify(target._id, {
       kind: 'system',
@@ -520,7 +707,7 @@ adminRouter.post('/admin/reports/:id', requirePerm('reports'), async (req, res) 
   const b = parse(z.object({ status: z.enum(['actioned', 'dismissed']), removeContent: z.boolean().optional() }), req.body);
   const r = await db.reports.findOne({ _id: String(req.params.id) });
   if (!r) throw new HttpError(404, 'Report not found');
-  if (b.removeContent && r.targetType !== 'user') await removeContent({ type: r.targetType, id: r.targetId }, 'Removed by a moderator');
+  if (b.removeContent && r.targetType !== 'user') await staffRemove({ type: r.targetType, id: r.targetId }, r.reason || 'breaking the Community Guidelines', uid(req));
   await db.reports.updateOne({ _id: r._id }, { $set: { status: b.status, resolvedBy: uid(req), resolvedAt: now() } });
   res.json({ ok: true });
 });
@@ -557,17 +744,21 @@ adminRouter.post('/admin/flags/:id', requirePerm('reports'), async (req, res) =>
 
 adminRouter.post('/admin/content/remove', requirePerm('reports'), async (req, res) => {
   const b = parse(
-    z.object({ type: z.enum(['post', 'comment', 'shout', 'thread', 'reply', 'wall', 'message']), id: z.string().max(60) }),
+    z.object({
+      type: z.enum(['post', 'comment', 'shout', 'thread', 'reply', 'wall', 'message']),
+      id: z.string().max(60),
+      reason: z.string().trim().min(3).max(200).default('breaking the Community Guidelines'),
+    }),
     req.body,
   );
-  await removeContent(b, 'Removed by a moderator');
+  await staffRemove(b, b.reason, uid(req));
   res.json({ ok: true });
 });
 
 adminRouter.get('/admin/modlog', async (_req, res) => {
   const rows = await db.modEvents.find({}).sort({ createdAt: -1 }).limit(100).toArray();
   const author = authorCache();
-  const byName = async (id) => (id === 'ai' ? 'SafeShield AI' : `@${(await author(id)).handle}`);
+  const byName = async (id) => (id === 'ai' ? 'LOLShield AI' : `@${(await author(id)).handle}`);
   res.json({
     items: await Promise.all(
       rows.map(async (e) => ({

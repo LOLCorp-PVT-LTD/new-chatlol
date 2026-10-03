@@ -23,6 +23,9 @@ export declare function createApi(opts: ApiClientOptions): {
         birthdate: string;
         gender: import('./profile').Gender;
         interests?: string[];
+        /** Referral code from an invite link. */
+        ref?: string;
+        acceptTerms?: string;
     }) => Promise<AuthResponse>;
     login: (b: {
         login: string;
@@ -241,17 +244,51 @@ export declare function createApi(opts: ApiClientOptions): {
         items: StoreItem[];
         sparks: number;
         gems: number;
+        gold: number;
         crateOdds: Record<string, number>;
+        exchange: { sparksPerGem: number; gemsPerGold: number };
     }>;
-    buy: (id: ID, currency?: "sparks" | "gems") => Promise<WithReward<{
+    buy: (id: ID, currency?: "sparks" | "gems" | "gold") => Promise<WithReward<{
         item: StoreItem;
         sparks: number;
         gems: number;
+        gold: number;
         won?: StoreItem | null;
     }>>;
     inventory: () => Promise<{
         items: StoreItem[];
     }>;
+    usePower: (key: import('./progression').PowerKey) => Promise<{
+        used: { key: string; until: string };
+        powers: Partial<Record<import('./progression').PowerKey, string>>;
+    }>;
+    unlockTheme: (key: import('./themes').AppThemeKey) => Promise<{ user: UserPrivate }>;
+    changeHandle: (handle: string) => Promise<{ user: UserPrivate }>;
+    referral: () => Promise<{ code: string; link: string; joined: number; paid: number; goldEarned: number; friends: { id: ID; displayName: string; handle: string; avatarUrl: string; paid: boolean; joinedAt: string }[] }>;
+    inviteByEmail: (emails: string[]) => Promise<{ sent: number }>;
+    acceptTerms: () => Promise<{ user: UserPrivate }>;
+    exchange: (to: 'gems' | 'gold', amount: number) => Promise<{ sparks: number; gems: number; gold: number }>;
+    useTicket: (key: import('./progression').TicketKey, targetId: ID, loungeId?: ID) => Promise<{ used: string; free: boolean; target: { id: ID; handle: string } }>;
+    gamesLeaderboard: (game?: string) => Promise<{ game: string | null; entries: { rank: number; user: UserPublic; wins: number; played: number }[] }>;
+    ads: () => Promise<{ slots: Record<string, Omit<{ enabled: boolean; mode: 'sandboxed' | 'direct'; code: string; imageUrl: string | null; linkUrl: string | null; height: number | null; every: number | null }, 'enabled'>> }>;
+    tournaments: () => Promise<{ tournaments: import('./games').Tournament[] }>;
+    tournament: (id: ID) => Promise<{ tournament: import('./games').Tournament }>;
+    joinTournament: (id: ID) => Promise<{ tournament: import('./games').Tournament }>;
+    arcade: () => Promise<{ games: { key: string; name: string; emoji: string; desc: string; myBest: number | null; top: { rank: number; user: UserPublic; score: number; at: string }[] }[]; sparksPerDay: number }>;
+    arcadeStart: (game: string) => Promise<{ runId: string; seed: number }>;
+    arcadeFinish: (runId: string, inputs: [number, string][]) => Promise<{ score: number; best: number; newBest: boolean; rank: number; rejected: boolean; reward: RewardEvent | null }>;
+    arcadeLeaderboard: (game: string, period?: 'day' | 'week' | 'all') => Promise<{ period: string; entries: { rank: number; user: UserPublic; score: number; at: string }[] }>;
+    games: () => Promise<{ games: import('./games').GameInfo[]; currencies: import('./games').StakeCurrency[]; stakeLimits: Record<string, number>; rakePct: number }>;
+    arenas: () => Promise<{ arenas: import('./games').Arena[] }>;
+    arena: (id: ID, code?: string) => Promise<{ arena: import('./games').Arena }>;
+    createArena: (b: { name: string; game: import('./games').GameKey; visibility: 'public' | 'private'; stake: { currency: import('./games').StakeCurrency; amount: number } }) => Promise<{ arena: import('./games').Arena }>;
+    joinArena: (id: ID, code?: string) => Promise<{ arena: import('./games').Arena }>;
+    joinArenaByCode: (code: string) => Promise<{ arena: import('./games').Arena }>;
+    leaveArena: (id: ID) => Promise<{ arena: import('./games').Arena }>;
+    inviteToArena: (id: ID, userIds: ID[]) => Promise<{ arena: import('./games').Arena }>;
+    startArena: (id: ID) => Promise<{ arena: import('./games').Arena }>;
+    arenaMove: (id: ID, action: Record<string, unknown>) => Promise<{ arena: import('./games').Arena }>;
+    king: () => Promise<{ king: { user: UserPublic; since: string; until: string } | null }>;
     claimDaily: () => Promise<WithReward<{
         claimed: boolean;
         nextAt: string;
@@ -303,6 +340,7 @@ export declare function createApi(opts: ApiClientOptions): {
     }>;
     shouts: (p?: { before?: string; mood?: string; replyTo?: ID }) => Promise<{ items: Shout[]; nextCursor: string | null; nextShoutAt: string | null }>;
     shout: (b: { body: string; mood?: string | null; replyToId?: ID | null; sticker?: import('./stickers').StickerInput | null }) => Promise<WithReward<{ shout: Shout; nextShoutAt: string }>>;
+    reactTo: (type: 'comment' | 'reply' | 'wall' | 'message', id: ID, kind: ReactionKind | null) => Promise<{ reactions: Partial<Record<ReactionKind, number>>; myReaction: ReactionKind | null }>;
     reactShout: (id: ID, kind: ReactionKind | null) => Promise<{ shout: Shout }>;
     deleteShout: (id: ID) => Promise<{ ok: true }>;
     shoutTrends: () => Promise<{ tags: { tag: string; count: number }[]; top: { rank: number; user: UserPublic; shouts: number; reps: number }[] }>;
@@ -325,7 +363,7 @@ export declare function createApi(opts: ApiClientOptions): {
     spotifySearch: (q: string) => Promise<{ enabled: boolean; source?: 'spotify' | 'apple'; tracks: ProfileSong[] }>;
     /** Spotify when the server has Spotify keys, otherwise Apple Music previews (no keys needed). */
     songSearch: (q: string) => Promise<{ enabled: boolean; source: 'spotify' | 'apple'; tracks: ProfileSong[] }>;
-    updateLayout: (layout: import('./profileLayout').ProfileLayout) => Promise<{ user: UserPrivate; layout: import('./profileLayout').ProfileLayout }>;
+    updateLayout: (layout: import('./profileLayout').ProfileLayout) => Promise<{ user: UserPrivate; layout: import('./profileLayout').ProfileLayout; premiumRemoved: string[] }>;
     showcase: (userId: ID, types: import('./profileLayout').SectionType[], limit?: number) => Promise<Showcase>;
     spotifyResolve: (url: string) => Promise<{ song: ProfileSong }>;
     premium: () => Promise<{ plans: import('./profile').PremiumPlan[]; premiumUntil: string | null; sparks: number; stripe: boolean; iap: boolean }>;
@@ -354,16 +392,44 @@ export declare function createApi(opts: ApiClientOptions): {
             items: { id: ID; user: UserPublic; reason: string; category: string | null; priority: string; status: string; excerpt: string | null; ref: { type: string; id: ID } | null; createdAt: string }[];
         }>;
         resolveFlag: (id: ID, status: 'resolved' | 'dismissed') => Promise<{ ok: true }>;
-        removeContent: (type: string, id: ID) => Promise<{ ok: true }>;
+        removeContent: (type: string, id: ID, reason?: string) => Promise<{ ok: true }>;
+        editProfile: (id: ID, b: { displayName?: string; handle?: string; bio?: string; pronouns?: string; city?: string; headline?: string; removeAvatar?: boolean; removeCover?: boolean; removeBackground?: boolean; removeSong?: boolean; reason?: string }) => Promise<{ user: AdminUser }>;
+        userContent: (id: ID, kind: 'posts' | 'photos' | 'shouts' | 'comments' | 'threads' | 'replies' | 'wall' | 'messages', before?: string) => Promise<{
+            items: { type: string; id: ID; text: string; title: string | null; mediaUrl: string | null; where: string | null; hidden: boolean; removed: { by: string; reason: string } | null; reactions: Record<string, number> | null; createdAt: string }[];
+            nextBefore: string | null;
+        }>;
+        userActivity: (id: ID) => Promise<{
+            features: { feature: string; total: number; days: number; last: string }[];
+            progression: { level: number; xp: number; loginStreak: number; lastDailyClaim: string | null; lastSeenAt: string; progressResetAt: string | null; powers: Record<string, string>; unlockedThemes: string[]; handleHistory: { from: string; at: string }[]; gameStats: { played: number; wins: number } };
+            inventory: { key?: string; name?: string; emoji?: string; kind?: string; qty: number; via: string | null; acquiredAt: string }[];
+            arenas: { id: ID; name: string; game: string; status: string; stake: { currency: string; amount: number }; payout: number; createdAt: string }[];
+            tickets: { against: { kind: string; reason: string; at: string }[]; used: { kind: string; targetId: ID; at: string }[] };
+        }>;
+        features: () => Promise<{ week: { feature: string; uses: number; users: number; today: number }[]; month: { feature: string; uses: number; users: number; today: number }[] }>;
         modlog: () => Promise<{ items: { id: ID; user: UserPublic; kind: string; reason: string; until: string | null; by: string; createdAt: string }[] }>;
         personas: () => Promise<{ items: { id: ID; handle: string; displayName: string; avatarUrl: string; dmFrom: 'everyone' | 'following' | 'nobody'; active: boolean; generated: boolean }[] }>;
         updatePersona: (id: ID, b: { dmFrom?: 'everyone' | 'following' | 'nobody'; active?: boolean }) => Promise<{ ok: true }>;
         generatePersonas: (b: { count: number; hint?: string }) => Promise<{ started: true }>;
         setPerms: (id: ID, perms: import('./permissions').Permission[]) => Promise<{ user: AdminUser }>;
-        wallet: (id: ID, b: { sparks?: number; gems?: number; reason?: string }) => Promise<{ user: AdminUser }>;
-        items: () => Promise<{ items: { key: string; name: string; kind: string; emoji: string | null; rarity: string | null; price: number }[] }>;
+        wallet: (id: ID, b: { sparks?: number; gems?: number; gold?: number; reason?: string }) => Promise<{ user: AdminUser }>;
+        items: () => Promise<{ items: { key: string; name: string; kind: string; emoji: string | null; rarity: string | null; price: number; goldPrice: number | null; preview: string | null; description: string }[] }>;
         giveItem: (id: ID, key: string, qty?: number) => Promise<{ ok: true }>;
         boost: (id: ID, hours: number) => Promise<{ user: AdminUser }>;
+        arenas: () => Promise<{ gemsGold: boolean; items: { id: string; name: string; game: string; status: string; hostId: string; playerIds: string[]; stake: { currency: string; amount: number }; payouts: { userId: string; amount: number }[]; outcome: unknown; createdAt: string; endedAt: string | null }[] }>;
+        setWagers: (gemsGold: boolean) => Promise<{ gemsGold: boolean }>;
+        ads: () => Promise<{ enabled: boolean; premiumAdFree: boolean; slots: Record<string, { enabled: boolean; mode: 'sandboxed' | 'direct'; code: string; imageUrl: string | null; linkUrl: string | null; height: number | null; every: number | null }>; available: { key: string; label: string; size: string; every?: number }[] }>;
+        saveAds: (b: { enabled: boolean; premiumAdFree: boolean; slots: Record<string, { enabled: boolean; mode: 'sandboxed' | 'direct'; code: string; imageUrl: string | null; linkUrl: string | null; height: number | null; every: number | null }> }) => Promise<{ enabled: boolean; premiumAdFree: boolean; slots: Record<string, { enabled: boolean; mode: 'sandboxed' | 'direct'; code: string; imageUrl: string | null; linkUrl: string | null; height: number | null; every: number | null }>; available: { key: string; label: string; size: string; every?: number }[] }>;
+        tournaments: () => Promise<{ tournaments: (import('./games').Tournament & { cancelled: boolean; cashToPay: { place: number; userId: string; prize: import('./games').TournamentPrize }[] })[] }>;
+        createTournament: (b: import('./games').TournamentInput) => Promise<{ tournament: import('./games').Tournament }>;
+        updateTournament: (id: ID, b: Partial<import('./games').TournamentInput>) => Promise<{ tournament: import('./games').Tournament }>;
+        cancelTournament: (id: ID) => Promise<{ ok: true }>;
+        finishTournament: (id: ID) => Promise<{ ok: true }>;
+        markCashPaid: (id: ID, place: number) => Promise<{ ok: true }>;
+        oversight: () => Promise<{ items: { id: ID; kind: 'mod_violation' | 'staff_revoked'; code: string | null; reason: string; action: { kind: string; targetId: string | null; reason: string } | null; cleared: boolean; staff: UserPublic; createdAt: string }[]; revoked: { user: UserPublic; from: { role: string; perms: string[] }; at: string }[] }>;
+        dismissFinding: (id: ID) => Promise<{ ok: true }>;
+        reinstateStaff: (userId: ID) => Promise<{ ok: true }>;
+        levelGates: () => Promise<{ gates: import('./progression').LevelGate[]; values: Record<string, number> }>;
+        setLevelGates: (values: Record<string, number>) => Promise<{ gates: import('./progression').LevelGate[]; values: Record<string, number> }>;
         terminate: (id: ID, reason: string) => Promise<{ user: AdminUser }>;
         payments: (p?: { status?: string; provider?: string; user?: string; days?: number; cursor?: string }) => Promise<{
             items: AdminPayment[];

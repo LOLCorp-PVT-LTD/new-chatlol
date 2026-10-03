@@ -22,7 +22,7 @@ import { acceptFriendRequest, declineFriendRequest } from '../lib/friends.js';
 /**
  * The persona engine: a light scheduler that makes AI personas behave like regulars —
  * posting photos, doing the daily drop, rating, commenting, hanging out in lounges and replying to DMs.
- * All content passes the same SafeShield moderation as human content. Runs on one elected worker instance.
+ * All content passes the same LOLShield moderation as human content. Runs on one elected worker instance.
  */
 
 const rand = (a, b) => a + Math.random() * (b - a);

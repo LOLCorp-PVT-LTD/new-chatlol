@@ -94,6 +94,13 @@ test(`socket on instance A receives a DM sent via instance B (${MODE} adapter)`,
   });
   const sock = ioClient('http://127.0.0.1:4711', { auth: { token: login.token }, transports: ['websocket'] });
   await new Promise((r) => sock.on('connect', () => r()));
+  {
+    // New accounts need level 3 to DM people who aren't their friends.
+    const { MongoClient, ObjectId } = await import('mongodb');
+    const c = await MongoClient.connect(DB);
+    await c.db(DB_NAME).collection('users').updateOne({ _id: new ObjectId(other.user.id) }, { $set: { xp: 5000 } });
+    await c.close();
+  }
   const b = createApi({ baseUrl: 'http://127.0.0.1:4712', getToken: () => other.token });
   const { conversation } = await b.openConversation(login.user.id);
   const got = new Promise((r) => sock.on('dm:message', r));

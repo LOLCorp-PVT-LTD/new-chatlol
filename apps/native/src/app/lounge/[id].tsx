@@ -22,7 +22,7 @@ export default function LoungeRoom() {
   useEffect(() => {
     void api.lounge(id).then((r) => { setLounge(r.lounge); setOnline(r.lounge.onlineCount); });
     const s = getSocket();
-    s.emit('lounge:join', id, (h) => setMessages(h));
+    s.emit('lounge:join', id, (h) => { if (Array.isArray(h)) setMessages(h); });
     const onMsg = (m: ChatMessage) => { if (m.roomId === id) setMessages((x) => [...x.slice(-200), m]); };
     const onPresence = (p: { loungeId: string; onlineCount: number }) => { if (p.loungeId === id) setOnline((n) => Math.max(n, p.onlineCount)); };
     s.on('lounge:message', onMsg);

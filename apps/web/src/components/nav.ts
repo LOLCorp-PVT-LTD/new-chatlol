@@ -11,11 +11,15 @@ export const NAV: NavItem[] = [
   { to: '/forums', label: 'Forums', icon: 'groups' },
   { to: '/live', label: 'Live Streams', icon: 'live_tv' },
   { to: '/drops', label: 'Daily Sunset Drops', icon: 'wb_twilight' },
+  { to: '/games', label: 'Game Arenas', icon: 'sports_esports' },
+  { to: '/arcade', label: 'Arcade', icon: 'emoji_events' },
+  { to: '/tournaments', label: 'Tournaments', icon: 'military_tech' },
   { to: '/arena', label: 'Hot Take Arena', icon: 'swords' },
   { to: '/leaderboard', label: 'Hall of Fame', icon: 'emoji_events' },
   { to: '/insights', label: 'Who Viewed Me', icon: 'visibility' },
   { to: '/premium', label: 'Premium', icon: 'workspace_premium' },
   { to: '/vault', label: 'Sparks Vault', icon: 'diamond' },
+  { to: '/invite', label: 'Invite & earn Gold', icon: 'person_add' },
 ];
 export const TABS: NavItem[] = [
   { to: '/', label: 'Home', icon: 'home' },

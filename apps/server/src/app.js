@@ -9,6 +9,10 @@ import { arenaRouter } from './routes/arena.js';
 import { socialRouter } from './routes/social.js';
 import { storeRouter } from './routes/store.js';
 import { liveRouter } from './routes/live.js';
+import { arenasRouter } from './routes/arenas.js';
+import { arcadeRouter } from './routes/arcade.js';
+import { tournamentsRouter } from './routes/tournaments.js';
+import { adsRouter } from './routes/ads.js';
 import { paymentsRouter } from './routes/payments.js';
 import { profileRouter } from './routes/profile.js';
 import { shoutsRouter } from './routes/shouts.js';
@@ -54,6 +58,10 @@ export function createApp() {
     adminRouter,
     postsRouter,
     arenaRouter,
+    arenasRouter,
+    arcadeRouter,
+    tournamentsRouter,
+    adsRouter,
     socialRouter,
     storeRouter,
     liveRouter,

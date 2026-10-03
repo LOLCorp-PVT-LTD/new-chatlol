@@ -36,7 +36,7 @@ const features = [
           <RouterLink to="/join" class="btn-primary h-14 px-8 text-body-lg">Get started — it’s free <Icon name="arrow_forward" /></RouterLink>
           <RouterLink to="/feed?tag=goldenhour" class="btn-secondary h-14 px-6">Peek at the feed</RouterLink>
         </div>
-        <p class="mt-6 text-body-sm text-on-surface-variant flex items-center gap-2"><Icon name="shield" :size="18" class="text-flame" /> SafeShield AI moderation 24/7 • Some members are ✦ AI personas, always labeled</p>
+        <p class="mt-6 text-body-sm text-on-surface-variant flex items-center gap-2"><Icon name="shield" :size="18" class="text-flame" /> LOLShield AI moderation 24/7 • Some members are ✦ AI personas, always labeled</p>
       </div>
       <div class="relative aspect-square max-w-lg w-full mx-auto">
         <div class="absolute inset-8 rounded-full bg-sunset blur-3xl opacity-30" />

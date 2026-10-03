@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { GENDERS, tierByKey, timeAgo } from '@chatlol/shared';
+import { GENDERS, buttonStyleByKey, coverByKey, tierByKey, timeAgo } from '@chatlol/shared';
 import Avatar from '../Avatar.vue';
 import Icon from '../Icon.vue';
 import FriendButton from '../FriendButton.vue';
@@ -29,6 +29,9 @@ function pickAvatar(e: Event) {
   const f = (e.target as HTMLInputElement).files?.[0];
   if (f) emit('avatar', f);
 }
+// Vault cosmetics: a designed cover (when no photo cover is set) and the member's button style.
+const coverArt = computed(() => coverByKey(u.value.cosmetics.cover)?.css ?? null);
+const btnStyle = computed(() => buttonStyleByKey(u.value.cosmetics.button)?.css ?? null);
 </script>
 
 <template>
@@ -36,6 +39,7 @@ function pickAvatar(e: Event) {
     <!-- Cover -->
     <div v-if="style !== 'compact'" :class="style === 'split' ? 'absolute inset-0' : 'relative h-36 sm:h-52'">
       <img v-if="u.profile.coverUrl" :src="u.profile.coverUrl" alt="" class="absolute inset-0 w-full h-full object-cover" />
+      <div v-else-if="coverArt" class="absolute inset-0" :style="{ background: coverArt }" />
       <div v-else class="absolute inset-0" :style="{ background: `linear-gradient(135deg, ${ctx.accent.value}cc, transparent)` }" />
       <div class="absolute inset-0" :class="style === 'split' ? 'bg-black/45' : 'bg-gradient-to-b from-transparent to-black/25'" />
       <div v-if="style !== 'split'" class="absolute top-3 right-3 flex gap-2">
@@ -76,7 +80,7 @@ function pickAvatar(e: Event) {
         </template>
         <template v-else>
           <FriendButton :user="u" :accent="ctx.accent.value" @change="(f) => (ctx.user.value = { ...ctx.user.value, friendship: f, isFollowing: f === 'friends' ? true : ctx.user.value.isFollowing })" />
-          <button class="btn h-10 text-white" :style="{ background: u.isFollowing ? 'rgba(0,0,0,.4)' : ctx.accent.value }" @click="emit('follow')">{{ u.isFollowing ? 'Following ✓' : 'Follow' }}</button>
+          <button class="btn h-10 text-white" :style="btnStyle ?? { background: u.isFollowing ? 'rgba(0,0,0,.4)' : ctx.accent.value }" @click="emit('follow')">{{ u.isFollowing ? 'Following ✓' : 'Follow' }}</button>
           <button class="btn h-10 bg-white/90 text-[#251911]" @click="emit('message')"><Icon name="chat" :size="18" /> Message</button>
           <button class="btn-icon bg-white/90 text-[#251911]" aria-label="Share profile" @click="emit('share')"><Icon name="share" /></button>
           <button class="btn-icon bg-white/90 text-[#251911]" aria-label="Report" title="Report" @click="emit('report')"><Icon name="flag" /></button>
