@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { DM_SPARK_COST, LOUNGE_LIMIT, REWARDS, can, hasPower } from '@chatlol/shared';
+import { DM_SPARK_COST, REWARDS, can, hasPower } from '@chatlol/shared';
 import { db, newId, now, isDuplicateKey, isObjectIdHex } from '../db.js';
 import { assertEmojiOwned, resolveSticker, stickerInput, stickerPreview } from '../lib/stickers.js';
 import { optionalAuth, requireAuth, uid } from '../lib/auth.js';
@@ -276,12 +276,7 @@ socialRouter.post('/lounges', requireAuth, async (req, res) => {
   assertClean(`${b.name} ${b.topic} ${b.nowPlaying}`);
   const u = await db.users.findOne({ _id: me }, { projection: { role: 1, perms: 1, premium: 1 } });
   const staff = can(u, 'lounges');
-  if (!staff) {
-    await assertLevel(me, 'lounge');
-    const limit = isPremium(u) ? LOUNGE_LIMIT.premium : LOUNGE_LIMIT.member;
-    if ((await db.lounges.countDocuments({ ownerId: me })) >= limit)
-      throw new HttpError(409, `You can have ${limit} lounge${limit === 1 ? '' : 's'} at a time${isPremium(u) ? '' : ' — 3 with Premium 👑'}`, 'lounge_limit');
-  }
+  if (!staff) throw new HttpError(403, 'Only admins can open new lounges', 'forbidden');
   let slug = slugify(b.name);
   if (await db.lounges.findOne({ slug })) slug = `${slug}-${newId().slice(-5)}`;
   const last = await db.lounges.find({}).sort({ position: -1 }).limit(1).toArray();

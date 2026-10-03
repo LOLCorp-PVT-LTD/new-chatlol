@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue';
-import type { Lounge } from '@chatlol/shared';
+import { can, type Lounge } from '@chatlol/shared';
 import { api } from '../lib/api';
 import { useSession } from '../stores/session';
 import { confirmDialog, promptDialog } from '../lib/dialog';
@@ -44,7 +44,7 @@ function saved(l: Lounge) {
   <div class="max-w-[900px] mx-auto space-y-5">
     <div class="flex flex-wrap items-end gap-3">
       <div class="flex-1 min-w-0"><h1 class="text-headline-xl">Hangout Lounges 🛋️</h1><p class="text-body-md text-on-surface-variant">Drop into a room. Real-time chat, shared soundtrack, zero pressure.</p></div>
-      <button v-if="s.user" class="btn-primary" @click="editing = 'new'"><Icon name="add" :size="20" /> Open a lounge</button>
+      <button v-if="s.user && can(s.user, 'lounges')" class="btn-primary" @click="editing = 'new'"><Icon name="add" :size="20" /> Open a lounge</button>
     </div>
     <div class="grid sm:grid-cols-2 gap-4">
       <RouterLink v-for="l in lounges" :key="l.id" :to="`/lounges/${l.id}`" class="rounded-lg bg-sunlit overflow-hidden shadow-warm hover:shadow-pop transition group">
