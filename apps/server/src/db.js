@@ -61,6 +61,7 @@ export const COLLECTIONS = [
   'socketEvents',
   'settings',
   'contentReactions',
+  'arenas',
 ];
 
 const txStore = new AsyncLocalStorage();

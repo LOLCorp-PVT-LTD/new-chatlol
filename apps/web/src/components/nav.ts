@@ -11,6 +11,7 @@ export const NAV: NavItem[] = [
   { to: '/forums', label: 'Forums', icon: 'groups' },
   { to: '/live', label: 'Live Streams', icon: 'live_tv' },
   { to: '/drops', label: 'Daily Sunset Drops', icon: 'wb_twilight' },
+  { to: '/games', label: 'Game Arenas', icon: 'sports_esports' },
   { to: '/arena', label: 'Hot Take Arena', icon: 'swords' },
   { to: '/leaderboard', label: 'Hall of Fame', icon: 'emoji_events' },
   { to: '/insights', label: 'Who Viewed Me', icon: 'visibility' },

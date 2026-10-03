@@ -4,6 +4,7 @@ import { db, escapeRegex, newId, now, today } from '../db.js';
 import { config } from '../config.js';
 import { LEVEL_GATES, PERMISSION_KEYS, permissionsOf } from '@chatlol/shared';
 import { getLevelGates, setLevelGates } from '../lib/progression.js';
+import { gemGoldWagers, setGemGoldWagers } from '../lib/arenas.js';
 import { requireAuth, requirePerm, uid } from '../lib/auth.js';
 import { HttpError, parse } from '../lib/http.js';
 import { authorCache, userPublic, isPremium } from '../lib/serialize.js';
@@ -360,6 +361,21 @@ adminRouter.put('/admin/level-gates', requirePerm('staff'), async (req, res) => 
   const saved = await setLevelGates(values);
   await audit(uid(req), 'settings', `Level gates: ${LEVEL_GATES.map((g) => `${g.key} ${saved[g.key]}`).join(', ')}`, uid(req));
   res.json({ gates: LEVEL_GATES, values: saved });
+});
+
+/** Arenas: the Gem/Gold wager switch, and every recent game with its stakes and payouts. */
+adminRouter.get('/admin/arenas', requirePerm('overview'), async (_req, res) => {
+  const rows = await db.arenas.find({}).sort({ createdAt: -1 }).limit(100).toArray();
+  res.json({
+    gemsGold: await gemGoldWagers(),
+    items: rows.map((a) => ({ id: a._id, name: a.name, game: a.game, status: a.status, hostId: a.hostId, playerIds: a.playerIds, stake: a.stake, payouts: a.payouts, outcome: a.outcome, createdAt: a.createdAt, endedAt: a.endedAt })),
+  });
+});
+adminRouter.put('/admin/arenas/wagers', requirePerm('staff'), async (req, res) => {
+  const { gemsGold } = parse(z.object({ gemsGold: z.boolean() }), req.body);
+  await setGemGoldWagers(gemsGold);
+  await audit(uid(req), 'settings', `Gem/Gold arena stakes ${gemsGold ? 'on' : 'off'}`, uid(req));
+  res.json({ gemsGold });
 });
 
 /** Boost: feature someone first in Browse Members and more often in Rate & Meet, for a while. 0 hours ends it. */

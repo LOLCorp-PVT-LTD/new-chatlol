@@ -864,3 +864,31 @@ test('Gold economy: exchange, tickets with guardrails, Premium gifts and the Kin
   assert.equal((await c.king()).king.user.id, c2.id);
   assert.ok((await db.users.findOne({ _id: a.id })).badges.includes('former_king'));
 });
+
+test('game arenas: level gate, invite-only, escrowed stakes, server-checked moves, winner paid minus rake', async () => {
+  const a = await signUp('ar');
+  const b = await signUp('arb');
+  const c = await signUp('arc');
+  await assert.rejects(as('ar').createArena({ name: 'gg', game: 'chess', visibility: 'private', stake: { currency: 'sparks', amount: 100 } }), (e) => e.code === 'level_required');
+  await levelUp(a);
+  await db.users.updateMany({ _id: { $in: [a.id, b.id] } }, { $set: { sparks: 1000 } });
+  const { arena } = await as('ar').createArena({ name: 'gg', game: 'chess', visibility: 'private', stake: { currency: 'sparks', amount: 100 } });
+  await assert.rejects(as('arc').joinArena(arena.id), (e) => e.code === 'arena_private');
+  await as('ar').inviteToArena(arena.id, [b.id]);
+  await as('arb').joinArena(arena.id);
+  await assert.rejects(as('arb').startArena(arena.id), (e) => e.status === 403, 'only the host starts');
+  let r = (await as('ar').startArena(arena.id)).arena;
+  assert.equal(r.status, 'playing');
+  assert.equal((await db.users.findOne({ _id: a.id })).sparks, 900, 'stake escrowed');
+  // Fool's mate: white = seat 0.
+  const white = r.playerIds[0] === a.id ? 'ar' : 'arb';
+  const black = white === 'ar' ? 'arb' : 'ar';
+  const sq = (n) => 'abcdefgh'.indexOf(n[0]) + (n[1] - 1) * 8;
+  await assert.rejects(as(black).arenaMove(arena.id, { from: sq('e7'), to: sq('e5') }), (e) => e.code === 'illegal_move', 'not their turn');
+  await assert.rejects(as(white).arenaMove(arena.id, { from: sq('e2'), to: sq('e5') }), (e) => e.code === 'illegal_move');
+  for (const [who, f, t] of [[white, 'f2', 'f3'], [black, 'e7', 'e5'], [white, 'g2', 'g4'], [black, 'd8', 'h4']]) r = (await as(who).arenaMove(arena.id, { from: sq(f), to: sq(t) })).arena;
+  assert.equal(r.status, 'finished');
+  const winner = black === 'ar' ? a.id : b.id;
+  assert.equal((await db.users.findOne({ _id: winner })).sparks, 900 + 190, 'pot 200 minus 5% rake');
+  assert.equal(c.id.length, 24);
+});

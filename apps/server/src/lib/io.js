@@ -8,5 +8,6 @@ export const room = {
   user: (id) => `user:${id}`,
   lounge: (id) => `lounge:${id}`,
   stream: (id) => `stream:${id}`,
+  arena: (id) => `arena:${id}`,
   global: 'global',
 };

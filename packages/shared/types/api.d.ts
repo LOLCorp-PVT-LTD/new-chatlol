@@ -262,6 +262,16 @@ export declare function createApi(opts: ApiClientOptions): {
     unlockTheme: (key: import('./themes').AppThemeKey) => Promise<{ user: UserPrivate }>;
     exchange: (to: 'gems' | 'gold', amount: number) => Promise<{ sparks: number; gems: number; gold: number }>;
     useTicket: (key: import('./progression').TicketKey, targetId: ID, loungeId?: ID) => Promise<{ used: string; free: boolean; target: { id: ID; handle: string } }>;
+    games: () => Promise<{ games: import('./games').GameInfo[]; currencies: import('./games').StakeCurrency[]; stakeLimits: Record<string, number>; rakePct: number }>;
+    arenas: () => Promise<{ arenas: import('./games').Arena[] }>;
+    arena: (id: ID, code?: string) => Promise<{ arena: import('./games').Arena }>;
+    createArena: (b: { name: string; game: import('./games').GameKey; visibility: 'public' | 'private'; stake: { currency: import('./games').StakeCurrency; amount: number } }) => Promise<{ arena: import('./games').Arena }>;
+    joinArena: (id: ID, code?: string) => Promise<{ arena: import('./games').Arena }>;
+    joinArenaByCode: (code: string) => Promise<{ arena: import('./games').Arena }>;
+    leaveArena: (id: ID) => Promise<{ arena: import('./games').Arena }>;
+    inviteToArena: (id: ID, userIds: ID[]) => Promise<{ arena: import('./games').Arena }>;
+    startArena: (id: ID) => Promise<{ arena: import('./games').Arena }>;
+    arenaMove: (id: ID, action: Record<string, unknown>) => Promise<{ arena: import('./games').Arena }>;
     king: () => Promise<{ king: { user: UserPublic; since: string; until: string } | null }>;
     claimDaily: () => Promise<WithReward<{
         claimed: boolean;
@@ -376,6 +386,8 @@ export declare function createApi(opts: ApiClientOptions): {
         items: () => Promise<{ items: { key: string; name: string; kind: string; emoji: string | null; rarity: string | null; price: number }[] }>;
         giveItem: (id: ID, key: string, qty?: number) => Promise<{ ok: true }>;
         boost: (id: ID, hours: number) => Promise<{ user: AdminUser }>;
+        arenas: () => Promise<{ gemsGold: boolean; items: { id: string; name: string; game: string; status: string; hostId: string; playerIds: string[]; stake: { currency: string; amount: number }; payouts: { userId: string; amount: number }[]; outcome: unknown; createdAt: string; endedAt: string | null }[] }>;
+        setWagers: (gemsGold: boolean) => Promise<{ gemsGold: boolean }>;
         levelGates: () => Promise<{ gates: import('./progression').LevelGate[]; values: Record<string, number> }>;
         setLevelGates: (values: Record<string, number>) => Promise<{ gates: import('./progression').LevelGate[]; values: Record<string, number> }>;
         terminate: (id: ID, reason: string) => Promise<{ user: AdminUser }>;

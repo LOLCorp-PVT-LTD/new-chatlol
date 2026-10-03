@@ -29,6 +29,7 @@ export interface ServerEvents {
         level: number;
     }) => void;
     'feed:new': (p: Post) => void;
+    'arena:update': (p: { id: ID; version: number; status: string }) => void;
     'message:reactions': (p: { id: ID; roomId: ID; reactions: Partial<Record<import('./types').ReactionKind, number>> }) => void;
     /** A Kick Ticket removed you from a lounge. */
     'lounge:kicked': (p: { loungeId: ID; by: string; minutes: number }) => void;
@@ -98,6 +99,8 @@ export interface ClientEvents {
         conversationId: ID;
     }) => void;
     'stream:join': (streamId: ID) => void;
+    'arena:watch': (arenaId: ID) => void;
+    'arena:unwatch': (arenaId: ID) => void;
     'stream:leave': (streamId: ID) => void;
     'stream:chat': (p: {
         streamId: ID;

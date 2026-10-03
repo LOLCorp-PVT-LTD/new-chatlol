@@ -184,6 +184,17 @@ export async function attachRealtime(server) {
     };
     socket.on('stream:join', safe(joinStream));
 
+    // ——— Game arenas: live updates (clients refetch their own view on 'arena:update') ———
+    socket.on(
+      'arena:watch',
+      safe(async (arenaId) => {
+        if (typeof arenaId !== 'string') return;
+        const a = await db.arenas.findOne({ _id: arenaId }, { projection: { visibility: 1, playerIds: 1, invitedIds: 1 } });
+        if (a && (a.visibility === 'public' || a.playerIds.includes(userId) || a.invitedIds.includes(userId))) socket.join(room.arena(arenaId));
+      }),
+    );
+    socket.on('arena:unwatch', (arenaId) => typeof arenaId === 'string' && socket.leave(room.arena(arenaId)));
+
     const leaveStream = async (streamId) => {
       await stopWatching(streamId);
       socket.leave(room.stream(streamId));
