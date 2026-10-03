@@ -8,6 +8,8 @@ import { api } from '../lib/api';
 import { useSession } from '../stores/session';
 import { confetti, ding } from '../lib/fx';
 import Avatar from '../components/Avatar.vue';
+import Icon from '../components/Icon.vue';
+import { useFullscreen } from '../lib/fullscreen';
 import { ARCADE_DRAW, echoPlaying, gridOf, type ArcadeUi } from '../lib/arcadeDraw';
 
 /**
@@ -16,6 +18,8 @@ import { ARCADE_DRAW, echoPlaying, gridOf, type ArcadeUi } from '../lib/arcadeDr
  */
 const route = useRoute();
 const s = useSession();
+const stage = ref<HTMLElement>();
+const fs = useFullscreen(stage);
 const key = route.params.game as keyof typeof ARCADE;
 const g = ARCADE[key];
 /** Client-only presentation state for the newer games (Echo playback, last tapped cell). */
@@ -408,11 +412,12 @@ const canCashOut = computed(() => !!g.TURN);
 
 <template>
   <div class="max-w-[1000px] mx-auto grid lg:grid-cols-[1fr_300px] gap-4 items-start">
-    <section class="card p-4 space-y-3">
+    <section ref="stage" class="card p-4 space-y-3">
       <div class="flex items-center justify-between gap-2"><h1 class="text-headline-md flex-1 truncate">{{ g.emoji }} {{ g.name }}</h1>
+        <button type="button" class="btn-ghost w-9 h-9 p-0 justify-center" :aria-label="fs.on.value ? 'Exit full screen' : 'Full screen'" :title="fs.on.value ? 'Exit full screen' : 'Full screen'" @click="fs.toggle"><Icon :name="fs.on.value ? 'fullscreen_exit' : 'fullscreen'" :size="20" /></button>
         <span v-if="g.level" class="chip chip-active h-8 tabular-nums">Level {{ level }}</span>
         <span class="text-headline-md tabular-nums min-w-[4ch] text-right">{{ score.toLocaleString() }}</span></div>
-      <div class="relative mx-auto w-full" :style="{ maxWidth: key === 'flight' || key === 'meteor' ? '380px' : key === 'runner' ? '640px' : '480px' }">
+      <div class="relative mx-auto w-full fs-fit" :style="{ '--fs-aspect': 1 / ratio, maxWidth: key === 'flight' || key === 'meteor' ? '380px' : key === 'runner' ? '640px' : '480px' }">
         <canvas ref="canvas" class="w-full rounded-[22px] touch-none select-none shadow-float" :style="{ aspectRatio: aspect }" @contextmenu.prevent @pointerdown="onDown" @pointermove="onMove" @pointerup="onUp" @pointercancel="onCancel" />
         <Transition name="lvl">
           <div v-if="levelUp && phase === 'playing'" class="absolute inset-x-0 top-[38%] flex justify-center pointer-events-none">

@@ -79,3 +79,11 @@
 .slide-up-enter-active, .slide-up-leave-active { transition: transform .3s cubic-bezier(.2,.9,.3,1), opacity .3s; }
 .slide-up-enter-from, .slide-up-leave-to { transform: translateY(40px); opacity: 0; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; } }
+
+/* Games in fullscreen (lib/fullscreen.ts): the game area fills the screen, scrolls if it must. */
+.game-fs {
+  position: fixed !important; inset: 0; z-index: 120; overflow: auto; margin: 0 !important; max-width: none !important;
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  background: rgb(var(--c-surface));
+}
+.game-fs .fs-fit { max-width: min(100%, calc((100dvh - 150px) * var(--fs-aspect, 1))) !important; }
