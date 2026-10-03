@@ -268,6 +268,9 @@ export declare function createApi(opts: ApiClientOptions): {
     exchange: (to: 'gems' | 'gold', amount: number) => Promise<{ sparks: number; gems: number; gold: number }>;
     useTicket: (key: import('./progression').TicketKey, targetId: ID, loungeId?: ID) => Promise<{ used: string; free: boolean; target: { id: ID; handle: string } }>;
     gamesLeaderboard: (game?: string) => Promise<{ game: string | null; entries: { rank: number; user: UserPublic; wins: number; played: number }[] }>;
+    tournaments: () => Promise<{ tournaments: import('./games').Tournament[] }>;
+    tournament: (id: ID) => Promise<{ tournament: import('./games').Tournament }>;
+    joinTournament: (id: ID) => Promise<{ tournament: import('./games').Tournament }>;
     arcade: () => Promise<{ games: { key: string; name: string; emoji: string; desc: string; myBest: number | null; top: { rank: number; user: UserPublic; score: number; at: string }[] }[]; sparksPerDay: number }>;
     arcadeStart: (game: string) => Promise<{ runId: string; seed: number }>;
     arcadeFinish: (runId: string, inputs: [number, string][]) => Promise<{ score: number; best: number; newBest: boolean; rank: number; rejected: boolean; reward: RewardEvent | null }>;
@@ -411,6 +414,12 @@ export declare function createApi(opts: ApiClientOptions): {
         boost: (id: ID, hours: number) => Promise<{ user: AdminUser }>;
         arenas: () => Promise<{ gemsGold: boolean; items: { id: string; name: string; game: string; status: string; hostId: string; playerIds: string[]; stake: { currency: string; amount: number }; payouts: { userId: string; amount: number }[]; outcome: unknown; createdAt: string; endedAt: string | null }[] }>;
         setWagers: (gemsGold: boolean) => Promise<{ gemsGold: boolean }>;
+        tournaments: () => Promise<{ tournaments: (import('./games').Tournament & { cancelled: boolean; cashToPay: { place: number; userId: string; prize: import('./games').TournamentPrize }[] })[] }>;
+        createTournament: (b: import('./games').TournamentInput) => Promise<{ tournament: import('./games').Tournament }>;
+        updateTournament: (id: ID, b: Partial<import('./games').TournamentInput>) => Promise<{ tournament: import('./games').Tournament }>;
+        cancelTournament: (id: ID) => Promise<{ ok: true }>;
+        finishTournament: (id: ID) => Promise<{ ok: true }>;
+        markCashPaid: (id: ID, place: number) => Promise<{ ok: true }>;
         levelGates: () => Promise<{ gates: import('./progression').LevelGate[]; values: Record<string, number> }>;
         setLevelGates: (values: Record<string, number>) => Promise<{ gates: import('./progression').LevelGate[]; values: Record<string, number> }>;
         terminate: (id: ID, reason: string) => Promise<{ user: AdminUser }>;

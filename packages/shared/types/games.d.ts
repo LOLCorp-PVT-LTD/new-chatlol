@@ -61,3 +61,12 @@ export declare const POCKETS: [number, number][];
 export declare function simulateShot(balls: { id: number; x: number; y: number; in: boolean }[], angle: number, power: number, opts?: { frames?: boolean }): { balls: { id: number; x: number; y: number; in: boolean }[]; potted: number[]; firstHit: number | null; frames: number[][][] };
 export declare const TOWER: { W: number; BASE: number; FLOORS: number };
 export declare function towerX(width: number, floor: number, ms: number): number;
+export interface TournamentPrize { gold?: number; gems?: number; sparks?: number; premiumDays?: number; item?: string; cash?: string }
+export interface Tournament {
+    id: string; title: string; description: string; bannerUrl: string | null; kind: 'arcade' | 'arena'; game: string; minLevel: number; entryGold: number; maxEntrants: number | null;
+    prizes: (TournamentPrize & { place: number; text: string })[]; startsAt: string; endsAt: string; featured: boolean; status: 'upcoming' | 'live' | 'ending' | 'ended' | 'cancelled';
+    entrants: number; joined: boolean; myScore: number | null;
+    board?: { rank: number; user: import('./types').UserPublic; score: number }[];
+    results: { place: number; userId: string; score: number; prize: TournamentPrize; user: import('./types').UserPublic }[] | null;
+}
+export type TournamentInput = { title: string; description?: string; bannerUrl?: string | null; kind: 'arcade' | 'arena'; game: string; minLevel?: number; entryGold?: number; maxEntrants?: number | null; prizes: TournamentPrize[]; startsAt: string; endsAt: string; featured?: boolean };

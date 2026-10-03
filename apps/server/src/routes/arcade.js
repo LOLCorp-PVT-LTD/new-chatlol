@@ -8,6 +8,7 @@ import { HttpError, parse, rateLimit } from '../lib/http.js';
 import { authorCache } from '../lib/serialize.js';
 import { bumpCounter, grant } from '../lib/rewards.js';
 import { track } from '../lib/activity.js';
+import { recordTournamentResult } from '../lib/tournaments.js';
 
 /**
  * Arcade: single-player games with leaderboards. A run starts on the server (which picks the seed); when it ends
@@ -48,6 +49,7 @@ arcadeRouter.post('/arcade/runs/:id/finish', requireAuth, async (req, res) => {
   const prevBest = (await db.arcadeRuns.find({ userId: me, game: run.game, status: 'done' }).sort({ score: -1 }).limit(1).toArray())[0]?.score ?? 0;
   await db.arcadeRuns.updateOne({ _id: run._id }, { $set: { status: suspicious ? 'rejected' : 'done', score, durationMs: elapsed, finishedAt: now() } });
   track(me, 'arcade');
+  if (score > 0) await recordTournamentResult('arcade', run.game, [me], score);
   let reward = null;
   if (score > 0) {
     const want = Math.floor(sparksFor[run.game](score));

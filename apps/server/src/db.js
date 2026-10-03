@@ -63,6 +63,8 @@ export const COLLECTIONS = [
   'contentReactions',
   'arenas',
   'arcadeRuns',
+  'tournaments',
+  'tournamentEntries',
 ];
 
 const txStore = new AsyncLocalStorage();

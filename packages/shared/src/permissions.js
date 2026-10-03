@@ -15,6 +15,8 @@ export const PERMISSIONS = [
   { key: 'items', label: 'Store items', desc: 'Give stickers, frames, themes and other items', group: 'Economy' },
   { key: 'boost', label: 'Boost profiles', desc: 'Feature someone at the top of Browse Members and Rate & Meet', group: 'Economy' },
   { key: 'payments', label: 'Payments', desc: 'See who paid what and the status of every payment; refund', group: 'Economy' },
+  { key: 'tournaments', label: 'Tournaments', desc: 'Create, edit, cancel and pay out tournaments', group: 'Economy' },
+  { key: 'ads', label: 'Ads', desc: 'Manage ad slots and ad codes', group: 'Panel' },
   { key: 'personas', label: 'AI personas', desc: 'Switch personas on or off and choose who can DM them', group: 'Panel' },
   { key: 'staff', label: 'Staff & permissions', desc: 'Make people moderators and give them permissions', group: 'Panel' },
 ];

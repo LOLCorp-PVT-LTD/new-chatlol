@@ -13,6 +13,7 @@ export const NAV: NavItem[] = [
   { to: '/drops', label: 'Daily Sunset Drops', icon: 'wb_twilight' },
   { to: '/games', label: 'Game Arenas', icon: 'sports_esports' },
   { to: '/arcade', label: 'Arcade', icon: 'emoji_events' },
+  { to: '/tournaments', label: 'Tournaments', icon: 'military_tech' },
   { to: '/arena', label: 'Hot Take Arena', icon: 'swords' },
   { to: '/leaderboard', label: 'Hall of Fame', icon: 'emoji_events' },
   { to: '/insights', label: 'Who Viewed Me', icon: 'visibility' },

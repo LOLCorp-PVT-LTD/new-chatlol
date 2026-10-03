@@ -5,6 +5,7 @@ import { HttpError } from './http.js';
 import { io, room } from './io.js';
 import { emitWallet, notify } from './rewards.js';
 import { isWord } from './words.js';
+import { recordTournamentResult } from './tournaments.js';
 
 /**
  * Game arenas: rooms where 2–6 members play one of the GAMES, optionally for a stake. The host creates it (public or
@@ -237,6 +238,7 @@ async function settleIfOver(a) {
   const winners = (out.winners ?? []).filter(eligible).map((i) => a.playerIds[i]);
   await db.users.updateMany({ _id: { $in: a.playerIds } }, { $inc: { 'gameStats.played': 1, [`gameStats.byGame.${a.game}.played`]: 1 } });
   if (winners.length) await db.users.updateMany({ _id: { $in: winners } }, { $inc: { 'gameStats.wins': 1, [`gameStats.byGame.${a.game}.wins`]: 1 } });
+  if (winners.length) await recordTournamentResult('arena', a.game, winners, 1);
   const done = await db.arenas.findOneAndUpdate({ _id: a._id }, { $set: { payouts } }, { returnDocument: 'after' });
   for (const p of a.playerIds) {
     void emitWallet(p);

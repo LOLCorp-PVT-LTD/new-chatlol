@@ -10,6 +10,7 @@ import { initShared, shared, sharedBackend } from './lib/shared.js';
 import { seedIfEmpty } from './seed.js';
 import { runInactivity } from './lib/progression.js';
 import { resolveArenaTimeouts } from './lib/arenas.js';
+import { finishDueTournaments } from './lib/tournaments.js';
 import { startPersonaEngine } from './ai/engine.js';
 import { refreshModels, setModelStore } from './ai/nim.js';
 import { resolveExpiredTakes } from './routes/arena.js';
@@ -86,6 +87,7 @@ async function main() {
     await runBirthdays();
     await runInactivity();
     await resolveArenaTimeouts();
+    await finishDueTournaments();
     if (config.ai.enabled && !engineStarted) {
       engineStarted = true;
       await startPersonaEngine(() => acquireWorkerLease());

@@ -1,4 +1,4 @@
-export type Permission = 'overview' | 'reports' | 'mute' | 'ban' | 'terminate' | 'wallet' | 'premium' | 'items' | 'profiles' | 'boost' | 'payments' | 'personas' | 'staff';
+export type Permission = 'overview' | 'reports' | 'mute' | 'ban' | 'terminate' | 'wallet' | 'premium' | 'items' | 'profiles' | 'tournaments' | 'ads' | 'boost' | 'payments' | 'personas' | 'staff';
 export type Role = 'user' | 'mod' | 'admin';
 export declare const PERMISSIONS: { key: Permission; label: string; desc: string; group: 'Panel' | 'Moderation' | 'Economy' }[];
 export declare const PERMISSION_KEYS: Permission[];

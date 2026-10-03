@@ -951,3 +951,31 @@ test('arcade: runs are replayed on the server; impossible-speed runs are rejecte
   const lb = await c.arcadeLeaderboard('2048');
   assert.equal(lb.entries[0].score, s.score);
 });
+
+test('tournaments: admin creates one, level + Gold entry enforced, cash needs free entry, arcade scores count, prizes paid', async () => {
+  const { ARCADE } = await import('@chatlol/shared');
+  const { finishTournament } = await import('./lib/tournaments.js');
+  const admin = await signUp('tadmin');
+  await db.users.updateOne({ _id: admin.id }, { $set: { role: 'admin' } });
+  const p1 = await signUp('tplay');
+  const base = { title: 'Snake Cup', kind: 'arcade', game: 'snake', minLevel: 15, entryGold: 5, startsAt: new Date(Date.now() - 60_000).toISOString(), endsAt: new Date(Date.now() + 3_600_000).toISOString(), prizes: [{ gold: 50 }] };
+  await assert.rejects(as('tadmin').admin.createTournament({ ...base, prizes: [{ cash: '£50' }] }), (e) => e.code === 'cash_needs_free_entry');
+  const { tournament } = await as('tadmin').admin.createTournament(base);
+  await assert.rejects(as('tplay').joinTournament(tournament.id), (e) => e.code === 'level_required');
+  await db.users.updateOne({ _id: p1.id }, { $set: { xp: xpForLevel(15), gold: 5 } });
+  await as('tplay').joinTournament(tournament.id);
+  assert.equal((await db.users.findOne({ _id: p1.id })).gold, 0, 'entry paid');
+  // A verified snake run counts.
+  const { runId, seed } = await as('tplay').arcadeStart('snake');
+  const g = ARCADE.snake;
+  let s = g.init(seed);
+  for (let t = 0; t < 30 && !g.over(s); t++) s = g.step(s, null);
+  await wait(30 * g.TICK_MS + 200);
+  const r = await as('tplay').arcadeFinish(runId, []);
+  const t2 = (await as('tplay').tournament(tournament.id)).tournament;
+  assert.equal(t2.myScore, r.score);
+  if (r.score > 0) {
+    await finishTournament(await db.tournaments.findOne({ _id: tournament.id }));
+    assert.equal((await db.users.findOne({ _id: p1.id })).gold, 50, '1st prize paid');
+  }
+});
