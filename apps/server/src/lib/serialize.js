@@ -152,7 +152,7 @@ export async function userPublic(u, viewerId) {
     displayName: u.displayName,
     avatarUrl: u.avatarUrl,
     bio: u.bio ?? '',
-    pronouns: u.pronouns ?? '',
+    pronouns: '', // pronoun field removed from profiles
     city: settings.showCity ? (u.city ?? '') : '',
     gender: settings.showGender ? (u.gender ?? null) : null,
     // Premium looks only show while Premium is active.
@@ -306,6 +306,7 @@ export async function serializePost(p, viewerId, author = authorCache(viewerId))
     kind: p.kind,
     body: p.body,
     mediaUrl: p.mediaUrl ?? null,
+    music: p.music ?? null,
     tags: p.tags ?? [],
     dropId: p.dropId ?? null,
     battle,

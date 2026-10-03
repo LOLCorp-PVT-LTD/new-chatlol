@@ -54,6 +54,34 @@ export const POWERS = [
     price: 300,
     rarity: 'rare',
   },
+  // Limit breakers: skip the waits and caps on posting for a while.
+  {
+    key: 'shout_storm',
+    name: 'Shout Storm',
+    emoji: '🌪️',
+    desc: 'No 45-second wait between shouts for 1 hour — shout as fast as you like',
+    minutes: 60,
+    price: 450,
+    rarity: 'rare',
+  },
+  {
+    key: 'overdrive',
+    name: 'Overdrive',
+    emoji: '🏎️',
+    desc: '5× the posting limits for 1 hour: photos, comments, wall notes, forum threads, replies and ratings',
+    minutes: 60,
+    price: 550,
+    rarity: 'epic',
+  },
+  {
+    key: 'free_talk',
+    name: 'Free Talk',
+    emoji: '💬',
+    desc: 'DMs cost no Sparks for 2 hours',
+    minutes: 120,
+    price: 400,
+    rarity: 'rare',
+  },
   {
     key: 'wipe_shield',
     name: 'Comeback Shield',
@@ -93,7 +121,10 @@ export const LEVEL_GATES = [
   { key: 'forum', label: 'Start forum threads and reply', level: 5 },
   { key: 'live', label: 'Go live', level: 5 },
   { key: 'arena', label: 'Create game arenas', level: 8 },
+  { key: 'lounge', label: 'Create your own lounge', level: 10 },
 ];
+/** How many lounges a member may own (staff: unlimited). */
+export const LOUNGE_LIMIT = { member: 1, premium: 3 };
 export const DEFAULT_LEVEL_GATES = Object.fromEntries(LEVEL_GATES.map((g) => [g.key, g.level]));
 export const levelGate = (key) => LEVEL_GATES.find((g) => g.key === key);
 
@@ -208,13 +239,18 @@ export const KING = { key: 'king_crown', name: 'King of ChatLOL', emoji: '👑',
 
 // ——— Status ranks ———
 /** Prestige by level. Each rank multiplies the daily check-in bonus; Noble and up show a badge by their name. */
+/**
+ * Status ranks come from a member's level (which comes from their XP), so everyone always has one. Every rank shows
+ * a badge next to the member's name everywhere: plain for the early ranks, filled from Noble, shining for Royalty
+ * and Legendary (`style`).
+ */
 export const STATUS_RANKS = [
-  { key: 'commoner', label: 'Commoner', emoji: '🪵', minLevel: 1, checkInBoost: 1, color: '#8c7b6b' },
-  { key: 'squire', label: 'Squire', emoji: '🛡️', minLevel: 5, checkInBoost: 1.1, color: '#6b8fb3' },
-  { key: 'knight', label: 'Knight', emoji: '⚔️', minLevel: 10, checkInBoost: 1.25, color: '#5470e8' },
-  { key: 'noble', label: 'Noble', emoji: '🎩', minLevel: 18, checkInBoost: 1.5, color: '#8f63e8', badge: true },
-  { key: 'royalty', label: 'Royalty', emoji: '💍', minLevel: 28, checkInBoost: 1.75, color: '#d4a017', badge: true },
-  { key: 'legendary', label: 'Legendary', emoji: '🌟', minLevel: 40, checkInBoost: 2, color: '#ff5e00', badge: true },
+  { key: 'commoner', label: 'Commoner', emoji: '🪵', minLevel: 1, checkInBoost: 1, color: '#8c7b6b', badge: true, style: 'plain' },
+  { key: 'squire', label: 'Squire', emoji: '🛡️', minLevel: 5, checkInBoost: 1.1, color: '#6b8fb3', badge: true, style: 'plain' },
+  { key: 'knight', label: 'Knight', emoji: '⚔️', minLevel: 10, checkInBoost: 1.25, color: '#5470e8', badge: true, style: 'plain' },
+  { key: 'noble', label: 'Noble', emoji: '🎩', minLevel: 18, checkInBoost: 1.5, color: '#8f63e8', badge: true, style: 'filled' },
+  { key: 'royalty', label: 'Royalty', emoji: '💍', minLevel: 28, checkInBoost: 1.75, color: '#d4a017', badge: true, style: 'shine' },
+  { key: 'legendary', label: 'Legendary', emoji: '🌟', minLevel: 40, checkInBoost: 2, color: '#ff5e00', badge: true, style: 'shine' },
 ];
 export const statusFor = (level) => [...STATUS_RANKS].reverse().find((r) => level >= r.minLevel) ?? STATUS_RANKS[0];
 
@@ -229,3 +265,6 @@ export const AD_SLOTS = [
   { key: 'arcade_gameover', label: 'Arcade — game over screen', size: '300×250' },
   { key: 'tournaments', label: 'Tournaments page', size: '728×90 / responsive' },
 ];
+
+/** Arcade (single-player) economy: a run costs Sparks to start, and every verified point pays Sparks back. */
+export const ARCADE_ECONOMY = { entry: 100, perPoint: 1, perPointPremium: 5 };

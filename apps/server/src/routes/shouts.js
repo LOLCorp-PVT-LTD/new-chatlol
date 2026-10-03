@@ -1,10 +1,12 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { REACTIONS, SHOUT_COOLDOWN_SEC, SHOUT_MAX, SHOUT_MOODS, REACTION_KEYS } from '@chatlol/shared';
+import { REACTIONS, SHOUT_MAX, SHOUT_MOODS, REACTION_KEYS } from '@chatlol/shared';
 import { db, newId, now } from '../db.js';
 import { assertEmojiOwned, resolveSticker, stickerInput } from '../lib/stickers.js';
 import { optionalAuth, requireAuth, uid } from '../lib/auth.js';
 import { HttpError, parse } from '../lib/http.js';
+import { shoutGap } from '../lib/limits.js';
+import { resolveTrack } from '../lib/youtubeApi.js';
 import { authorCache } from '../lib/serialize.js';
 import { grant, notify } from '../lib/rewards.js';
 import { assertClean } from '../lib/moderation.js';
@@ -36,6 +38,7 @@ export async function serializeShout(s, viewerId, author = authorCache(viewerId)
     author: await author(s.authorId),
     body: s.body,
     sticker: s.sticker ?? null,
+    music: s.music ?? null,
     mood: s.mood ?? null,
     mentions: s.mentionHandles ?? [],
     replyTo: replyTo
@@ -74,7 +77,7 @@ shoutsRouter.get('/shouts', optionalAuth, async (req, res) => {
 async function shoutCooldown(userId) {
   const last = await db.shouts.findOne({ authorId: userId }, { sort: { createdAt: -1 }, projection: { createdAt: 1 } });
   if (!last) return 0;
-  return Math.max(0, Math.ceil(SHOUT_COOLDOWN_SEC - (Date.now() - Date.parse(last.createdAt)) / 1000));
+  return Math.max(0, Math.ceil((await shoutGap(userId)) - (Date.now() - Date.parse(last.createdAt)) / 1000));
 }
 
 /** Resolves @handles in the text (up to 5) to users. */
@@ -89,7 +92,7 @@ async function resolveMentions(body, authorId) {
   );
 }
 
-export async function insertShout(authorId, { body, mood = null, replyToId = null, sticker = null }) {
+export async function insertShout(authorId, { body, mood = null, replyToId = null, sticker = null, music = null }) {
   const replyTo = replyToId ? await db.shouts.findOne({ _id: replyToId, hidden: { $ne: true } }) : null;
   if (replyToId && !replyTo) throw new HttpError(404, 'That shout is gone');
   const mentioned = await resolveMentions(body, authorId);
@@ -98,6 +101,7 @@ export async function insertShout(authorId, { body, mood = null, replyToId = nul
     authorId,
     body,
     sticker,
+    music,
     mood,
     replyToId: replyTo?._id ?? null,
     mentions: mentioned.map((u) => u._id),
@@ -147,26 +151,30 @@ shoutsRouter.post('/shouts', requireAuth, async (req, res) => {
         .nullable()
         .optional(),
       replyToId: z.string().max(40).nullable().optional(),
+      music: z.object({ youtubeId: z.string().regex(/^[A-Za-z0-9_-]{11}$/) }).nullable().optional(),
     }),
     req.body,
   );
-  if (!b.body && !b.sticker) throw new HttpError(400, 'Write something or pick a sticker');
+  if (!b.body && !b.sticker && !b.music) throw new HttpError(400, 'Write something or pick a sticker');
+  const music = b.music ? await resolveTrack(b.music.youtubeId) : null;
+  if (b.music && !music) throw new HttpError(400, 'That song can’t be played here');
   await assertCanPost(me);
   assertClean(b.body);
   await assertEmojiOwned(me, b.body);
   const sticker = await resolveSticker(me, b.sticker);
-  // One shout every 45 seconds, enforced cluster-wide.
-  if (!(await shared().setNx(`shout:cd:${me}`, '1', SHOUT_COOLDOWN_SEC * 1000))) {
+  // One shout every 45 seconds (3 with Shout Storm), enforced cluster-wide.
+  const gap = await shoutGap(me);
+  if (!(await shared().setNx(`shout:cd:${me}`, '1', gap * 1000))) {
     const wait = Math.max(1, await shoutCooldown(me));
     throw new HttpError(429, `Next shout in ${wait}s ⏳`, 'shout_cooldown');
   }
-  const shout = await insertShout(me, { body: b.body, mood: b.mood ?? null, replyToId: b.replyToId ?? null, sticker });
+  const shout = await insertShout(me, { body: b.body, mood: b.mood ?? null, replyToId: b.replyToId ?? null, sticker, music });
   if (b.body) screen({ userId: me, text: b.body, ref: { type: 'shout', id: shout._id }, targetId: shout.mentions[0] ?? null });
   const reward = await grant(me, 2, 5, 'Shouted 📣');
   track(me, 'shout');
   res.status(201).json({
     shout: await serializeShout(shout, me),
-    nextShoutAt: new Date(Date.now() + SHOUT_COOLDOWN_SEC * 1000).toISOString(),
+    nextShoutAt: new Date(Date.now() + gap * 1000).toISOString(),
     reward,
   });
 });

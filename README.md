@@ -158,7 +158,8 @@ Everything lives in **`apps/server/.env`** (copy `apps/server/.env.example`). Wi
 | Push — iPhone (APNs, free with your developer account) | `APNS_TEAM_ID`, `APNS_KEY_ID`, `APNS_KEY` (the .p8 key or its path), `APNS_BUNDLE_ID`, `APNS_ENV` (`production` / `sandbox`) |
 | Push — Android (Firebase Cloud Messaging, free) | `FIREBASE_SERVICE_ACCOUNT` (service-account JSON or its path) on the server, and `google-services.json` in `apps/native/` for the app build |
 | Push — web browsers (Web Push, free) | Nothing: VAPID keys are generated once and kept in the database. Set `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` to use your own. People turn it on in Settings → Notifications ("Notifications on this browser"). The desktop app uses system notifications over its live connection. |
-| Song search | Works with no setup: searches Apple Music and plays 30-second previews. Add `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` (free at developer.spotify.com) to search Spotify instead and play full songs. Pasting a Spotify link always works. |
+| Song search | Works with no setup: searches Apple Music and plays 30-second previews. Add `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` (free at developer.spotify.com) to search Spotify instead (Spotify only plays full songs to visitors signed in to Spotify). Pasting a Spotify link always works. |
+| Full-length profile songs | Members can paste a YouTube link as their song (plays in full for everyone, no setup). Add `YOUTUBE_API_KEY` (YouTube Data API v3, console.cloud.google.com) and Spotify / Apple songs are matched to their YouTube version automatically. |
 | Live video | `TURN_URLS`, `TURN_SECRET` |
 
 Store products: create consumables `gems_80`, `gems_450`, `gems_1000`, `gems_2200` and **non-renewing subscriptions** `premium_7d`, `premium_30d`, `premium_90d` in App Store Connect and Play Console, then attach them in RevenueCat.

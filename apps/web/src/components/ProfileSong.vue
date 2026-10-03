@@ -8,6 +8,8 @@ import Icon from './Icon.vue';
  * A member's profile song.
  *  - Spotify songs play in Spotify's embed (iFrame API).
  *  - Apple Music songs (used when the server has no Spotify keys) play their 30-second preview in our own player.
+ *  - Songs with a YouTube version (`youtubeId`: pasted by the member, or matched by the server) play IN FULL from
+ *    YouTube for every visitor — Spotify only plays whole songs to people signed in to Spotify.
  * It starts automatically when the visitor allows it (Settings → "Autoplay profile songs"). Browsers only allow
  * sound after the visitor has interacted with the site: clicking through to a profile inside ChatLOL counts, opening
  * the link fresh in a new tab doesn't. When the browser blocks it, the song starts on the visitor's first click,
@@ -19,7 +21,8 @@ const audio = ref<HTMLAudioElement>();
 const playing = ref(false);
 const blocked = ref(false);
 const progress = ref(0);
-const isApple = () => props.song.source === 'apple';
+const isApple = () => props.song.source === 'apple' && !props.song.youtubeId;
+const isYouTube = () => !!props.song.youtubeId;
 
 /**
  * Blocked by the browser: try again on every click, tap or key press anywhere until the song is actually playing.
@@ -81,6 +84,56 @@ async function mountSpotify() {
     });
   });
 }
+// ——— YouTube (full-length) ———
+type YTPlayer = { playVideo: () => void; pauseVideo: () => void; destroy: () => void; getCurrentTime: () => number; getDuration: () => number; seekTo: (s: number, a: boolean) => void };
+type YTNs = { Player: new (el: HTMLElement, o: object) => YTPlayer; PlayerState: { PLAYING: number } };
+const yw = window as unknown as { YT?: YTNs; onYouTubeIframeAPIReady?: () => void; __ytApi?: Promise<YTNs> };
+function loadYouTube(): Promise<YTNs> {
+  yw.__ytApi ??= new Promise((resolve) => {
+    if (yw.YT?.Player) return resolve(yw.YT);
+    const prev = yw.onYouTubeIframeAPIReady;
+    yw.onYouTubeIframeAPIReady = () => (prev?.(), resolve(yw.YT!));
+    const sc = document.createElement('script');
+    sc.src = 'https://www.youtube.com/iframe_api';
+    sc.async = true;
+    document.head.appendChild(sc);
+  });
+  return yw.__ytApi;
+}
+const ytHost = ref<HTMLElement>();
+let yt: YTPlayer | null = null;
+let ytTimer: ReturnType<typeof setInterval> | undefined;
+async function mountYouTube() {
+  const YT = await loadYouTube();
+  if (!ytHost.value) return;
+  const el = document.createElement('div');
+  ytHost.value.replaceChildren(el);
+  const id = props.song.youtubeId!;
+  yt = new YT.Player(el, {
+    videoId: id,
+    host: 'https://www.youtube-nocookie.com',
+    width: '100%',
+    height: '100%',
+    playerVars: { autoplay: props.autoplay ? 1 : 0, playsinline: 1, controls: 0, rel: 0, modestbranding: 1, loop: 1, playlist: id, iv_load_policy: 3 },
+    events: {
+      onReady: () => {
+        if (!props.autoplay) return;
+        yt?.playVideo();
+        setTimeout(() => !playing.value && waitForInteraction(), 2500);
+      },
+      onStateChange: (e: { data: number }) => {
+        playing.value = e.data === YT.PlayerState.PLAYING;
+        if (playing.value) { blocked.value = false; stopWaiting(); }
+      },
+    },
+  });
+  clearInterval(ytTimer);
+  ytTimer = setInterval(() => {
+    const d = yt?.getDuration?.() ?? 0;
+    progress.value = d ? (yt!.getCurrentTime() ?? 0) / d : 0;
+  }, 500);
+}
+
 async function mountApple() {
   if (!props.autoplay || !audio.value) return;
   try { await audio.value.play(); } catch { waitForInteraction(); }
@@ -91,14 +144,18 @@ function mount() {
   playing.value = false;
   controller?.destroy();
   controller = null;
-  if (isApple()) void mountApple();
+  yt?.destroy();
+  yt = null;
+  if (isYouTube()) void mountYouTube();
+  else if (isApple()) void mountApple();
   else void mountSpotify();
 }
 onMounted(mount);
-watch(() => props.song.id, mount);
-onUnmounted(() => { stopWaiting(); controller?.destroy(); audio.value?.pause(); });
+watch(() => [props.song.id, props.song.youtubeId], mount);
+onUnmounted(() => { stopWaiting(); controller?.destroy(); yt?.destroy(); clearInterval(ytTimer); audio.value?.pause(); });
 /** Try to play; if the browser still says no, keep waiting for the next interaction. */
 function playNow() {
+  if (isYouTube()) return yt?.playVideo();
   if (isApple()) {
     void audio.value?.play().then(() => { blocked.value = false; stopWaiting(); }).catch(() => waitForInteraction());
   } else controller?.play();
@@ -108,11 +165,18 @@ function play() {
   playNow();
 }
 function toggle() {
+  if (isYouTube()) return playing.value ? yt?.pauseVideo() : play();
   if (!audio.value) return;
   if (audio.value.paused) play();
   else audio.value.pause();
 }
 function seek(e: MouseEvent) {
+  const r0 = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  if (isYouTube()) {
+    const d = yt?.getDuration() ?? 0;
+    if (d) yt!.seekTo(((e.clientX - r0.left) / r0.width) * d, true);
+    return;
+  }
   const a = audio.value;
   if (!a?.duration) return;
   const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -122,7 +186,25 @@ function seek(e: MouseEvent) {
 
 <template>
   <div class="rounded-md overflow-hidden relative bg-black/20">
-    <template v-if="song.source === 'apple'">
+    <!-- Full-length song from YouTube: the (small, visible) YouTube player plus our controls. -->
+    <template v-if="song.youtubeId">
+      <div class="flex items-center gap-3 p-2.5 bg-[#141414] text-white">
+        <div class="relative w-[112px] aspect-video rounded overflow-hidden shrink-0 bg-black"><div ref="ytHost" class="absolute inset-0 [&>iframe]:w-full [&>iframe]:h-full" /></div>
+        <div class="min-w-0 flex-1">
+          <p class="text-label-lg truncate">{{ song.title || 'Profile song' }}</p>
+          <p class="text-body-sm opacity-70 truncate">{{ song.artist }}</p>
+          <div class="mt-2 h-1.5 rounded-full bg-white/20 cursor-pointer" @click="seek"><div class="h-full rounded-full bg-[#ff0033]" :style="{ width: `${progress * 100}%` }" /></div>
+        </div>
+        <button class="w-11 h-11 rounded-full bg-white text-black flex items-center justify-center shrink-0" :aria-label="playing ? 'Pause' : 'Play'" @click="toggle"><Icon :name="playing ? 'pause' : 'play_arrow'" fill /></button>
+      </div>
+      <p class="px-3 py-1 text-[11px] bg-[#141414] text-white/60 flex justify-between gap-2">
+        <span>Full song · via YouTube</span>
+        <a v-if="song.source === 'spotify'" :href="spotifyOpenUrl(song)" target="_blank" rel="noopener" class="hover:text-white">Open in Spotify ↗</a>
+        <a v-else-if="song.linkUrl" :href="song.linkUrl" target="_blank" rel="noopener" class="hover:text-white">Apple Music ↗</a>
+        <a v-else :href="`https://www.youtube.com/watch?v=${song.youtubeId}`" target="_blank" rel="noopener" class="hover:text-white">YouTube ↗</a>
+      </p>
+    </template>
+    <template v-else-if="song.source === 'apple'">
       <div class="flex items-center gap-3 p-2.5 bg-[#1c1c1e] text-white">
         <img v-if="song.artUrl" :src="song.artUrl" alt="" class="w-14 h-14 rounded object-cover shrink-0" />
         <div v-else class="w-14 h-14 rounded bg-white/10 flex items-center justify-center shrink-0"><Icon name="music_note" /></div>
@@ -140,6 +222,6 @@ function seek(e: MouseEvent) {
     <button v-if="blocked" class="absolute inset-0 bg-black/55 text-white flex items-center justify-center gap-2 text-label-lg backdrop-blur-sm" @click="play">
       <Icon name="play_circle" fill /> Play {{ song.title || 'their song' }}
     </button>
-    <a v-if="song.source !== 'apple'" :href="spotifyOpenUrl(song)" target="_blank" rel="noopener" class="sr-only">Open in Spotify</a>
+    <a v-if="song.source === 'spotify' && !song.youtubeId" :href="spotifyOpenUrl(song)" target="_blank" rel="noopener" class="sr-only">Open in Spotify</a>
   </div>
 </template>

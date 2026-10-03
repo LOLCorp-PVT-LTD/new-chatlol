@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import type { StickerInput } from '@chatlol/shared';
 import EmojiButton from './EmojiButton.vue';
+import MusicPicker from './MusicPicker.vue';
+import MusicCard from './MusicCard.vue';
+import type { MusicTrack } from '@chatlol/shared';
 import { insertAtCaret } from '../lib/insertAtCaret';
 import { computed, onUnmounted, ref, watch } from 'vue';
 import type { Shout, UserPublic } from '@chatlol/shared';
@@ -43,11 +46,15 @@ function pickMention(u: UserPublic) {
 
 const box = ref<HTMLTextAreaElement>();
 const addEmoji = (t: string) => (body.value = insertAtCaret(box.value, body.value, t));
+/** A song from YouTube that plays with the shout. */
+const music = ref<MusicTrack | null>(null);
+const picking = ref(false);
 async function send(sticker: StickerInput | null = null) {
-  if ((!body.value.trim() && !sticker) || busy.value || wait.value) return;
+  if ((!body.value.trim() && !sticker && !music.value) || busy.value || wait.value) return;
   busy.value = true;
   try {
-    const r = await api.shout({ body: body.value.trim(), mood: mood.value, replyToId: props.replyTo?.id ?? null, sticker });
+    const r = await api.shout({ body: body.value.trim(), mood: mood.value, replyToId: props.replyTo?.id ?? null, sticker, music: music.value && !sticker ? { youtubeId: music.value.youtubeId ?? music.value.id } : null });
+    music.value = null;
     nextAt.value = r.nextShoutAt;
     body.value = '';
     mood.value = null;
@@ -78,12 +85,15 @@ async function send(sticker: StickerInput | null = null) {
         </div>
       </div>
     </div>
+    <div v-if="music" class="relative"><MusicCard :track="music" compact /><button type="button" class="absolute -top-2 left-[340px] btn-icon w-7 h-7 bg-surface shadow-warm" aria-label="Remove song" @click="music = null"><Icon name="close" :size="16" /></button></div>
+    <MusicPicker v-if="picking" @close="picking = false" @pick="(t) => ((music = t), (picking = false))" />
     <div class="flex items-center gap-2 flex-wrap">
       <button v-for="m in compact ? [] : SHOUT_MOODS" :key="m.key" type="button" class="chip h-8 text-label-sm" :class="{ 'chip-active': mood === m.key }" @click="mood = mood === m.key ? null : m.key">{{ m.emoji }} {{ m.label }}</button>
       <span class="flex-1" />
+      <button type="button" class="btn-icon w-9 h-9" aria-label="Add a song" title="Add a song" @click="picking = true"><Icon name="music_note" :size="20" /></button>
       <EmojiButton stickers @insert="addEmoji" @sticker="send" />
       <span class="text-label-md tabular-nums" :class="left < 15 ? 'text-error' : 'text-on-surface-variant'">{{ left }}</span>
-      <button class="btn-primary h-10" :disabled="!body.trim() || busy || wait > 0">
+      <button class="btn-primary h-10" :disabled="(!body.trim() && !music) || busy || wait > 0">
         <template v-if="wait"><Icon name="hourglass_top" :size="18" /> {{ wait }}s</template>
         <template v-else><Icon name="campaign" :size="18" /> Shout</template>
       </button>

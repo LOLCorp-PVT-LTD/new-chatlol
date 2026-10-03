@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db.js';
+import { EXCHANGE } from '@chatlol/shared';
+import { currentFestival, ensureFestivalLounge } from '../lib/festivals.js';
 import { optionalAuth } from '../lib/auth.js';
 import { authorCache, serializePost, serializePosts, serializeTake, serializeThread } from '../lib/serialize.js';
 import { presence } from '../lib/presence.js';
@@ -65,7 +67,7 @@ homeRouter.get('/home', optionalAuth, async (req, res) => {
       .toArray(),
     ensureDrop(),
     db.hotTakes.find({ resolved: false }).sort({ agreePool: -1 }).limit(3).toArray(),
-    db.lounges.find({}).sort({ position: 1 }).toArray(),
+    db.lounges.find({ $or: [{ expiresAt: null }, { expiresAt: { $exists: false } }, { expiresAt: { $gt: new Date().toISOString() } }] }).sort({ position: 1 }).toArray(),
     db.users
       .find({ deletedAt: null, isAi: false, 'moderation.status': { $ne: 'banned' } })
       .sort({ createdAt: -1 })
@@ -107,8 +109,30 @@ homeRouter.get('/home', optionalAuth, async (req, res) => {
     (await db.posts.find({ systemKey: { $in: birthdays.map((u) => birthdayKey(u._id, year)) } }, { projection: { systemKey: 1 } }).toArray()).map((p) => [p.systemKey, p._id]),
   );
 
+  // Royalty: the richest members, by total wealth in Sparks (Gems and Gold valued at the exchange rate).
+  const GEM = EXCHANGE.sparksPerGem;
+  const GOLD = EXCHANGE.gemsPerGold * GEM;
+  const richest = await db.users
+    .aggregate([
+      { $match: { deletedAt: null, isAi: { $ne: true }, 'moderation.status': { $ne: 'banned' }, _id: { $nin: blocked } } },
+      { $addFields: { worth: { $add: [{ $ifNull: ['$sparks', 0] }, { $multiply: [{ $ifNull: ['$gems', 0] }, GEM] }, { $multiply: [{ $ifNull: ['$gold', 0] }, GOLD] }] } } },
+      { $match: { worth: { $gt: 0 } } },
+      { $sort: { worth: -1 } },
+      { $limit: 10 },
+      { $project: { _id: 1, sparks: 1, gems: 1, gold: 1, worth: 1 } },
+    ])
+    .toArray();
+
+  // Festival season: the Home banner, and its lounge (opened on first visit).
+  const festival = await currentFestival();
+  const festivalLounge = festival ? await ensureFestivalLounge(festival) : null;
+
   res.json({
     stats: { members, online: await presence.count() },
+    festival: festival ? { ...festival, loungeId: festivalLounge?._id ?? null } : null,
+    royalty: await Promise.all(
+      richest.map(async (u, i) => ({ rank: i + 1, user: await author(u._id), sparks: u.sparks ?? 0, gems: u.gems ?? 0, gold: u.gold ?? 0, worth: u.worth })),
+    ),
     popularMembers: popularUsers.slice(0, 10),
     rate: rateNext ? await serializePost(rateNext, viewer, author) : null,
     forums: await Promise.all(

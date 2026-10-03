@@ -6,6 +6,8 @@ import { db, newId, now, isDuplicateKey } from '../db.js';
 import { assertEmojiOwned, resolveSticker, stickerInput, stickerPreview } from '../lib/stickers.js';
 import { optionalAuth, requireAuth, uid } from '../lib/auth.js';
 import { HttpError, parse, rateLimit } from '../lib/http.js';
+import { postLimit } from '../lib/limits.js';
+import { resolveTrack } from '../lib/youtubeApi.js';
 import { serializePost, serializePosts, serializeComment, authorCache, invalidateStats, userPublic } from '../lib/serialize.js';
 import { grant, notify, progressRatingQuest, recordDropStreak, ticker } from '../lib/rewards.js';
 import { assertClean } from '../lib/moderation.js';
@@ -142,6 +144,8 @@ const createSchema = z.object({
   album: z.string().trim().max(30).nullable().optional(),
   /** false = add to the profile gallery without posting to the news feed. */
   inFeed: z.boolean().optional(),
+  /** A song from YouTube that plays with the post. */
+  music: z.object({ youtubeId: z.string().regex(/^[A-Za-z0-9_-]{11}$/) }).nullable().optional(),
 });
 
 export async function insertPost(authorId, b) {
@@ -160,6 +164,7 @@ export async function insertPost(authorId, b) {
     album: b.mediaUrl ? (b.album ?? null) : null,
     inFeed: b.mediaUrl ? b.inFeed !== false : true,
     battle: b.battle ? b.battle.map((o) => ({ id: newId(), label: o.label, mediaUrl: o.mediaUrl ?? null, votes: 0 })) : null,
+    music: b.musicTrack ?? null,
     r1: 0,
     r2: 0,
     r3: 0,
@@ -180,9 +185,13 @@ export async function insertPost(authorId, b) {
 
 postsRouter.post('/posts', requireAuth, async (req, res) => {
   const me = uid(req);
-  await rateLimit(`post:${me}`, 6);
+  await postLimit(me, 'post', 6);
   const b = parse(createSchema, req.body);
-  if (!b.body.trim() && !b.mediaUrl && !b.battle) throw new HttpError(400, 'Say something or add a photo');
+  if (!b.body.trim() && !b.mediaUrl && !b.battle && !b.music) throw new HttpError(400, 'Say something or add a photo');
+  if (b.music) {
+    b.musicTrack = await resolveTrack(b.music.youtubeId);
+    if (!b.musicTrack) throw new HttpError(400, 'That song can’t be played here');
+  }
   await assertCanPost(me);
   const text = b.body + ' ' + (b.battle?.map((o) => o.label).join(' ') ?? '');
   assertClean(text);
@@ -262,7 +271,7 @@ async function ratingReward(me) {
 
 postsRouter.post('/posts/:id/rate', requireAuth, async (req, res) => {
   const me = uid(req);
-  await rateLimit(`rate:${me}`, 90);
+  await postLimit(me, 'rate', 90);
   const { score } = parse(z.object({ score: z.number().int().min(1).max(5) }), req.body);
   const r = await applyRating(String(req.params.id), me, score);
   const reward = r.isNew ? await ratingReward(me) : null;
@@ -342,7 +351,7 @@ export async function insertComment(postId, authorId, body, sticker = null) {
 
 postsRouter.post('/posts/:id/comments', requireAuth, async (req, res) => {
   const me = uid(req);
-  await rateLimit(`comment:${me}`, 20);
+  await postLimit(me, 'comment', 20);
   const { body, sticker: stickerIn } = parse(z.object({ body: z.string().trim().max(500).default(''), sticker: stickerInput }), req.body);
   if (!body && !stickerIn) throw new HttpError(400, 'Write something or pick a sticker');
   await assertCanPost(me);
@@ -495,7 +504,7 @@ postsRouter.get('/roulette/next', requireAuth, async (req, res) => {
 
 postsRouter.post('/roulette/vote', requireAuth, async (req, res) => {
   const me = uid(req);
-  await rateLimit(`rate:${me}`, 90);
+  await postLimit(me, 'rate', 90);
   const b = parse(z.object({ postId: z.string(), score: z.number().int().min(1).max(5) }), req.body);
   if (await db.ratings.findOne({ postId: b.postId, userId: me })) throw new HttpError(409, 'Already rated that one');
   const r = await applyRating(b.postId, me, b.score);

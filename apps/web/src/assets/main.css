@@ -4,6 +4,8 @@
 @tailwind utilities;
 
 @layer base {
+  /* Fine grain that makes glass read as frosted rather than clear. */
+  :root { --frost: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
   html { @apply bg-surface; -webkit-tap-highlight-color: transparent; }
   /* A profile page paints the member's background on the whole window (see ProfileView). */
   html.has-profile-bg { background: var(--profile-bg) !important; background-attachment: fixed !important; min-height: 100%; }
@@ -17,7 +19,17 @@
       radial-gradient(38% 40% at 92% 18%, rgb(var(--c-flame) / .32), transparent 70%),
       radial-gradient(45% 40% at 70% 95%, rgb(var(--c-primary-container) / .26), transparent 70%),
       radial-gradient(35% 35% at 5% 85%, rgb(var(--c-tangerine) / .24), transparent 70%);
-    filter: blur(20px); animation: ambient 40s ease-in-out infinite alternate; }
+    animation: ambient 40s ease-in-out infinite alternate; }
+  /* Crisper orbs on top of the soft glow: glass panels moving over them shows the blur. */
+  body::after { content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background:
+      radial-gradient(circle at 18% 30%, rgb(var(--c-tangerine) / .4) 0 80px, transparent 110px),
+      radial-gradient(circle at 82% 62%, rgb(var(--c-flame) / .32) 0 115px, transparent 150px),
+      radial-gradient(circle at 55% 12%, rgb(var(--c-primary-container) / .28) 0 50px, transparent 75px),
+      radial-gradient(circle at 35% 88%, rgb(var(--c-flame) / .26) 0 95px, transparent 130px);
+    animation: ambient 60s ease-in-out infinite alternate-reverse; }
+  [data-theme='dark'] body::after { opacity: .6; }
+  html.has-profile-bg body::after { display: none; }
   [data-theme='dark'] body::before { opacity: .55; }
   html.has-profile-bg body::before { display: none; }
   @keyframes ambient { to { transform: translate3d(2%, -3%, 0) scale(1.06); } }
@@ -30,29 +42,30 @@
   /* Iconsax (iconsax-font-icon): light, rounded line icons. */
   .icon { display: inline-flex; align-items: center; justify-content: center; font-style: normal; line-height: 1; font-size: 20px; width: 1em; height: 1em; flex-shrink: 0; }
   /* Frosted glass panel: translucent surface, blur, a hairline light edge and a soft top highlight. */
-  .card { @apply rounded-lg shadow-warm; background: rgb(var(--c-surface-container-lowest) / .62);
-    -webkit-backdrop-filter: blur(22px) saturate(160%); backdrop-filter: blur(22px) saturate(160%);
-    border: 1px solid rgb(255 255 255 / .55); box-shadow: inset 0 1px 0 rgb(255 255 255 / .6), 0 8px 32px -12px rgb(var(--c-flame) / .18); }
-  [data-theme='dark'] .card { background: rgb(var(--c-surface-container-lowest) / .55); border-color: rgb(255 255 255 / .08);
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / .06), 0 10px 36px -14px rgb(0 0 0 / .6); }
+  .card { @apply rounded-lg shadow-warm; position: relative; background-color: rgb(var(--c-surface-container-lowest) / .5);
+    background-image: var(--frost); background-blend-mode: overlay;
+    -webkit-backdrop-filter: blur(40px) saturate(180%); backdrop-filter: blur(40px) saturate(180%);
+    border: 1px solid rgb(255 255 255 / .55); box-shadow: inset 0 1px 0 rgb(255 255 255 / .65), 0 8px 32px -12px rgb(var(--c-flame) / .22); }
+  [data-theme='dark'] .card { background-color: rgb(var(--c-surface-container-lowest) / .45); border-color: rgb(255 255 255 / .09);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / .07), 0 10px 36px -14px rgb(0 0 0 / .6); }
   .glass-panel { @apply card; }
   .btn { @apply inline-flex items-center justify-center gap-2 rounded-full font-bold text-label-lg px-5 h-11 transition-all active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none; }
   .btn-primary { @apply btn bg-sunset text-white shadow-float hover:brightness-110; }
   .btn-secondary { @apply btn bg-sunlit text-flame hover:bg-primary-fixed; }
   .btn-ghost { @apply btn text-on-surface hover:bg-flame/10; }
   .btn-icon { @apply inline-flex items-center justify-center rounded-full w-11 h-11 transition-all hover:bg-surface-container-high active:scale-95 text-on-surface-variant; }
-  .chip { @apply inline-flex items-center gap-1.5 rounded-full px-3.5 h-9 text-label-md border border-sandstone/70 bg-surface-container-lowest/60 backdrop-blur-md whitespace-nowrap transition-all active:scale-95; }
+  .chip { @apply inline-flex items-center gap-1.5 rounded-full px-3.5 h-9 text-label-md border border-sandstone/70 bg-surface-container-lowest/50 backdrop-blur-xl whitespace-nowrap transition-all active:scale-95; }
   .chip-active { @apply bg-umber text-cream border-umber; }
   /* A selected / active state (picked reaction, active tab, chosen option). Bright orange in light mode; in dark
      mode a deep brown with an orange edge, so the emoji or label on it stays readable. */
   .is-on { background-image: linear-gradient(135deg, rgb(var(--c-tangerine)), rgb(var(--c-flame))); color: #fff; border-color: transparent; }
   [data-theme='dark'] .is-on { background-image: none; background-color: rgb(var(--c-sel-bg)); color: rgb(var(--c-sel-fg)); box-shadow: inset 0 0 0 1.5px rgb(var(--c-sel-border)); }
   [data-theme='dark'] .chip-active { background-color: rgb(var(--c-sel-bg)); color: rgb(var(--c-sel-fg)); border-color: rgb(var(--c-sel-border)); }
-  .input { @apply w-full h-[52px] rounded-full bg-surface-container-lowest/70 backdrop-blur-md border border-sandstone/80 px-6 text-body-lg text-on-surface placeholder:text-outline
+  .input { @apply w-full h-[52px] rounded-full bg-surface-container-lowest/55 backdrop-blur-xl border border-sandstone/80 px-6 text-body-lg text-on-surface placeholder:text-outline
     focus:outline-none focus:border-flame focus:border-2 focus:ring-4 focus:ring-flame/15 transition; }
   .textarea { @apply input h-auto rounded-md py-4 resize-none; }
   .label { @apply text-label-sm uppercase tracking-wider text-on-surface-variant; }
-  .glass { @apply bg-surface/60 backdrop-blur-2xl backdrop-saturate-150; }
+  .glass { @apply bg-surface/55; background-image: var(--frost); -webkit-backdrop-filter: blur(36px) saturate(180%); backdrop-filter: blur(36px) saturate(180%); }
   .btn-secondary { -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
   .skeleton { background: linear-gradient(90deg, rgb(var(--c-surface-container)) 0px, rgb(var(--c-surface-container-high)) 80px, rgb(var(--c-surface-container)) 160px);
     background-size: 800px 100%; @apply animate-shimmer; }

@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { DM_SPARK_COST, REWARDS } from '@chatlol/shared';
+import { DM_SPARK_COST, LOUNGE_LIMIT, REWARDS, can, hasPower } from '@chatlol/shared';
 import { db, newId, now, isDuplicateKey, isObjectIdHex } from '../db.js';
 import { assertEmojiOwned, resolveSticker, stickerInput, stickerPreview } from '../lib/stickers.js';
 import { optionalAuth, requireAuth, uid } from '../lib/auth.js';
 import { HttpError, parse, rateLimit } from '../lib/http.js';
+import { postLimit } from '../lib/limits.js';
 import {
   serializeThread,
   serializeReply,
@@ -131,7 +132,7 @@ export async function insertReply(threadId, authorId, body) {
 
 socialRouter.post('/forums', requireAuth, async (req, res) => {
   const me = uid(req);
-  await rateLimit(`thread:${me}`, 3);
+  await postLimit(me, 'thread', 3);
   const b = parse(
     z.object({ board: z.string(), title: z.string().trim().min(4).max(120), body: z.string().trim().min(1).max(4000) }),
     req.body,
@@ -149,7 +150,7 @@ socialRouter.post('/forums', requireAuth, async (req, res) => {
 
 socialRouter.post('/forums/:id/replies', requireAuth, async (req, res) => {
   const me = uid(req);
-  await rateLimit(`reply:${me}`, 20);
+  await postLimit(me, 'reply', 20);
   const { body } = parse(z.object({ body: z.string().trim().min(1).max(2000) }), req.body);
   await assertCanPost(me);
   await assertLevel(me, 'forum');
@@ -188,7 +189,8 @@ const recentMessages = (roomType, roomId, limit, extra = {}) =>
     .limit(limit)
     .toArray();
 
-export async function serializeLounge(l, author) {
+/** `viewer`: the signed-in user's record (for canManage), if any. */
+export async function serializeLounge(l, author, viewer = null) {
   const ids = await shared().smembers(loungeKey(l._id));
   const recent = (
     await db.messages
@@ -216,14 +218,25 @@ export async function serializeLounge(l, author) {
     onlineCount: active.size,
     memberPreview: await Promise.all(previewIds.map(author)),
     isLive: active.size > 0,
+    owner: l.ownerId ? await author(l.ownerId) : null,
+    festival: l.festival ?? null,
+    radio: !!l.radio,
+    expiresAt: l.expiresAt ?? null,
+    canManage: !!viewer && (l.ownerId === viewer._id || can(viewer, 'lounges')),
   };
 }
 
+const viewerOf = (req) => (req.userId ? db.users.findOne({ _id: req.userId }, { projection: { role: 1, perms: 1 } }) : null);
+/** Seasonal lounges close when their festival ends. */
+const openLounges = () => ({ $or: [{ expiresAt: null }, { expiresAt: { $exists: false } }, { expiresAt: { $gt: now() } }] });
+
 socialRouter.get('/lounges', optionalAuth, async (req, res) => {
   const author = authorCache(req.userId);
-  const rows = await db.lounges.find({}).sort({ position: 1 }).toArray();
-  const lounges = await Promise.all(rows.map((l) => serializeLounge(l, author)));
-  res.json({ lounges: lounges.sort((a, b) => b.onlineCount - a.onlineCount) });
+  const viewer = await viewerOf(req);
+  const rows = await db.lounges.find(openLounges()).sort({ position: 1 }).toArray();
+  const lounges = await Promise.all(rows.map((l) => serializeLounge(l, author, viewer)));
+  // Festival lounges first while they're on, then the busiest.
+  res.json({ lounges: lounges.sort((a, b) => Number(!!b.festival) - Number(!!a.festival) || b.onlineCount - a.onlineCount) });
 });
 
 socialRouter.get('/lounges/:id', optionalAuth, async (req, res) => {
@@ -231,7 +244,84 @@ socialRouter.get('/lounges/:id', optionalAuth, async (req, res) => {
   if (!l) throw new HttpError(404, 'Lounge not found');
   const author = authorCache(req.userId);
   const rows = (await recentMessages('lounge', l._id, 60)).reverse();
-  res.json({ lounge: await serializeLounge(l, author), messages: await Promise.all(rows.map((m) => serializeMessage(m, author))) });
+  res.json({ lounge: await serializeLounge(l, author, await viewerOf(req)), messages: await Promise.all(rows.map((m) => serializeMessage(m, author))) });
+});
+
+// ——— Making and managing lounges ———
+// Members from level 10 (Settings → level gates) can open their own: 1 at a time, 3 with Premium. Owners edit and
+// delete theirs; staff with the Lounges permission can manage any (deleting someone else's needs a reason, logged).
+const loungeBody = z.object({
+  name: z.string().trim().min(3).max(40),
+  emoji: z.string().trim().min(1).max(8),
+  topic: z.string().trim().max(120).default(''),
+  nowPlaying: z.string().trim().max(80).default(''),
+  coverUrl: z.string().url().max(600).nullable().optional(),
+  /** Live radio in this lounge (everyone hears the same song; listeners vote on what's next). */
+  radio: z.boolean().optional(),
+});
+const slugify = (name) =>
+  name.toLowerCase().normalize('NFKD').replace(/[^\w\s-]/g, '').trim().replace(/[\s_]+/g, '-').slice(0, 32) || 'lounge';
+
+socialRouter.post('/lounges', requireAuth, async (req, res) => {
+  const me = uid(req);
+  await rateLimit(`lounge:create:${me}`, 3);
+  const b = parse(loungeBody, req.body);
+  assertClean(`${b.name} ${b.topic} ${b.nowPlaying}`);
+  const u = await db.users.findOne({ _id: me }, { projection: { role: 1, perms: 1, premium: 1 } });
+  const staff = can(u, 'lounges');
+  if (!staff) {
+    await assertLevel(me, 'lounge');
+    const limit = isPremium(u) ? LOUNGE_LIMIT.premium : LOUNGE_LIMIT.member;
+    if ((await db.lounges.countDocuments({ ownerId: me })) >= limit)
+      throw new HttpError(409, `You can have ${limit} lounge${limit === 1 ? '' : 's'} at a time${isPremium(u) ? '' : ' — 3 with Premium 👑'}`, 'lounge_limit');
+  }
+  let slug = slugify(b.name);
+  if (await db.lounges.findOne({ slug })) slug = `${slug}-${newId().slice(-5)}`;
+  const last = await db.lounges.find({}).sort({ position: -1 }).limit(1).toArray();
+  const doc = {
+    _id: newId(), slug, name: b.name, emoji: b.emoji, topic: b.topic, nowPlaying: b.nowPlaying,
+    coverUrl: b.coverUrl || `https://picsum.photos/seed/${slug}/800/500`,
+    ownerId: staff && req.body.official ? null : me, position: (last[0]?.position ?? 0) + 1, createdAt: now(), radio: b.radio ?? true,
+  };
+  await db.lounges.insertOne(doc);
+  track(me, 'lounge');
+  res.status(201).json({ lounge: await serializeLounge(doc, authorCache(me), u) });
+});
+
+async function manageable(req) {
+  const me = uid(req);
+  const l = await db.lounges.findOne(byIdOrSlug(req.params.id));
+  if (!l) throw new HttpError(404, 'Lounge not found');
+  const u = await db.users.findOne({ _id: me }, { projection: { role: 1, perms: 1 } });
+  const owner = l.ownerId === me;
+  if (!owner && !can(u, 'lounges')) throw new HttpError(403, 'Only the lounge’s owner or staff can change it');
+  return { me, l, u, owner };
+}
+
+socialRouter.patch('/lounges/:id', requireAuth, async (req, res) => {
+  const { me, l, u } = await manageable(req);
+  const b = parse(loungeBody.partial(), req.body);
+  assertClean(`${b.name ?? ''} ${b.topic ?? ''} ${b.nowPlaying ?? ''}`);
+  const set = Object.fromEntries(Object.entries(b).filter(([, v]) => v !== undefined));
+  if (Object.keys(set).length) await db.lounges.updateOne({ _id: l._id }, { $set: set });
+  const fresh = await db.lounges.findOne({ _id: l._id });
+  io()?.to(room.lounge(l._id)).emit('lounge:updated', await serializeLounge(fresh, authorCache(me), null));
+  res.json({ lounge: await serializeLounge(fresh, authorCache(me), u) });
+});
+
+socialRouter.delete('/lounges/:id', requireAuth, async (req, res) => {
+  const { me, l, owner } = await manageable(req);
+  const reason = String(req.body?.reason ?? '').trim().slice(0, 300);
+  if (!owner && l.ownerId && reason.length < 5) throw new HttpError(400, 'Give a reason for deleting someone else’s lounge');
+  await db.lounges.deleteOne({ _id: l._id });
+  await db.messages.deleteMany({ roomType: 'lounge', roomId: l._id });
+  io()?.to(room.lounge(l._id)).emit('lounge:deleted', { loungeId: l._id });
+  if (!owner) {
+    const { audit } = await import('./admin.js');
+    await audit(l.ownerId ?? me, 'lounge_deleted', `Lounge “${l.name}” deleted${reason ? `: ${reason}` : ''}`, me, { review: { reason } });
+    if (l.ownerId) await notify(l.ownerId, { kind: 'system', title: `Your lounge “${l.name}” was removed`, body: reason || 'Removed by the ChatLOL team', link: '/lounges' });
+  }
+  res.json({ ok: true });
 });
 
 export { recentMessages };
@@ -417,12 +507,12 @@ socialRouter.post('/conversations/:id/messages', requireAuth, async (req, res) =
     }))
   )
     throw new HttpError(403, "You can't message this person");
-  // DMs to real people cost Sparks (Premium members and chats with AI personas are free).
+  // DMs to real people cost Sparks (Premium members, Free Talk power-ups and chats with AI personas are free).
   const [sender, other] = await Promise.all([
-    db.users.findOne({ _id: me }, { projection: { premium: 1 } }),
+    db.users.findOne({ _id: me }, { projection: { premium: 1, powers: 1 } }),
     otherId ? db.users.findOne({ _id: otherId }, { projection: { isAi: 1 } }) : null,
   ]);
-  if (other && !other.isAi && !isPremium(sender)) {
+  if (other && !other.isAi && !isPremium(sender) && !hasPower(sender, 'free_talk')) {
     const paid = await db.users.updateOne({ _id: me, sparks: { $gte: DM_SPARK_COST } }, { $inc: { sparks: -DM_SPARK_COST } });
     if (!paid.modifiedCount)
       throw new HttpError(402, `Messages cost ${DM_SPARK_COST} Sparks — earn more, or go Premium to message free`, 'insufficient_sparks');

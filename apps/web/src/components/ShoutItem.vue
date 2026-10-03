@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import MusicCard from './MusicCard.vue';
+import VideoEmbeds from './VideoEmbeds.vue';
+import { withoutVideos } from '@chatlol/shared';
 import RemovedNote from './RemovedNote.vue';
 import { confirmDialog, reportDialog } from '../lib/dialog';
 import RichText from './RichText.vue';
@@ -53,7 +56,9 @@ async function report() {
         ↪ <b>@{{ shout.replyTo.author.handle }}</b> {{ shout.replyTo.body }}
       </RouterLink>
       <RemovedNote v-if="shout.removed" what="shout" :removed="shout.removed" class="mt-1" />
-      <p v-else-if="shout.body" class="mt-1 break-words" :class="compact ? 'text-body-md' : 'text-body-lg'"><RichText :text="shout.body" tags /></p>
+      <p v-else-if="withoutVideos(shout.body)" class="mt-1 break-words" :class="compact ? 'text-body-md' : 'text-body-lg'"><RichText :text="shout.body" tags videos /></p>
+      <VideoEmbeds v-if="!shout.removed" :text="shout.body" :max="1" :compact="compact" class="mt-2" />
+      <MusicCard v-if="shout.music && !shout.removed" :track="shout.music" compact class="mt-2" />
       <StickerView v-if="shout.sticker" :sticker="shout.sticker" :size="compact ? 96 : 128" class="mt-1" />
       <div class="flex items-center gap-1 mt-2 flex-wrap">
         <button v-for="r in REACTIONS" :key="r.key" class="rounded-full px-2 h-8 text-body-sm flex items-center gap-1 transition active:scale-90"

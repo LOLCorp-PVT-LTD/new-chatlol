@@ -1,4 +1,7 @@
-import { ARENA_MIN_STAKE } from '@chatlol/shared';
+import { ARENA_MIN_STAKE, PROFILE_ACCENTS, PROFILE_BACKGROUNDS } from '@chatlol/shared';
+import { DEFAULT_SETTINGS } from '../lib/serialize.js';
+import { recordProfileView } from '../routes/profile.js';
+import { notify } from '../lib/rewards.js';
 import { db, newId, now, today } from '../db.js';
 import { config } from '../config.js';
 import { bus } from '../lib/events.js';
@@ -8,7 +11,7 @@ import { localCheck, deepCheck } from '../lib/moderation.js';
 import { grant } from '../lib/rewards.js';
 import { shared } from '../lib/shared.js';
 import { applyRating, insertComment, insertPost } from '../routes/posts.js';
-import { insertDm, insertLoungeMessage, insertReply, insertThread, loungeKey, markRead, recentMessages } from '../routes/social.js';
+import { getOrCreateDm, insertDm, insertLoungeMessage, insertReply, insertThread, loungeKey, markRead, recentMessages } from '../routes/social.js';
 import { placeStake, newTake } from '../routes/arena.js';
 import { insertStreamMessage } from '../routes/live.js';
 import { insertShout, reactToShout } from '../routes/shouts.js';
@@ -509,6 +512,85 @@ async function actFollowBack(r) {
   for (const f of fans) await db.follows.insertIfMissing({ followerId: r.userId, followeeId: f.followerId }, { createdAt: now() });
 }
 
+
+// ——— Personas reaching out on their own: profile visits, wall notes, DM openers, profile edits ———
+// Only towards members who are around (seen in the last 3 days) and haven't hidden AI personas
+// (Settings → "Show AI personas"); DMs and wall notes also follow each member's own DM / wall settings, and
+// everything is capped so nobody gets swamped.
+
+/** A random real member who's been around lately and is happy to see personas. */
+async function randomHuman(extra = {}) {
+  const since = new Date(Date.now() - 3 * 86_400_000).toISOString();
+  const rows = await db.users
+    .aggregate([
+      { $match: { isAi: false, deletedAt: null, lastSeenAt: { $gt: since }, 'moderation.status': { $nin: ['banned', 'suspended'] }, 'settings.showAIPersonas': { $ne: false }, ...extra } },
+      { $sample: { size: 1 } },
+    ])
+    .toArray();
+  return rows[0] ?? null;
+}
+const blockedBetween = (a, b) => db.blocks.findOne({ $or: [{ blockerId: a, blockedId: b }, { blockerId: b, blockedId: a }] });
+/** At most `n` times per `sec` for this key (cluster-wide). */
+async function under(key, n, sec) {
+  return (await shared().incr(`ai:cap:${key}`, sec)) <= n;
+}
+
+/** Drops by someone's profile (they see it in "who viewed you"), sometimes rates it. */
+async function actVisit(r) {
+  const h = await randomHuman();
+  if (!h || (await blockedBetween(r.userId, h._id))) return;
+  if (!(await under(`visits:${h._id}`, 3, 86_400))) return; // max 3 persona visits per member a day
+  await recordProfileView(h._id, r.userId);
+  if (chance(0.35) && !(await db.profileRatings.findOne({ profileId: h._id, userId: r.userId })))
+    await db.profileRatings.insertOne({ _id: newId(), profileId: h._id, userId: r.userId, score: 3 + Math.floor(Math.random() * 3), createdAt: now() });
+}
+
+/** Leaves a friendly note on someone's wall (if their wall is open to everyone). */
+async function actWall(r) {
+  const h = await randomHuman({ 'settings.wallFrom': { $nin: ['nobody', 'following'] } });
+  if (!h || (await blockedBetween(r.userId, h._id))) return;
+  if (!(await under(`wall:${h._id}`, 1, 2 * 86_400)) || !(await under(`wall-by:${r.userId}`, 3, 86_400))) return;
+  const ctx = `You're leaving a short note on @${h.handle}'s profile wall. Their bio: "${h.bio ?? ''}". Interests: ${(h.interests ?? []).join(', ') || 'unknown'}. City: ${h.city || 'unknown'}.`;
+  const text = (await say(r.persona, ctx, 'Write one short, warm, specific wall note (max 120 chars). No hashtags.', [], 60)) ?? fallback.comment(r.persona);
+  const note = { _id: newId(), profileId: h._id, authorId: r.userId, body: text.slice(0, 280), sticker: null, mood: null, createdAt: now() };
+  await db.wallNotes.insertOne(note);
+  const me = await db.users.findOne({ _id: r.userId }, { projection: { displayName: 1 } });
+  await notify(h._id, { kind: 'wall', actorId: r.userId, link: `/u/${h.handle}`, title: `${me.displayName} left a note on your wall`, body: note.body.slice(0, 120) });
+}
+
+/**
+ * Starts a conversation with someone new: a short opener based on their profile. Only with an AI model (canned
+ * openers read as spam), only if their DMs are open to everyone, and at most one persona opener per member a week.
+ */
+async function actReachOut(r) {
+  if (!nimEnabled()) return;
+  const h = await randomHuman({ 'settings.dmFrom': { $nin: ['nobody', 'following'] } });
+  if (!h || (await blockedBetween(r.userId, h._id))) return;
+  if (await db.conversations.findOne({ pairKey: [r.userId, h._id].sort().join('|') })) return; // already talking
+  if (!(await under(`opener:${h._id}`, 1, 7 * 86_400)) || !(await under(`opener-by:${r.userId}`, 2, 86_400))) return;
+  const ctx = `You're sending the first DM to @${h.handle} (${h.displayName}) on ChatLOL. You don't know them yet. Their bio: "${h.bio ?? ''}". Interests: ${(h.interests ?? []).join(', ') || 'unknown'}. City: ${h.city || 'unknown'}.`;
+  const text = await say(r.persona, ctx, 'Write a casual, friendly first message (max 120 chars) that mentions something specific from their profile and asks one easy question. Not flirty, not salesy.', [], 60);
+  if (!text) return;
+  const conv = await getOrCreateDm(r.userId, h._id);
+  await insertDm(conv._id ?? conv.id ?? conv, r.userId, text.slice(0, 500));
+}
+
+/** Freshens their own profile now and then: headline, bio, accent colour, background. */
+async function actEditProfile(r) {
+  if (!(await under(`profile-edit:${r.userId}`, 1, 2 * 86_400))) return;
+  const u = await db.users.findOne({ _id: r.userId }, { projection: { bio: 1, profile: 1 } });
+  const set = {};
+  const headline = await say(r.persona, 'Updating your profile headline on ChatLOL.', 'Write a new short profile headline (max 60 chars) about your current mood or what you are into this week. No quotes.', [], 30);
+  if (headline) set['profile.headline'] = headline.replace(/^["“]|["”]$/g, '').slice(0, 60);
+  if (chance(0.4)) {
+    const bio = await say(r.persona, `Your current bio: "${u?.bio ?? ''}".`, 'Rewrite your profile bio in your own voice (max 120 chars, emoji ok).', [], 50);
+    if (bio) set.bio = bio.slice(0, 160);
+  }
+  if (chance(0.5)) set['profile.accent'] = pick(PROFILE_ACCENTS);
+  if (chance(0.3)) set['profile.background'] = { kind: 'preset', value: pick(PROFILE_BACKGROUNDS).key };
+  if (Object.keys(set).length) await db.users.updateOne({ _id: r.userId }, { $set: set });
+}
+
 async function tick() {
   if (!(await isLeader())) return;
   const up = awake();
@@ -525,6 +607,12 @@ async function tick() {
   else if (roll < 0.94) await actGallery(r);
   else if (roll < 0.95) await actAvatar(r);
   else await actFollowBack(r);
+  // Reaching out to members, on top of the main action.
+  const extra = Math.random();
+  if (extra < 0.25) await actVisit(r);
+  else if (extra < 0.32) await actWall(r);
+  else if (extra < 0.36) await actReachOut(r);
+  else if (extra < 0.38) await actEditProfile(r);
 }
 
 // ——— Reactions to humans ———

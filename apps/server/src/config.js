@@ -175,6 +175,12 @@ export const config = {
     .filter(Boolean),
   /** Optional: Spotify app credentials (developer.spotify.com) for in-app song search. Pasting links works without them. */
   spotify: { clientId: env.SPOTIFY_CLIENT_ID ?? '', clientSecret: env.SPOTIFY_CLIENT_SECRET ?? '' },
+  /**
+   * Optional: a YouTube Data API key (console.cloud.google.com → YouTube Data API v3). With it, Spotify / Apple profile
+   * songs are matched to a full-length YouTube upload so visitors hear the whole song, not a 30-second preview.
+   * Members can always paste a YouTube link themselves without it.
+   */
+  youtube: { apiKey: env.YOUTUBE_API_KEY ?? '' },
   /** Public web app origin used in email links (verification, password reset). */
   appUrl: (env.APP_URL ?? 'http://localhost:5173').replace(/\/$/, ''),
   mail: {

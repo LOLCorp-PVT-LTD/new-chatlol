@@ -12,6 +12,7 @@ import { runInactivity } from './lib/progression.js';
 import { resolveArenaTimeouts } from './lib/arenas.js';
 import { finishDueTournaments } from './lib/tournaments.js';
 import { startPersonaEngine } from './ai/engine.js';
+import { resumeRadio, startRadioLoop } from './lib/radio.js';
 import { refreshModels, setModelStore } from './ai/nim.js';
 import { resolveExpiredTakes } from './routes/arena.js';
 import { runBirthdays } from './lib/birthdays.js';
@@ -42,6 +43,9 @@ async function main() {
 
   const server = createServer(createApp());
   await attachRealtime(server);
+  // Radio: re-arm song timers after a restart, and keep every station moving.
+  await resumeRadio();
+  startRadioLoop();
   server.listen(config.port, config.host, () => {
     console.log(`🌅 ChatLOL API on http://localhost:${config.port} (db: ${db.kind}, shared state: ${sharedBackend()})`);
     console.log(`   Settings from: ${loadedEnvFiles.length ? loadedEnvFiles.join(', ') : 'environment only (no settings file found)'}`);

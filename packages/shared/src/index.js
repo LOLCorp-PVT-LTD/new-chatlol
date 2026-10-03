@@ -12,4 +12,6 @@ export * from './progression.js';
 export * from './games/index.js';
 export * from './cosmetics.js';
 export * from './arcade.js';
+export * from './youtube.js';
+export * from './festivals.js';
 export * from './legal.js';

@@ -1,4 +1,4 @@
-export type PowerKey = 'xp_surge' | 'boost_2x' | 'spotlight' | 'gate_pass' | 'ghost_mode' | 'wipe_shield' | 'arena_shield';
+export type PowerKey = 'xp_surge' | 'boost_2x' | 'spotlight' | 'gate_pass' | 'ghost_mode' | 'shout_storm' | 'overdrive' | 'free_talk' | 'wipe_shield' | 'arena_shield';
 export interface Power {
   key: PowerKey;
   name: string;
@@ -72,7 +72,11 @@ export interface StatusRank {
     checkInBoost: number;
     color: string;
     badge?: boolean;
+    /** Badge look: plain (early ranks), filled (Noble), shine (Royalty, Legendary). */
+    style: 'plain' | 'filled' | 'shine';
 }
 export declare const STATUS_RANKS: StatusRank[];
 export declare const statusFor: (level: number) => StatusRank;
 export declare const AD_SLOTS: { key: string; label: string; size: string; every?: number }[];
+export declare const ARCADE_ECONOMY: { entry: number; perPoint: number; perPointPremium: number };
+export declare const LOUNGE_LIMIT: { member: number; premium: number };

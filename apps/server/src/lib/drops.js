@@ -1,4 +1,6 @@
+import { festivalDrop } from '@chatlol/shared';
 import { db, today } from '../db.js';
+import { currentFestival } from './festivals.js';
 
 export const DROP_PROMPTS = [
   ['Your Late-Night Creative Space or Desk Setup', '🖥️'],
@@ -24,10 +26,12 @@ export function dayIndex(day) {
 export async function ensureDrop(day = today()) {
   let d = await db.drops.findOne({ day });
   if (!d) {
-    const [prompt, emoji] = DROP_PROMPTS[dayIndex(day) % DROP_PROMPTS.length];
+    // During a festival the drop is themed for it.
+    const fest = await currentFestival(Date.parse(`${day}T12:00:00Z`));
+    const [prompt, emoji] = (fest && festivalDrop(fest.key, dayIndex(day))) ?? DROP_PROMPTS[dayIndex(day) % DROP_PROMPTS.length];
     const startsAt = `${day}T00:00:00.000Z`;
     const endsAt = new Date(Date.parse(startsAt) + 86_400_000 - 1).toISOString();
-    await db.drops.insertIfMissing({ day }, { prompt, emoji, startsAt, endsAt });
+    await db.drops.insertIfMissing({ day }, { prompt, emoji, startsAt, endsAt, festival: fest?.key ?? null });
     d = await db.drops.findOne({ day });
   }
   return d;

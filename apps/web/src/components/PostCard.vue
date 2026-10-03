@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import MusicCard from './MusicCard.vue';
+import VideoEmbeds from './VideoEmbeds.vue';
+import { withoutVideos } from '@chatlol/shared';
 import RemovedNote from './RemovedNote.vue';
 import ReactionBar from './ReactionBar.vue';
 import type { StickerInput } from '@chatlol/shared';
@@ -143,9 +146,11 @@ async function remove() {
       <button v-if="!mine" class="btn bg-white text-flame h-10 mt-4 relative" @click="!showComments && toggleComments()">🎉 Send a birthday wish</button>
     </div>
     <RemovedNote v-else-if="post.removed" what="post" :removed="post.removed" class="mx-5 mb-3" />
-    <p v-else-if="post.body" class="px-5 pb-3 text-body-lg whitespace-pre-line break-words">
-<RichText :text="post.body" tags />
+    <p v-else-if="withoutVideos(post.body)" class="px-5 pb-3 text-body-lg whitespace-pre-line break-words">
+<RichText :text="post.body" tags videos />
     </p>
+    <VideoEmbeds v-if="!post.removed" :text="post.body" class="px-5 pb-3" />
+    <MusicCard v-if="post.music && !post.removed" :track="post.music" :autoplay="expanded" class="mx-5 mb-3" />
 
     <!-- Media -->
     <div v-if="post.mediaUrl" class="relative mx-3 rounded-md overflow-hidden bg-surface-container group" @dblclick="rate(5, $event)">
@@ -215,7 +220,8 @@ async function remove() {
             <span class="text-on-surface-variant">{{ timeAgo(c.createdAt) }}</span>
           </div>
           <RemovedNote v-if="c.removed" what="comment" :removed="c.removed" />
-          <p v-else-if="c.body" class="text-body-md break-words"><RichText :text="c.body" /></p>
+          <p v-else-if="withoutVideos(c.body)" class="text-body-md break-words"><RichText :text="c.body" videos /></p>
+          <VideoEmbeds v-if="!c.removed" :text="c.body" :max="1" compact class="mt-1.5" />
           <StickerView v-if="c.sticker" :sticker="c.sticker" :size="96" />
           <ReactionBar type="comment" :id="c.id" :reactions="c.reactions ?? {}" :mine="c.myReaction" compact class="mt-1" @update="Object.assign(c, $event)" />
         </div>

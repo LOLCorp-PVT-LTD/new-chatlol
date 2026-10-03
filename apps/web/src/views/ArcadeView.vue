@@ -16,7 +16,7 @@ const BG: Record<string, string> = { snake: 'linear-gradient(135deg,#0f172a,#16a
       <div class="absolute -right-6 -bottom-10 text-[150px] opacity-20 rotate-12 select-none">🕹️</div>
       <p class="label !text-white/80">Arcade</p>
       <h1 class="text-headline-lg">Beat the high scores</h1>
-      <p class="text-body-md opacity-90 max-w-lg">Quick solo games. Every score is replayed and checked on our side, so the leaderboards are real. Earn up to {{ data?.sparksPerDay ?? 100 }} ✦ a day.</p>
+      <p class="text-body-md opacity-90 max-w-lg">Quick solo games. Every score is replayed and checked on our side, so the leaderboards are real. Each run costs ✦{{ data?.economy.entry ?? 100 }}; every point pays ✦{{ data?.economy.perPoint ?? 1 }} back (✦{{ data?.economy.perPointPremium ?? 5 }} with Premium).</p>
     </section>
     <AdSlot placement="arcade_lobby" />
     <div v-if="data" class="grid sm:grid-cols-2 gap-4">

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ScrollRow from '../ScrollRow.vue';
 import { computed, ref, watch } from 'vue';
 import type { AdminUser, Permission } from '@chatlol/shared';
 import { PERMISSIONS, ROLE_DEFAULTS, ROLES, can, statusFor, timeAgo } from '@chatlol/shared';
@@ -66,8 +67,8 @@ watch(tab, async (t) => {
 });
 
 // ——— Profile ———
-const edit = ref({ displayName: '', handle: '', bio: '', pronouns: '', city: '' });
-watch(u, (x) => x && (edit.value = { displayName: x.displayName, handle: x.handle, bio: x.bio, pronouns: x.pronouns, city: x.city }), { immediate: true });
+const edit = ref({ displayName: '', handle: '', bio: '', city: '' });
+watch(u, (x) => x && (edit.value = { displayName: x.displayName, handle: x.handle, bio: x.bio, city: x.city }), { immediate: true });
 async function saveProfile() {
   const x = u.value!;
   const b: Record<string, string> = {};
@@ -166,16 +167,15 @@ const FEATURE_LABEL: Record<string, string> = { post: 'Posts', shout: 'Shouts', 
     </div>
     <p v-if="u.deleted" class="rounded-md bg-error/10 text-error p-3 text-body-md">This account is closed.</p>
 
-    <nav class="flex gap-1.5 overflow-x-auto scrollbar-none -mx-1 px-1 pb-1 border-b border-sandstone">
+    <ScrollRow class="border-b border-sandstone" inner-class="gap-1.5 -mx-1 px-1 pb-1">
       <button v-for="t in TABS" :key="t[0]" class="chip h-9 shrink-0" :class="{ 'chip-active': tab === t[0] }" @click="tab = t[0]"><Icon :name="t[1]" :size="16" /> {{ t[2] }}</button>
-    </nav>
+    </ScrollRow>
 
     <!-- Profile -->
     <section v-if="tab === 'profile'" class="space-y-3">
       <div class="grid sm:grid-cols-2 gap-3">
         <label class="text-label-md">Display name<input v-model="edit.displayName" class="input h-10 mt-1" maxlength="40" :disabled="!has('profiles')" /></label>
         <label class="text-label-md">Username (@)<input v-model="edit.handle" class="input h-10 mt-1" maxlength="20" :disabled="!has('profiles')" /></label>
-        <label class="text-label-md">Pronouns<input v-model="edit.pronouns" class="input h-10 mt-1" maxlength="24" :disabled="!has('profiles')" /></label>
         <label class="text-label-md">City<input v-model="edit.city" class="input h-10 mt-1" maxlength="60" :disabled="!has('profiles')" /></label>
         <label class="text-label-md sm:col-span-2">Bio<textarea v-model="edit.bio" class="input min-h-[80px] mt-1 py-2" maxlength="280" :disabled="!has('profiles')" /></label>
       </div>

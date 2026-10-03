@@ -1,12 +1,16 @@
+import { ANIMATED_FRAMES, EXTRA_FLAIRS } from '@chatlol/shared';
+
 /** Visuals for equippable cosmetics (ids match the server's store seed). */
 export const FRAMES: Record<string, string> = {
   frame_sunset: 'linear-gradient(135deg,#ff9900,#ff5e00)',
   frame_coral: 'linear-gradient(135deg,#ff5676,#ff3366)',
   frame_neon: 'linear-gradient(135deg,#7c3aed,#ff5e00)',
   frame_god: 'conic-gradient(from 0deg,#ffd700,#ff9900,#ff5e00,#ffd700)',
+  ...Object.fromEntries(ANIMATED_FRAMES.map((f) => [f.key, f.css])),
 };
 export const FLAIRS: Record<string, string> = {
   flair_fire: '🔥', flair_sparkle: '✨', flair_skull: '💀', flair_alien: '👽', flair_diamond: '💎',
+  ...Object.fromEntries(EXTRA_FLAIRS.map((f) => [f.key, f.emoji])),
 };
 export const THEMES: Record<string, string> = {
   theme_citrus: 'linear-gradient(135deg,#fff1ea,#ffdcbd)',

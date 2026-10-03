@@ -1,6 +1,6 @@
 import { db, newId, now, today, initDb } from './db.js';
 import { PERSONAS } from './ai/personas.js';
-import { BUTTON_STYLES, KING, POWERS, PROFILE_COVERS, SHOP_FONTS, TICKETS, PROFILE_ACCENTS, PROFILE_BACKGROUNDS, stickerStoreItems } from '@chatlol/shared';
+import { ANIMATED_FRAMES, EXTRA_FLAIRS, BUTTON_STYLES, KING, POWERS, PROFILE_COVERS, SHOP_FONTS, TICKETS, PROFILE_ACCENTS, PROFILE_BACKGROUNDS, stickerStoreItems } from '@chatlol/shared';
 import { newUser, DEFAULT_SETTINGS, DEFAULT_PROFILE } from './lib/serialize.js';
 import { hashPassword } from './lib/auth.js';
 import { ensureDrop } from './lib/drops.js';
@@ -93,6 +93,9 @@ const STORE = [
     'linear-gradient(135deg,#ffd700,#ff9900,#ff5e00)',
     1,
   ],
+  // Animated frames and extra flairs (Sparks or Gems; the legendary ones with Gold too).
+  ...ANIMATED_FRAMES.map((f) => [f.key, 'frame', f.label, `Animated · ${f.desc}`, f.price, f.rarity, f.emoji, f.css, false, null, f.gold]),
+  ...EXTRA_FLAIRS.map((f) => [f.key, 'flair', f.label, `${f.emoji} next to your name`, f.price, f.rarity, f.emoji, null, false, null, f.gold]),
   ['flair_fire', 'flair', 'On Fire', '🔥 next to your name', 120, 'common', '🔥', '#ff5e00'],
   ['flair_sparkle', 'flair', 'Sparkle', '✨ next to your name', 120, 'common', '✨', '#fe9800'],
   ['flair_skull', 'flair', 'I’m Dead', '💀 next to your name', 300, 'rare', '💀', '#3b2e25'],

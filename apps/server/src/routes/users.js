@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { attachFullSong } from '../lib/songMatch.js';
 import { z } from 'zod';
 import { db, now, newId, escapeRegex } from '../db.js';
 import { optionalAuth, requireAuth, uid } from '../lib/auth.js';
@@ -69,6 +70,8 @@ usersRouter.get('/users', optionalAuth, async (req, res) => {
 
 usersRouter.get('/users/:handle', optionalAuth, async (req, res) => {
   const u = await db.users.findOne({ handleLower: String(req.params.handle).toLowerCase(), deletedAt: null });
+  // Songs saved before full-length matching existed: find their YouTube version in the background.
+  if (u?.profile?.song && !u.profile.song.youtubeId) attachFullSong(u._id, u.profile.song);
   if (!u) throw new HttpError(404, 'No one here by that name');
   if ({ ...DEFAULT_SETTINGS, ...u.settings }.profileVisibility === 'members' && !req.userId)
     throw new HttpError(401, `Sign in to see @${u.handle}'s profile`, 'members_only');

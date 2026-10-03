@@ -43,7 +43,7 @@ async function findTarget(req) {
   return u;
 }
 /** Staff actions that aren't moderation (grants, boosts, roles) go in the same log, so everything is accountable. */
-const audit = async (userId, kind, reason, by, { review, ...extra } = {}) => {
+export const audit = async (userId, kind, reason, by, { review, ...extra } = {}) => {
   await db.modEvents.insertOne({ _id: newId(), userId, kind, reason, byUserId: by, createdAt: now(), ...extra });
   // LOLShield oversight: non-admin staff actions are checked for missing reasons, missing evidence and self-dealing.
   void reviewStaffAction({ staffId: by, kind, targetId: userId, reason: review?.reason ?? reason, meta: review ?? {} });
@@ -114,6 +114,7 @@ adminRouter.get('/admin/overview', requirePerm('overview'), async (req, res) => 
       turn: config.rtc.turnUrls.length > 0,
       s3: !!config.s3.bucket,
       songSearch: config.spotify.clientId && config.spotify.clientSecret ? 'Spotify' : 'not set: add SPOTIFY_CLIENT_ID + SPOTIFY_CLIENT_SECRET',
+      fullSongs: config.youtube.apiKey ? 'YouTube matching ✓' : 'not set: add YOUTUBE_API_KEY for full-length profile songs',
       pushIos: apnsConfigured() ? `APNs (${config.push.apns.env})` : 'not set — add APNS_* keys',
       pushAndroid: fcmConfigured() ? 'Firebase (FCM)' : 'not set — add FIREBASE_SERVICE_ACCOUNT',
       pushWeb: 'Web Push (VAPID) ✓',
@@ -375,7 +376,6 @@ adminRouter.patch('/admin/users/:id/profile', requirePerm('profiles'), async (re
       displayName: z.string().trim().min(1).max(40).optional(),
       handle: z.string().regex(/^[a-zA-Z0-9_.]{3,20}$/, '3–20 letters, numbers, _ or .').optional(),
       bio: z.string().max(280).optional(),
-      pronouns: z.string().max(24).optional(),
       city: z.string().max(60).optional(),
       headline: z.string().max(80).optional(),
       removeAvatar: z.boolean().optional(),
@@ -390,7 +390,7 @@ adminRouter.patch('/admin/users/:id/profile', requirePerm('profiles'), async (re
   assertOutranks(req, target);
   const set = {};
   const changed = [];
-  for (const k of ['displayName', 'bio', 'pronouns', 'city']) if (b[k] !== undefined && b[k] !== target[k]) (set[k] = b[k]), changed.push(k);
+  for (const k of ['displayName', 'bio', 'city']) if (b[k] !== undefined && b[k] !== target[k]) (set[k] = b[k]), changed.push(k);
   if (b.headline !== undefined) (set['profile.headline'] = b.headline), changed.push('headline');
   if (b.handle && b.handle !== target.handle) {
     if (await db.users.findOne({ handleLower: b.handle.toLowerCase(), _id: { $ne: target._id } })) throw new HttpError(409, 'That handle is taken');

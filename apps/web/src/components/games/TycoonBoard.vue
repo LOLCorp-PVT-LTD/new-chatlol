@@ -10,13 +10,14 @@ const emit = defineEmits<{ (e: 'move', a: Record<string, unknown>): void }>();
 const st = computed(() => props.arena.state as TycoonState);
 const COLORS = ['#ff5e00', '#3fa7e0', '#8f63e8', '#22c55e'];
 const GROUP: Record<string, string> = { sand: '#e9c46a', coral: '#ff7f6e', violet: '#9b72e8', lagoon: '#2fb5a7', gold: '#d4a017', flame: '#ff5e00' };
-// Lay the tiles around the edge of a 7×6 grid (clockwise from the bottom-right corner).
+// Lay the tiles around the edge of a 7×6 grid (clockwise from the bottom-right corner). The ring has 22 slots;
+// every tile must get one, or the board fails to render at all.
 const POS = (() => {
   const out: [number, number][] = [];
   for (let c = 6; c >= 0; c--) out.push([5, c]);
   for (let r = 4; r >= 1; r--) out.push([r, 0]);
   for (let c = 0; c <= 6; c++) out.push([0, c]);
-  for (let r = 1; r <= 2; r++) out.push([r, 6]);
+  for (let r = 1; r <= 4; r++) out.push([r, 6]);
   return out.slice(0, TYCOON_BOARD.length);
 })();
 const me = computed(() => props.arena.mySeat);

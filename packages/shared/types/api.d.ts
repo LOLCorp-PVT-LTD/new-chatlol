@@ -46,7 +46,7 @@ export declare function createApi(opts: ApiClientOptions): {
     me: () => Promise<WithReward<{
         user: UserPrivate;
     }>>;
-    updateMe: (b: Partial<Pick<UserPrivate, "displayName" | "bio" | "pronouns" | "city" | "interests" | "avatarUrl">>) => Promise<{
+    updateMe: (b: Partial<Pick<UserPrivate, "displayName" | "bio" | "city" | "interests" | "avatarUrl">>) => Promise<{
         user: UserPrivate;
     }>;
     updateSettings: (b: Partial<UserSettings>) => Promise<{
@@ -125,6 +125,7 @@ export declare function createApi(opts: ApiClientOptions): {
         soundtrack?: string | null;
         album?: string | null;
         inFeed?: boolean;
+        music?: { youtubeId: string } | null;
     }) => Promise<WithReward<{
         post: Post;
     }>>;
@@ -211,6 +212,9 @@ export declare function createApi(opts: ApiClientOptions): {
     lounges: () => Promise<{
         lounges: Lounge[];
     }>;
+    createLounge: (b: LoungeInput & { official?: boolean }) => Promise<{ lounge: Lounge }>;
+    updateLounge: (id: ID, b: Partial<LoungeInput>) => Promise<{ lounge: Lounge }>;
+    deleteLounge: (id: ID, reason?: string) => Promise<{ ok: true }>;
     lounge: (id: ID) => Promise<{
         lounge: Lounge;
         messages: ChatMessage[];
@@ -274,7 +278,7 @@ export declare function createApi(opts: ApiClientOptions): {
     tournaments: () => Promise<{ tournaments: import('./games').Tournament[] }>;
     tournament: (id: ID) => Promise<{ tournament: import('./games').Tournament }>;
     joinTournament: (id: ID) => Promise<{ tournament: import('./games').Tournament }>;
-    arcade: () => Promise<{ games: { key: string; name: string; emoji: string; desc: string; myBest: number | null; top: { rank: number; user: UserPublic; score: number; at: string }[] }[]; sparksPerDay: number }>;
+    arcade: () => Promise<{ games: { key: string; name: string; emoji: string; desc: string; myBest: number | null; top: { rank: number; user: UserPublic; score: number; at: string }[] }[]; economy: { entry: number; perPoint: number; perPointPremium: number } }>;
     arcadeStart: (game: string) => Promise<{ runId: string; seed: number }>;
     arcadeFinish: (runId: string, inputs: [number, string][]) => Promise<{ score: number; best: number; newBest: boolean; rank: number; rejected: boolean; reward: RewardEvent | null }>;
     arcadeLeaderboard: (game: string, period?: 'day' | 'week' | 'all') => Promise<{ period: string; entries: { rank: number; user: UserPublic; score: number; at: string }[] }>;
@@ -339,7 +343,7 @@ export declare function createApi(opts: ApiClientOptions): {
         entries: LeaderboardEntry[];
     }>;
     shouts: (p?: { before?: string; mood?: string; replyTo?: ID }) => Promise<{ items: Shout[]; nextCursor: string | null; nextShoutAt: string | null }>;
-    shout: (b: { body: string; mood?: string | null; replyToId?: ID | null; sticker?: import('./stickers').StickerInput | null }) => Promise<WithReward<{ shout: Shout; nextShoutAt: string }>>;
+    shout: (b: { body: string; mood?: string | null; replyToId?: ID | null; sticker?: import('./stickers').StickerInput | null; music?: { youtubeId: string } | null }) => Promise<WithReward<{ shout: Shout; nextShoutAt: string }>>;
     reactTo: (type: 'comment' | 'reply' | 'wall' | 'message', id: ID, kind: ReactionKind | null) => Promise<{ reactions: Partial<Record<ReactionKind, number>>; myReaction: ReactionKind | null }>;
     reactShout: (id: ID, kind: ReactionKind | null) => Promise<{ shout: Shout }>;
     deleteShout: (id: ID) => Promise<{ ok: true }>;
@@ -362,9 +366,20 @@ export declare function createApi(opts: ApiClientOptions): {
     insights: () => Promise<Insights>;
     spotifySearch: (q: string) => Promise<{ enabled: boolean; source?: 'spotify' | 'apple'; tracks: ProfileSong[] }>;
     /** Spotify when the server has Spotify keys, otherwise Apple Music previews (no keys needed). */
-    songSearch: (q: string) => Promise<{ enabled: boolean; source: 'spotify' | 'apple'; tracks: ProfileSong[] }>;
+    songSearch: (q: string) => Promise<{ enabled: boolean; source: 'spotify' | 'apple' | 'youtube'; tracks: ProfileSong[] }>;
     updateLayout: (layout: import('./profileLayout').ProfileLayout) => Promise<{ user: UserPrivate; layout: import('./profileLayout').ProfileLayout; premiumRemoved: string[] }>;
     showcase: (userId: ID, types: import('./profileLayout').SectionType[], limit?: number) => Promise<Showcase>;
+    radio: (station: string) => Promise<import('./types').RadioState>;
+    radioSuggest: (station: string, youtubeId: string) => Promise<import('./types').RadioState>;
+    radioVote: (station: string, itemId: ID) => Promise<import('./types').RadioState>;
+    radioRemove: (station: string, itemId: ID) => Promise<import('./types').RadioState>;
+    radioSkip: (station: string) => Promise<import('./types').RadioState>;
+    radioEnded: (station: string, trackId: string) => Promise<{ ok: true }>;
+    festival: () => Promise<{ festival: import('./festivals').FestivalSummary | null; loungeId?: ID | null; quiz?: { questions: { q: string; choices: string[] }[]; done: boolean; score: number | null; perRight: number; perfectBonus: number } }>;
+    festivalQuiz: (answers: number[]) => Promise<{ right: number; total: number; answers: number[]; reward: RewardEvent | null }>;
+    adminFestivals: () => Promise<{ current: import('./festivals').FestivalSummary | null; upcoming: (import('./festivals').FestivalSummary & { enabled: boolean })[]; all: { key: string; name: string; emoji: string }[] }>;
+    adminSetFestivals: (disabled: string[]) => Promise<{ current: import('./festivals').FestivalSummary | null; upcoming: (import('./festivals').FestivalSummary & { enabled: boolean })[] }>;
+    youtubeResolve: (url: string) => Promise<{ song: ProfileSong }>;
     spotifyResolve: (url: string) => Promise<{ song: ProfileSong }>;
     premium: () => Promise<{ plans: import('./profile').PremiumPlan[]; premiumUntil: string | null; sparks: number; stripe: boolean; iap: boolean }>;
     buyPremium: (planId: string) => Promise<{ premiumUntil: string; user: UserPrivate }>;
@@ -393,7 +408,7 @@ export declare function createApi(opts: ApiClientOptions): {
         }>;
         resolveFlag: (id: ID, status: 'resolved' | 'dismissed') => Promise<{ ok: true }>;
         removeContent: (type: string, id: ID, reason?: string) => Promise<{ ok: true }>;
-        editProfile: (id: ID, b: { displayName?: string; handle?: string; bio?: string; pronouns?: string; city?: string; headline?: string; removeAvatar?: boolean; removeCover?: boolean; removeBackground?: boolean; removeSong?: boolean; reason?: string }) => Promise<{ user: AdminUser }>;
+        editProfile: (id: ID, b: { displayName?: string; handle?: string; bio?: string; city?: string; headline?: string; removeAvatar?: boolean; removeCover?: boolean; removeBackground?: boolean; removeSong?: boolean; reason?: string }) => Promise<{ user: AdminUser }>;
         userContent: (id: ID, kind: 'posts' | 'photos' | 'shouts' | 'comments' | 'threads' | 'replies' | 'wall' | 'messages', before?: string) => Promise<{
             items: { type: string; id: ID; text: string; title: string | null; mediaUrl: string | null; where: string | null; hidden: boolean; removed: { by: string; reason: string } | null; reactions: Record<string, number> | null; createdAt: string }[];
             nextBefore: string | null;
@@ -441,3 +456,5 @@ export declare function createApi(opts: ApiClientOptions): {
     };
 };
 export type Api = ReturnType<typeof createApi>;
+
+export interface LoungeInput { name: string; emoji: string; topic?: string; nowPlaying?: string; coverUrl?: string | null; radio?: boolean }

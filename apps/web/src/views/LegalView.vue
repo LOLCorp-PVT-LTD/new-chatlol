@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { LEGAL_DOCS, LEGAL_VERSION } from '@chatlol/shared';
+import CompanyText from '../components/CompanyText.vue';
 
 /** Terms, Community Guidelines, Safety Rules and Privacy Notice, from the shared documents. */
 const route = useRoute();
@@ -18,7 +19,7 @@ const TABS = [['terms', 'Terms'], ['guidelines', 'Guidelines'], ['safety', 'Safe
     <p v-if="key === 'guidelines'" class="text-body-lg">ChatLOL should be fun for everyone. These rules apply everywhere — profiles, posts, shouts, chats, lounges, streams and games. LOLShield, our AI moderator, and our team enforce them. Moderators must always give a reason, and you can appeal any decision.</p>
     <section v-for="(s, i) in doc.sections" :key="i" class="card p-5 space-y-2">
       <div class="flex items-start gap-2"><h2 class="text-headline-sm flex-1">{{ s.title }}</h2><span v-if="s.severity" class="chip h-6 text-[10px] shrink-0">{{ SEV[s.severity] }}</span></div>
-      <p class="text-body-md leading-relaxed">{{ s.body }}</p>
+      <p class="text-body-md leading-relaxed"><CompanyText :text="s.body" /></p>
       <ul v-if="s.examples?.length" class="text-body-sm text-on-surface-variant list-disc pl-5"><li v-for="e in s.examples" :key="e">{{ e }}</li></ul>
     </section>
   </article>

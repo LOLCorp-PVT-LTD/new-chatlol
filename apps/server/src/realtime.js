@@ -10,6 +10,7 @@ import { screen } from './lib/aiModeration.js';
 import { insertLoungeMessage, loungeKey, markRead, recentMessages } from './routes/social.js';
 import { streamKeys, endStream, insertStreamMessage } from './routes/live.js';
 import { kickKey } from './lib/tickets.js';
+import { radioRoom, validStation } from './lib/radio.js';
 import { bus } from './lib/events.js';
 import { assertEmojiOwned, resolveSticker, stickerInput } from './lib/stickers.js';
 import { shared, redisClient, duplicateRedis, sharedBackend } from './lib/shared.js';
@@ -208,6 +209,10 @@ export async function attachRealtime(server) {
       }),
     );
     socket.on('arena:unwatch', (arenaId) => typeof arenaId === 'string' && socket.leave(room.arena(arenaId)));
+
+    // ——— Radio: listeners join the station's room for live now-playing / queue updates ———
+    socket.on('radio:watch', (station) => typeof station === 'string' && validStation(station) && socket.join(radioRoom(station)));
+    socket.on('radio:unwatch', (station) => typeof station === 'string' && socket.leave(radioRoom(station)));
 
     const leaveStream = async (streamId) => {
       await stopWatching(streamId);

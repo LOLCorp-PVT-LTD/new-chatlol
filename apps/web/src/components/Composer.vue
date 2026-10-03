@@ -2,7 +2,9 @@
 import EmojiButton from './EmojiButton.vue';
 import { insertAtCaret } from '../lib/insertAtCaret';
 import { ref, computed } from 'vue';
-import type { Post } from '@chatlol/shared';
+import type { MusicTrack, Post } from '@chatlol/shared';
+import MusicPicker from './MusicPicker.vue';
+import MusicCard from './MusicCard.vue';
 import { api, uploadImage } from '../lib/api';
 import { useSession } from '../stores/session';
 import Modal from './Modal.vue';
@@ -18,6 +20,14 @@ const bodyBox = ref<HTMLTextAreaElement>();
 const file = ref<File | null>(null);
 const preview = ref<string | null>(null);
 const soundtrack = ref('');
+/** A song from YouTube that plays with the post. */
+const music = ref<MusicTrack | null>(null);
+const picking = ref(false);
+function pickSong(t: MusicTrack) {
+  music.value = t;
+  soundtrack.value = `${t.artist} — ${t.title}`.slice(0, 80);
+  picking.value = false;
+}
 const options = ref(['', '']);
 const busy = ref(false);
 const error = ref('');
@@ -26,7 +36,7 @@ const input = ref<HTMLInputElement>();
 const canPost = computed(() => {
   if (tab.value === 'photo') return !!file.value;
   if (tab.value === 'battle') return body.value.trim() && options.value.every((o) => o.trim());
-  return !!body.value.trim();
+  return !!body.value.trim() || !!music.value;
 });
 
 function onFile(e: Event) {
@@ -52,6 +62,7 @@ async function submit() {
       : await api.createPost({
           kind: tab.value, body: body.value, mediaUrl,
           soundtrack: soundtrack.value || null,
+          music: music.value && tab.value !== 'battle' ? { youtubeId: music.value.youtubeId ?? music.value.id } : null,
           battle: tab.value === 'battle' ? options.value.map((label) => ({ label })) : undefined,
         });
     s.reward(r.reward);
@@ -88,8 +99,13 @@ async function submit() {
           <button class="absolute top-2 right-2 btn-icon bg-surface/80" aria-label="Remove photo" @click="file = null; preview = null"><Icon name="close" /></button>
         </div>
         <input ref="input" type="file" accept="image/*" capture="environment" class="hidden" @change="onFile" />
-        <div class="relative"><Icon name="music_note" class="absolute left-5 top-1/2 -translate-y-1/2 text-flame" :size="20" />
+        <div v-if="mode === 'drop'" class="relative"><Icon name="music_note" class="absolute left-5 top-1/2 -translate-y-1/2 text-flame" :size="20" />
           <input v-model="soundtrack" class="input pl-12 text-body-md" maxlength="80" placeholder="Add a soundtrack (e.g. Tycho — Awake)" /></div>
+      </template>
+      <template v-if="mode !== 'drop' && tab !== 'battle'">
+        <div v-if="music" class="relative"><MusicCard :track="music" /><button type="button" class="absolute -top-2 -right-2 btn-icon w-7 h-7 bg-surface shadow-warm" aria-label="Remove song" @click="(music = null), (soundtrack = '')"><Icon name="close" :size="16" /></button></div>
+        <button v-else type="button" class="btn-secondary h-10" @click="picking = true"><Icon name="music_note" :size="18" /> Add a song</button>
+        <MusicPicker v-if="picking" @close="picking = false" @pick="pickSong" />
       </template>
       <template v-if="tab === 'battle'">
         <div v-for="(_, i) in options" :key="i" class="flex gap-2">

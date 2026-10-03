@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import VideoEmbeds from '../VideoEmbeds.vue';
+import { withoutVideos } from '@chatlol/shared';
 import RemovedNote from '../RemovedNote.vue';
 import ReactionBar from '../ReactionBar.vue';
 import type { StickerInput } from '@chatlol/shared';
@@ -47,7 +49,8 @@ async function send(sticker: StickerInput | null = null) {
         <p class="text-body-sm"><RouterLink :to="`/u/${n.author.handle}`" class="font-bold hover:underline">{{ n.author.displayName }}</RouterLink>
           <span v-if="n.mood" class="ml-1">{{ WALL_MOODS.find((m) => m.key === n.mood)?.emoji }}</span> <span class="muted">· {{ timeAgo(n.createdAt) }}</span></p>
         <RemovedNote v-if="n.removed" what="comment" :removed="n.removed" class="mt-1" />
-        <p v-else-if="n.body" class="text-body-md mt-0.5 break-words"><RichText :text="n.body" /></p>
+        <p v-else-if="withoutVideos(n.body)" class="text-body-md mt-0.5 break-words"><RichText :text="n.body" videos /></p>
+        <VideoEmbeds v-if="!n.removed" :text="n.body" :max="1" compact class="mt-1.5" />
         <StickerView v-if="n.sticker" :sticker="n.sticker" :size="96" />
         <ReactionBar type="wall" :id="n.id" :reactions="n.reactions ?? {}" :mine="n.myReaction" compact class="mt-1" @update="Object.assign(n, $event)" />
       </div>

@@ -189,6 +189,9 @@ export const STRIKE_LADDER = [
 export const STRIKE_WINDOW_DAYS = 30;
 
 export const COPYRIGHT = `ChatLOL 2026 - All rights reserved by LOLCorp PVT LTD.`;
+/** The company name links (dofollow) to its site wherever it appears. */
+export const COMPANY_NAME = 'LOLCorp PVT LTD';
+export const COMPANY_URL = 'https://lolcorp.co.uk';
 
 // ——— ChatLOL Premium ———
 /** Non-renewing passes. Real-money prices are per store listing; the Sparks price is deliberately steep. */

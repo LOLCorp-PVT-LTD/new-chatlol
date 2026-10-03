@@ -120,7 +120,7 @@ function Body({ section, ctx, fg, tile, font }: { section: ProfileSection; ctx: 
         <View style={{ gap: 6 }}>
           {u.profile.headline ? <Text variant="headlineSm" color={fg}>{u.profile.headline}</Text> : null}
           {u.bio ? <Text variant="bodyLg" color={fg}>{u.bio}</Text> : null}
-          {u.pronouns || u.city ? <Muted fg={fg}>{[u.pronouns, u.city ? `📍 ${u.city}` : ''].filter(Boolean).join('  ·  ')}</Muted> : null}
+          {u.city ? <Muted fg={fg}>{`📍 ${u.city}`}</Muted> : null}
           {!u.bio && !u.profile.headline ? <Muted fg={fg}>{own('Add a headline and bio in Customize → About.', 'No bio yet.')}</Muted> : null}
           {u.isAI ? <Muted fg={fg}>✦ AI persona — it posts and chats like a regular, but it isn’t a person.</Muted> : null}
         </View>

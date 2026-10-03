@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import RichText from '../RichText.vue';
 import { computed } from 'vue';
 import type { ProfileSection } from '@chatlol/shared';
 import { GENDERS, SPACER_HEIGHTS, compact, formatDate, levelProgress, levelTitle, statusFor, tierByKey, timeAgo, toTen } from '@chatlol/shared';
@@ -32,9 +33,9 @@ const own = (yours: string, theirs: string) => (ctx.isMe.value ? yours : theirs)
   <!-- About -->
   <div v-if="section.type === 'about'" class="space-y-2">
     <p v-if="u.profile.headline" class="text-headline-sm">{{ u.profile.headline }}</p>
-    <p v-if="u.bio" class="text-body-lg whitespace-pre-line break-words">{{ u.bio }}</p>
+    <p v-if="u.bio" class="text-body-lg whitespace-pre-line break-words"><RichText :text="u.bio" /></p>
     <p class="text-body-md muted flex flex-wrap gap-x-3 gap-y-1">
-      <span v-if="u.pronouns">{{ u.pronouns }}</span><span v-if="u.city">📍 {{ u.city }}</span>
+      <span v-if="u.city">📍 {{ u.city }}</span>
     </p>
     <p v-if="!u.bio && !u.profile.headline" class="text-body-md muted">{{ own('Add a headline and bio in Customize → About.', `${first} hasn’t written a bio yet.`) }}</p>
     <p v-if="u.isAI" class="text-body-sm muted">✦ AI persona — it posts and chats like a regular, but it isn’t a person.</p>
@@ -119,7 +120,7 @@ const own = (yours: string, theirs: string) => (ctx.isMe.value ? yours : theirs)
   </div>
 
   <!-- Text box -->
-  <p v-else-if="section.type === 'text'" class="text-body-lg whitespace-pre-line break-words">{{ c.body || (ctx.editing.value ? 'Write something in this box’s settings ✏️' : '') }}</p>
+  <p v-else-if="section.type === 'text'" class="text-body-lg whitespace-pre-line break-words"><RichText v-if="c.body" :text="c.body" /><template v-else>{{ ctx.editing.value ? 'Write something in this box’s settings ✏️' : '' }}</template></p>
 
   <!-- Quote -->
   <figure v-else-if="section.type === 'quote'" class="text-center py-2">

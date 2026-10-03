@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { appTheme } from '../stores/theme';
-import { LOGO_RATIO, MASCOT_RATIO, logoSvg } from '../lib/brandLogo';
+import { LOGO_RATIO, MASCOT_RATIO, logoSvg, logoUid } from '../lib/brandLogo';
 
 /**
  * Brand mark, drawn as inline SVG in the current app theme's colours. `auto` = mascot on phones, full CHATLOL
@@ -14,8 +14,9 @@ const props = withDefaults(defineProps<{ variant?: 'auto' | 'wordmark' | 'mascot
 });
 const heights = { sm: 28, md: 36, lg: 48 };
 const h = computed(() => heights[props.size]);
-const wordmark = computed(() => logoSvg(appTheme.value, 'wordmark'));
-const mascot = computed(() => logoSvg(appTheme.value, 'mascot'));
+const uid = logoUid();
+const wordmark = computed(() => logoSvg(appTheme.value, 'wordmark', uid));
+const mascot = computed(() => logoSvg(appTheme.value, 'mascot', uid));
 const wordStyle = computed(() =>
   props.header
     ? { width: '100%', maxWidth: '130px', aspectRatio: String(LOGO_RATIO), height: 'auto', objectFit: 'contain' as const }

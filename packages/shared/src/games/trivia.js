@@ -1,5 +1,6 @@
 import { rng, shuffle } from './rng.js';
 import { TRIVIA_BANK } from './triviaBank.js';
+import { festivalTrivia } from '../festivals.js';
 
 /**
  * Trivia race for 2–8 players, everyone at once. 10 questions, 15 seconds each: a right answer scores 100 plus
@@ -9,9 +10,11 @@ const Q_MS = 15_000;
 const REVEAL_MS = 4_000;
 export const TRIVIA_ROUNDS = 10;
 
-export function initTrivia(n, seed, { now = Date.now() } = {}) {
+/** `festival`: during a festival, up to half the questions come from its themed set. */
+export function initTrivia(n, seed, { now = Date.now(), festival = null } = {}) {
   const r = rng(seed);
-  const qs = shuffle(TRIVIA_BANK, r)
+  const themed = festival ? shuffle(festivalTrivia(festival), r).slice(0, TRIVIA_ROUNDS / 2) : [];
+  const qs = shuffle([...themed, ...shuffle(TRIVIA_BANK, r).slice(0, TRIVIA_ROUNDS - themed.length)], r)
     .slice(0, TRIVIA_ROUNDS)
     .map(([cat, q, right, ...wrong]) => {
       const choices = shuffle([right, ...wrong], r);

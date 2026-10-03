@@ -15,6 +15,7 @@ import TierPad from '../components/TierPad.vue';
 import TierBars from '../components/TierBars.vue';
 import Icon from '../components/Icon.vue';
 import DropWidget from '../components/DropWidget.vue';
+import FestivalBanner from '../components/FestivalBanner.vue';
 import TournamentCard from '../components/TournamentCard.vue';
 
 /** Home: a slice of every part of ChatLOL, each with an arrow to its full page. */
@@ -61,6 +62,7 @@ async function nextRate() {
 <template>
   <div v-if="h" class="space-y-6 w-full">
     <DropWidget :drop="h.drop" />
+    <FestivalBanner v-if="h.festival" :festival="h.festival" />
     <!-- The reigning King of ChatLOL -->
     <RouterLink v-if="king" :to="`/u/${king.user.handle}`" class="block rounded-lg p-5 pt-8 shadow-float relative overflow-hidden text-[#3b2a00] bg-[linear-gradient(135deg,#fff3b0,#fcd34d_45%,#d4a017)] hover:brightness-105 transition">
       <div class="absolute -right-6 -bottom-10 text-[140px] opacity-20 rotate-12 select-none">👑</div>
@@ -152,6 +154,21 @@ async function nextRate() {
           <Avatar :user="t.author" :size="36" />
           <div class="min-w-0 flex-1"><p class="text-label-lg truncate group-hover:text-primary">{{ t.title }}</p>
             <p class="text-body-sm text-on-surface-variant">▲ {{ t.upvotes }} • 💬 {{ t.replyCount }} • {{ timeAgo(t.lastActivityAt) }}</p></div>
+        </RouterLink>
+      </section>
+
+      <!-- Royalty: the richest members -->
+      <section v-if="h.royalty?.length" class="card p-5 relative overflow-hidden">
+        <div class="absolute -right-6 -top-6 text-[110px] opacity-10 rotate-12 pointer-events-none">👑</div>
+        <SectionHead title="Royalty" icon="workspace_premium" to="/vault?tab=exchange" hint="The richest on ChatLOL" />
+        <RouterLink v-for="e in h.royalty" :key="e.user.id" :to="`/u/${e.user.handle}`" class="flex items-center gap-3 py-2">
+          <span class="w-8 h-8 rounded-full flex items-center justify-center font-bold shrink-0"
+            :class="e.rank === 1 ? 'bg-[linear-gradient(135deg,#fff3b0,#fcd34d_45%,#d4a017)] text-[#3b2a00] shadow-[0_0_14px_rgb(212_160_23/.6)]' : e.rank <= 3 ? 'bg-[#f3e2b3] text-[#6b4e00]' : 'bg-surface-container-low'">{{ e.rank === 1 ? '👑' : e.rank }}</span>
+          <Avatar :user="e.user" :size="40" />
+          <div class="flex-1 min-w-0">
+            <UserName :user="e.user" :link="false" class="text-body-md" />
+            <p class="text-[11px] text-on-surface-variant tabular-nums">🪙 {{ compact(e.gold) }} · 💎 {{ compact(e.gems) }} · ✦ {{ compact(e.sparks) }}</p>
+          </div>
         </RouterLink>
       </section>
 

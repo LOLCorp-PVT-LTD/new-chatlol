@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import VideoEmbeds from '../components/VideoEmbeds.vue';
+import { withoutVideos } from '@chatlol/shared';
 import RemovedNote from '../components/RemovedNote.vue';
 import ReactionBar from '../components/ReactionBar.vue';
 import EmojiButton from '../components/EmojiButton.vue';
@@ -44,7 +46,10 @@ async function send() {
       <div class="flex items-center gap-3"><Avatar :user="thread.author" :size="44" /><div><UserName :user="thread.author" /><p class="text-body-sm text-on-surface-variant">{{ timeAgo(thread.createdAt) }} ago</p></div></div>
       <h1 class="text-headline-lg mt-4">{{ thread.title }}</h1>
       <RemovedNote v-if="thread.removed" what="thread" :removed="thread.removed" class="mt-2" />
-      <p v-else class="text-body-lg mt-2 whitespace-pre-line">{{ thread.body }}</p>
+      <template v-else>
+        <p v-if="withoutVideos(thread.body)" class="text-body-lg mt-2 whitespace-pre-line"><RichText :text="thread.body" tags videos /></p>
+        <VideoEmbeds :text="thread.body" class="mt-3" />
+      </template>
       <p class="text-label-md text-on-surface-variant mt-4">⬆ {{ thread.upvotes }} • 💬 {{ replies.length }}</p>
     </article>
     <div v-for="r in replies" :key="r.id" class="flex gap-3">
@@ -52,7 +57,10 @@ async function send() {
       <div class="card px-4 py-3 flex-1 min-w-0 rounded-md">
         <div class="flex items-center gap-2 text-body-sm"><UserName :user="r.author" /><span class="text-on-surface-variant">{{ timeAgo(r.createdAt) }}</span></div>
         <RemovedNote v-if="r.removed" what="reply" :removed="r.removed" class="mt-1" />
-        <p v-else class="text-body-md mt-0.5 whitespace-pre-line break-words"><RichText :text="r.body" /></p>
+        <template v-else>
+          <p v-if="withoutVideos(r.body)" class="text-body-md mt-0.5 whitespace-pre-line break-words"><RichText :text="r.body" videos /></p>
+          <VideoEmbeds :text="r.body" :max="1" compact class="mt-1.5" />
+        </template>
         <ReactionBar type="reply" :id="r.id" :reactions="r.reactions ?? {}" :mine="r.myReaction" compact class="mt-1.5" @update="Object.assign(r, $event)" />
       </div>
     </div>

@@ -31,9 +31,10 @@ const search = () => q.value.trim() && router.push({ path: '/members', query: { 
       <ThemeSwitch />
       <template v-if="s.user">
         <button class="btn-primary hidden sm:inline-flex" @click="$emit('compose')"><Icon name="add_a_photo" :size="20" /> Post Photo</button>
-        <RouterLink to="/vault" class="flex items-center gap-1 bg-surface-container px-3 h-10 rounded-full shadow-warm" :title="`${s.user.sparks} Sparks`">
+        <RouterLink to="/vault?tab=exchange" class="flex items-center gap-1 bg-surface-container px-3 h-10 rounded-full shadow-warm" :title="`${s.user.sparks.toLocaleString()} Sparks · ${s.user.gems.toLocaleString()} Gems · ${s.user.gold.toLocaleString()} Gold — tap to exchange`">
           <Icon name="local_fire_department" class="text-flame" fill :size="20" /><span class="text-label-md tabular-nums">{{ compact(s.user.sparks) }}</span>
           <span class="hidden sm:inline text-label-md tabular-nums ml-1.5">💎 {{ compact(s.user.gems) }}</span>
+          <span class="hidden sm:inline text-label-md tabular-nums ml-1.5">🪙 {{ compact(s.user.gold) }}</span>
         </RouterLink>
         <RouterLink to="/messages" class="btn-icon relative" aria-label="Messages"><Icon name="mail" />
           <span v-if="s.unreadDms" class="absolute top-1.5 right-1.5 min-w-4 h-4 px-1 rounded-full bg-coral text-white text-[10px] font-bold flex items-center justify-center">{{ s.unreadDms }}</span></RouterLink>

@@ -83,7 +83,11 @@ export interface UserPrivate extends UserPublic {
 }
 export interface ProfileSong {
     /** Where it plays from: a Spotify embed, or an Apple Music 30-second preview (used when Spotify search isn't set up). */
-    source?: 'spotify' | 'apple';
+    source?: 'spotify' | 'apple' | 'youtube';
+    /** Full-length YouTube upload of the song: plays in full for every visitor (Spotify only plays previews to people not signed in). */
+    youtubeId?: string | null;
+    /** Length in seconds (YouTube tracks, when known). */
+    duration?: number;
     type: import('./profile').SpotifyKind;
     id: string;
     title: string;
@@ -149,9 +153,13 @@ export interface BattleOption {
     votes: number;
 }
 export type PostKind = 'photo' | 'text' | 'battle' | 'drop' | 'roulette' | 'birthday';
+/** A song from YouTube attached to a post or shout (same shape as a profile song). */
+export type MusicTrack = ProfileSong;
 export interface Post {
     /** Removed by staff: shown as a “removed by Admin for <reason>” card. */
     removed?: { by: string; reason: string; at: string } | null;
+    /** A song that plays with the post. */
+    music?: MusicTrack | null;
     id: ID;
     author: UserPublic;
     kind: PostKind;
@@ -252,6 +260,15 @@ export interface Lounge {
     onlineCount: number;
     memberPreview: UserPublic[];
     isLive: boolean;
+    /** Who made it (null = an official ChatLOL lounge). */
+    owner?: UserPublic | null;
+    /** Seasonal lounge for a festival (key), open until `expiresAt`. */
+    festival?: string | null;
+    expiresAt?: string | null;
+    /** This lounge has a live radio. */
+    radio?: boolean;
+    /** The viewer may edit / delete it (owner or staff with the Lounges permission). */
+    canManage?: boolean;
 }
 export interface ChatMessage {
     /** Removed by staff: shown as a “removed by Admin for <reason>” card. */
@@ -410,6 +427,8 @@ export interface RtcSignal {
 export interface Shout {
     /** Removed by staff: shown as a “removed by Admin for <reason>” card. */
     removed?: { by: string; reason: string; at: string } | null;
+    /** A song that plays with the shout. */
+    music?: MusicTrack | null;
     id: ID;
     author: UserPublic;
     body: string;
@@ -454,6 +473,10 @@ export interface Insights {
 }
 export interface HomeData {
     stats: { members: number; online: number };
+    /** The festival on right now, if any (Home banner). */
+    festival: (import('./festivals').FestivalSummary & { loungeId: ID | null }) | null;
+    /** Richest members (wealth in Sparks, Gems and Gold valued at the exchange rate). */
+    royalty: { rank: number; user: UserPublic; sparks: number; gems: number; gold: number; worth: number }[];
     popularMembers: UserPublic[];
     rate: Post | null;
     forums: ShoutThread[];
@@ -513,3 +536,13 @@ export interface Showcase {
 
 /** none · outgoing (you sent a request) · incoming (they sent you one) · friends */
 export type Friendship = 'none' | 'outgoing' | 'incoming' | 'friends';
+
+/** A live radio station (lounge or shoutbox): the song everyone hears now and the voting queue. */
+export interface RadioState {
+    station: string;
+    now: { track: MusicTrack; by: ID | null; startedAt: ISODate; endsAt: ISODate; serverTime: ISODate } | null;
+    queue: { id: ID; track: MusicTrack; by: ID; votes: number; mine: boolean; voted: boolean }[];
+    serverTime: ISODate;
+    /** The viewer can skip songs and remove anything from the queue. */
+    host?: boolean;
+}

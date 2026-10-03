@@ -23,8 +23,8 @@ export default function Customize() {
   const [song, setSong] = useState<ProfileSong | null>(u?.profile.song ?? null);
   const [songInput, setSongInput] = useState('');
   const [results, setResults] = useState<ProfileSong[]>([]);
-  const [source, setSource] = useState<'spotify' | 'apple'>('spotify');
-  const [about, setAbout] = useState({ displayName: u?.displayName ?? '', bio: u?.bio ?? '', pronouns: u?.pronouns ?? '', city: u?.city ?? '' });
+  const [source, setSource] = useState<'spotify' | 'apple' | 'youtube'>('spotify');
+  const [about, setAbout] = useState({ displayName: u?.displayName ?? '', bio: u?.bio ?? '', city: u?.city ?? '' });
   const [gender, setGender] = useState<Gender | null>(u?.gender ?? null);
   const [interests, setInterests] = useState<string[]>(u?.interests ?? []);
   const [busy, setBusy] = useState(false);
@@ -105,7 +105,7 @@ export default function Customize() {
           <Label>About you</Label>
           <Input value={about.displayName} onChangeText={(v) => setAbout({ ...about, displayName: v })} placeholder="Name" maxLength={40} />
           <Row gap={8}>{GENDERS.map((g) => <Chip key={g.key} label={`${g.emoji} ${g.label}`} active={gender === g.key} onPress={() => setGender(g.key)} />)}</Row>
-          <Row gap={8}><Input value={about.pronouns} onChangeText={(v) => setAbout({ ...about, pronouns: v })} placeholder="Pronouns" maxLength={24} style={{ flex: 1 }} /><Input value={about.city} onChangeText={(v) => setAbout({ ...about, city: v })} placeholder="City" maxLength={60} style={{ flex: 1 }} /></Row>
+          <Input value={about.city} onChangeText={(v) => setAbout({ ...about, city: v })} placeholder="City" maxLength={60} />
           <Input value={about.bio} onChangeText={(v) => setAbout({ ...about, bio: v })} placeholder="Bio" multiline maxLength={280} style={{ minHeight: 80 }} />
           <Label>Interests • {interests.length}/{MAX_INTERESTS}</Label>
           {INTEREST_GROUPS.map((g) => (

@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import RadioPlayer from '../components/RadioPlayer.vue';
+import VideoEmbeds from '../components/VideoEmbeds.vue';
+import { withoutVideos } from '@chatlol/shared';
 import RemovedNote from '../components/RemovedNote.vue';
 import ReactionBar from '../components/ReactionBar.vue';
 import { emojiOnly } from '../lib/richText';
@@ -17,6 +20,7 @@ import { useSession } from '../stores/session';
 import Avatar from '../components/Avatar.vue';
 import UserName from '../components/UserName.vue';
 import Icon from '../components/Icon.vue';
+import LoungeEditor from '../components/LoungeEditor.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -67,6 +71,20 @@ async function kick(m: { author: UserPublic }) {
   } catch (e) { s.toast({ kind: 'error', title: (e as Error).message }); }
 }
 
+/** Owner / staff: edit or delete; everyone inside is sent back to the list if it's deleted. */
+const editing = ref(false);
+const onDeleted = (p: { loungeId: string }) => {
+  if (p.loungeId !== lounge.value?.id) return;
+  s.toast({ kind: 'info', title: 'This lounge was closed' });
+  void router.push('/lounges');
+};
+const onUpdated = (l: Lounge) => { if (l.id === lounge.value?.id) lounge.value = { ...lounge.value, ...l, canManage: lounge.value.canManage }; };
+async function removeLounge() {
+  const l = lounge.value;
+  if (!l || !(await confirmDialog({ title: `Delete “${l.name}”?`, body: 'The lounge and its chat history are removed for everyone.', danger: true }))) return;
+  try { await api.deleteLounge(l.id, l.owner && l.owner.id !== s.user?.id ? 'Removed by staff' : ''); void router.push('/lounges'); } catch (e) { s.toast({ kind: 'error', title: (e as Error).message }); }
+}
+
 onMounted(async () => {
   const r = await api.lounge(id);
   lounge.value = r.lounge;
@@ -82,6 +100,8 @@ onMounted(async () => {
   sock.on('lounge:message', onMsg);
   sock.on('lounge:presence', onPresence);
   sock.on('lounge:members', onMembers);
+  sock.on('lounge:deleted', onDeleted);
+  sock.on('lounge:updated', onUpdated);
 });
 onUnmounted(() => {
   const sock = s.socket();
@@ -89,6 +109,8 @@ onUnmounted(() => {
   sock.off('lounge:message', onMsg);
   sock.off('lounge:presence', onPresence);
   sock.off('lounge:members', onMembers);
+  sock.off('lounge:deleted', onDeleted);
+  sock.off('lounge:updated', onUpdated);
   sock.off('lounge:kicked', onKicked);
   sock.off('message:reactions', onReactions);
 });
@@ -108,11 +130,16 @@ function send(text = draft.value, sticker: StickerInput | null = null) {
       <span class="text-3xl">{{ lounge.emoji }}</span>
       <div class="min-w-0 flex-1"><h1 class="text-headline-sm truncate">{{ lounge.name }}</h1>
         <p class="text-body-sm text-on-surface-variant truncate flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-online" /> {{ online }} here • <Icon name="graphic_eq" :size="14" class="text-flame" /> {{ lounge.nowPlaying }}</p></div>
+      <template v-if="lounge.canManage">
+        <button class="btn-icon w-9 h-9 shrink-0" aria-label="Edit lounge" @click="editing = true"><Icon name="edit_note" :size="18" /></button>
+        <button class="btn-icon w-9 h-9 shrink-0 text-error" aria-label="Delete lounge" @click="removeLounge"><Icon name="delete" :size="18" /></button>
+      </template>
       <button class="flex items-center -space-x-2 shrink-0 rounded-full pr-1 hover:opacity-90" :aria-expanded="showMembers" aria-label="Who’s here" @click="showMembers = !showMembers">
         <Avatar v-for="u in members.slice(0, 4)" :key="u.id" :user="u" :size="30" class="ring-2 ring-sunlit rounded-full" />
         <span class="w-[30px] h-[30px] rounded-full bg-surface-container-high ring-2 ring-sunlit flex items-center justify-center text-[11px] font-bold">{{ members.length > 4 ? `+${members.length - 4}` : members.length }}</span>
       </button>
     </header>
+    <RadioPlayer v-if="lounge?.radio" :key="lounge.id" :station="`lounge:${lounge.id}`" :title="`${lounge.name} radio`" class="mx-3 mt-3 shrink-0" />
     <Transition name="fade">
       <section v-if="showMembers" class="px-5 py-3 border-b border-sandstone/60 bg-surface-container-lowest/50 backdrop-blur-md">
         <p class="label mb-2">In the room · {{ members.length }}</p>
@@ -142,13 +169,15 @@ function send(text = draft.value, sticker: StickerInput | null = null) {
           <RemovedNote v-if="m.removed" what="message" :removed="m.removed" />
           <StickerView v-if="m.sticker" :sticker="m.sticker" :size="128" class="block" :class="{ 'ml-auto': m.author.id === s.user?.id }" />
           <p v-if="m.body && emojiOnly(m.body)" :class="{ 'text-right': m.author.id === s.user?.id }"><RichText :text="m.body" /></p>
-          <p v-else-if="m.body" class="px-4 py-2 rounded-[20px] text-body-md break-words"
-            :class="m.author.id === s.user?.id ? 'bg-sunset text-white rounded-tr-md' : 'bg-surface-container-low rounded-tl-md'"><RichText :text="m.body" /></p>
+          <p v-else-if="withoutVideos(m.body)" class="px-4 py-2 rounded-[20px] text-body-md break-words"
+            :class="m.author.id === s.user?.id ? 'bg-sunset text-white rounded-tr-md' : 'bg-surface-container-low rounded-tl-md'"><RichText :text="m.body" videos /></p>
+          <VideoEmbeds v-if="!m.removed" :text="m.body" :max="1" compact class="mt-1.5" :class="{ 'ml-auto': m.author.id === s.user?.id }" />
           <ReactionBar type="message" :id="m.id" :reactions="m.reactions ?? {}" :mine="m.myReaction" compact class="mt-1" :class="{ 'justify-end': m.author.id === s.user?.id }" @update="Object.assign(m, $event)" />
         </div>
       </div>
       </template>
     </div>
+    <LoungeEditor v-if="editing && lounge" :lounge="lounge" @close="editing = false" @saved="(l) => ((lounge = { ...lounge, ...l }), (editing = false))" />
     <form v-if="s.user" class="border-t border-sandstone p-3 space-y-2" @submit.prevent="send()">
       <div class="flex gap-1.5"><button v-for="e in EMOJI" :key="e" type="button" class="w-9 h-9 rounded-full bg-surface-container-low hover:scale-110 transition" @click="send(e)">{{ e }}</button></div>
       <div class="flex gap-2 items-center">

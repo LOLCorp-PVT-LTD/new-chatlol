@@ -66,7 +66,7 @@ const LIMIT = (min, max, def) => ({ limit: { min, max, def } });
  *  multi: can be added more than once · sizes: widths it can take · config: its settings (with defaults)
  */
 export const PROFILE_SECTIONS = [
-  { key: 'about', label: 'About me', emoji: '👋', desc: 'Headline, bio, pronouns and city', sizes: ['third', 'half', 'twothirds', 'full'], size: 'half' },
+  { key: 'about', label: 'About me', emoji: '👋', desc: 'Headline, bio and city', sizes: ['third', 'half', 'twothirds', 'full'], size: 'half' },
   { key: 'details', label: 'Details', emoji: '📇', desc: 'Gender, level, member since, last active', sizes: ['third', 'half', 'twothirds', 'full'], size: 'third' },
   { key: 'interests', label: 'Interests', emoji: '🏷️', desc: 'Your interest tags', sizes: ['third', 'half', 'twothirds', 'full'], size: 'half' },
   { key: 'song', label: 'Profile song', emoji: '🎵', desc: 'Your song, playing when people visit', sizes: ['third', 'half', 'twothirds', 'full'], size: 'half' },

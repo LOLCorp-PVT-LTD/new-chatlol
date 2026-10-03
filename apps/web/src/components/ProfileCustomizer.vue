@@ -19,11 +19,11 @@ const busy = ref(false);
 /** Photo/colour backgrounds and the profile song are Premium perks. */
 const premium = computed(() => !!s.user?.premiumUntil);
 const look = ref({ background: { ...u.profile.background }, accent: u.profile.accent, coverUrl: u.profile.coverUrl, headline: u.profile.headline });
-const about = ref({ displayName: u.displayName, bio: u.bio, pronouns: u.pronouns, city: u.city, gender: u.gender as Gender | null, interests: [...u.interests] });
+const about = ref({ displayName: u.displayName, bio: u.bio, city: u.city, gender: u.gender as Gender | null, interests: [...u.interests] });
 const song = ref<ProfileSong | null>(u.profile.song);
 const songInput = ref('');
 const results = ref<ProfileSong[]>([]);
-const searchSource = ref<'spotify' | 'apple'>('spotify');
+const searchSource = ref<'spotify' | 'apple' | 'youtube'>('spotify');
 const searching = ref(false);
 /** Hear a search result before picking it (Apple previews). */
 const previewing = ref<string | null>(null);
@@ -40,9 +40,10 @@ function pick(r: ProfileSong) { previewAudio.pause(); previewing.value = null; s
 const preview = computed(() => ({ ...u.profile, ...look.value }));
 
 let t: ReturnType<typeof setTimeout>;
+const isLink = (v: string) => /spotify|youtu\.?be/i.test(v);
 watch(songInput, (v) => {
   clearTimeout(t);
-  if (!v.trim() || v.includes('spotify')) return (results.value = []);
+  if (!v.trim() || isLink(v)) return (results.value = []);
   t = setTimeout(async () => {
     searching.value = true;
     try {
@@ -53,7 +54,21 @@ watch(songInput, (v) => {
   }, 350);
 });
 async function useLink() {
-  try { song.value = (await api.spotifyResolve(songInput.value.trim())).song; songInput.value = ''; } catch (e) { s.toast({ kind: 'error', title: (e as Error).message }); }
+  const v = songInput.value.trim();
+  try {
+    song.value = /youtu\.?be/i.test(v) ? (await api.youtubeResolve(v)).song : (await api.spotifyResolve(v)).song;
+    songInput.value = '';
+  } catch (e) { s.toast({ kind: 'error', title: (e as Error).message }); }
+}
+/** Optional: a YouTube link to the full version of a Spotify / Apple song. */
+const fullInput = ref('');
+async function useFullLink() {
+  if (!song.value) return;
+  try {
+    const yt = (await api.youtubeResolve(fullInput.value.trim())).song;
+    song.value = { ...song.value, youtubeId: yt.youtubeId };
+    fullInput.value = '';
+  } catch (e) { s.toast({ kind: 'error', title: (e as Error).message }); }
 }
 async function upload(e: Event, target: 'cover' | 'background') {
   const f = (e.target as HTMLInputElement).files?.[0];
@@ -68,7 +83,7 @@ const toggleInterest = (i: string) =>
 async function save() {
   busy.value = true;
   try {
-    await api.updateMe({ displayName: about.value.displayName, bio: about.value.bio, pronouns: about.value.pronouns, city: about.value.city, interests: about.value.interests });
+    await api.updateMe({ displayName: about.value.displayName, bio: about.value.bio, city: about.value.city, interests: about.value.interests });
     const r = await api.updateProfile({
       ...look.value,
       gender: about.value.gender ?? undefined,
@@ -131,18 +146,27 @@ async function save() {
       <template v-else-if="tab === 'song'">
         <div v-if="song" class="flex items-center gap-3 rounded-md bg-surface-container-low p-3">
           <img v-if="song.artUrl" :src="song.artUrl" alt="" class="w-14 h-14 rounded-md object-cover" /><span v-else class="w-14 h-14 rounded-md bg-sunset text-white flex items-center justify-center"><Icon name="music_note" /></span>
-          <div class="min-w-0 flex-1"><p class="text-label-lg truncate">{{ song.title || 'Spotify ' + song.type }}</p><p class="text-body-sm text-on-surface-variant truncate">{{ song.artist || 'Plays on your profile' }}</p></div>
+          <div class="min-w-0 flex-1"><p class="text-label-lg truncate">{{ song.title || (song.source === 'youtube' ? 'YouTube song' : 'Spotify ' + song.type) }}</p><p class="text-body-sm text-on-surface-variant truncate">{{ song.artist || 'Plays on your profile' }}</p></div>
           <button class="btn-ghost" @click="song = null">Remove</button>
+        </div>
+        <div v-if="song && song.source !== 'youtube'" class="rounded-md border border-sandstone p-3 space-y-2">
+          <p class="text-label-lg">🎧 Full song for everyone</p>
+          <p v-if="song.youtubeId" class="text-body-sm">✅ Visitors hear the full song (via YouTube). <button class="underline text-primary" @click="song = { ...song, youtubeId: null }">Remove</button></p>
+          <template v-else>
+            <p class="text-body-sm text-on-surface-variant">{{ song.source === 'apple' ? 'Apple Music only plays a 30-second preview.' : 'Spotify only plays the full song to visitors signed in to Spotify — everyone else hears 30 seconds.' }} We’ll try to find the full version on YouTube automatically, or paste a YouTube link to it here:</p>
+            <div class="flex gap-2"><input v-model="fullInput" class="input h-11" placeholder="https://youtube.com/watch?v=…" /><button class="btn-secondary h-11 shrink-0" :disabled="!fullInput.trim()" @click="useFullLink">Use</button></div>
+          </template>
         </div>
         <div>
           <p class="label mb-2">Find your song</p>
           <div class="relative"><Icon name="search" class="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant" :size="20" />
             <input v-model="songInput" class="input pl-11" placeholder="Song or artist — e.g. Blinding Lights" autocomplete="off" />
-            <button v-if="songInput.includes('spotify')" class="btn-primary absolute right-1.5 top-1/2 -translate-y-1/2 h-10" @click="useLink">Use link</button></div>
+            <button v-if="isLink(songInput)" class="btn-primary absolute right-1.5 top-1/2 -translate-y-1/2 h-10" @click="useLink">Use link</button></div>
           <p class="text-body-sm text-on-surface-variant mt-2">
-            <template v-if="searchSource === 'spotify'">Searching Spotify. Visitors signed in to Spotify hear the full song; everyone else hears a 30-second preview.</template>
+            <template v-if="searchSource === 'youtube'">Searching YouTube — your song plays in full for everyone.</template>
+            <template v-else-if="searchSource === 'spotify'">Searching Spotify. Visitors signed in to Spotify hear the full song; everyone else hears a 30-second preview.</template>
             <template v-else>Searching Apple Music — a 30-second preview loops on your profile.</template>
-            You can also paste a Spotify link.
+            You can also paste a Spotify link — or a <b>YouTube link</b>, which plays the full song for everyone.
           </p>
         </div>
         <p v-if="searching" class="text-body-sm text-on-surface-variant">Searching…</p>
@@ -157,7 +181,7 @@ async function save() {
             <button class="btn h-9 px-4 bg-sunset text-white shrink-0" @click="pick(r)">{{ song?.id === r.id ? 'Picked ✓' : 'Pick' }}</button>
           </div>
         </div>
-        <p v-if="songInput.trim() && !searching && !results.length && !songInput.includes('spotify')" class="text-body-sm text-on-surface-variant">No songs found — try another spelling.</p>
+        <p v-if="songInput.trim() && !searching && !results.length && !isLink(songInput)" class="text-body-sm text-on-surface-variant">No songs found — try another spelling.</p>
         <p class="text-body-sm text-on-surface-variant">Your song starts playing when people open your profile (they can turn autoplay off in their settings).</p>
       </template>
 
@@ -166,7 +190,7 @@ async function save() {
         <div class="grid grid-cols-2 gap-2">
           <button v-for="g in GENDERS" :key="g.key" type="button" class="h-11 rounded-full border font-bold" :class="about.gender === g.key ? 'is-on' : 'border-sandstone'" @click="about.gender = g.key">{{ g.emoji }} {{ g.label }}</button>
         </div>
-        <div class="grid grid-cols-2 gap-2"><input v-model="about.pronouns" class="input" placeholder="Pronouns" maxlength="24" /><input v-model="about.city" class="input" placeholder="City" maxlength="60" /></div>
+        <input v-model="about.city" class="input" placeholder="City" maxlength="60" />
         <textarea v-model="about.bio" class="textarea" rows="3" placeholder="Bio" maxlength="280" />
         <p class="label">Interests • {{ about.interests.length }}/{{ MAX_INTERESTS }}</p>
         <div class="space-y-3 max-h-64 overflow-y-auto">
