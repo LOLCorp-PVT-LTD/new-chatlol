@@ -39,3 +39,19 @@ export declare const CONTRIBUTION: { perDeposit: number; recruit: number; quest:
 export declare const CLAN_SEASON: { weeks: number };
 export declare function clanSeasonFor(week?: number): { season: number; number: number; startWeek: number; endWeek: number; startsAt: string; endsAt: string };
 export interface ClanContributor { user: import('./types').UserPublic; points: number; xp: number; reputation: number; quests: number; wars: number; recruits: number; donated: number }
+export declare const SEASON_POINTS: { perXp: number; quest: number; warWin: number; warLoss: number; capture: number; hold: number; bounty: number; event: number };
+export declare const SEASON_PRIZES: { place: number; reputation: number; gems: number; title: string }[];
+export type ClanBoardKey = 'season' | 'reputation' | 'level' | 'weekly' | 'active' | 'wins' | 'streak' | 'achievements' | 'territory' | 'prestige' | 'members';
+export declare const CLAN_BOARDS: { key: ClanBoardKey; name: string; emoji: string }[];
+export type BountyKey = 'overtake' | 'xp' | 'quest' | 'recruit' | 'active';
+export declare const CLAN_BOUNTY_POOL: { key: BountyKey; emoji: string; label: (t: { name?: string; target: number }) => string }[];
+export declare const BOUNTY_REWARD: { reputation: number; treasury: number };
+export interface ClanLiveEventDef { key: string; name: string; emoji: string; desc: string; xp?: number; social?: number; mint?: number; sprint?: boolean; siege?: number }
+export declare const CLAN_LIVE_EVENTS: ClanLiveEventDef[];
+export declare const LIVE_EVENT_HOURS: number;
+export declare const SPRINT_PRIZES: { reputation: number; treasury: number }[];
+export declare const CLAN_PRESTIGE: { max: number; reputation: number; minLevel: number };
+export declare function prestigeStars(n: number): string;
+export interface ClanBounty { key: BountyKey; emoji: string; label: string; target: number; progress: number; done: boolean }
+export interface ClanLiveEvent extends ClanLiveEventDef { startsAt: string; endsAt: string }
+export interface ClanBoardRow { rank: number; clan?: { id: string; name: string; tag: string; emoji: string; prestige: number }; user?: import('./types').UserPublic; value: number; sub?: string }

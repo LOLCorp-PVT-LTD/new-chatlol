@@ -40,6 +40,8 @@ export interface ServerEvents {
         level: number;
     }) => void;
     'feed:new': (p: Post) => void;
+    /** A live clan event just started (Double Clan XP, Gold Rush…). */
+    'clan:event': (p: import('./clanWorld').ClanLiveEvent) => void;
     'arena:update': (p: { id: ID; version: number; status: string }) => void;
     /** A player's live activity in a game (e.g. pool aim and power), relayed to everyone else. */
     'arena:live': (p: { id: ID; userId: ID; data: Record<string, unknown> }) => void;

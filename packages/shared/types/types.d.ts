@@ -16,7 +16,7 @@ export interface UserPublic {
     /** Clan MVP last week. */
     clanMvp?: { clanId: string; clan: string } | null;
     /** Their clan (badge on the profile; tag next to their name from clan level 2). `glow` = Prestige upgrade level. */
-    clan?: { id: string; tag: string; name: string; emoji: string; color: string | null; level: number; legend: boolean; glow: number } | null;
+    clan?: { id: string; tag: string; name: string; emoji: string; color: string | null; level: number; legend: boolean; glow: number; prestige: number } | null;
     id: ID;
     handle: string;
     displayName: string;

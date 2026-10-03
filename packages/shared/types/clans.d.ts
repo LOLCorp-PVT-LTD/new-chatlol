@@ -16,7 +16,7 @@ export interface ClanLevel { level: number; rep: number; members: number; perk: 
 export declare const CLAN_LEVELS: ClanLevel[];
 export declare function clanLevelFor(rep: number): ClanLevel;
 export declare function nextClanLevel(rep: number): ClanLevel | null;
-export declare function clanHas(rep: number, key: NonNullable<ClanLevel['key']>): boolean;
+export declare function clanHas(rep: number, key: NonNullable<ClanLevel['key']>, prestige?: number): boolean;
 export declare const CLAN_WAR: { hours: number; winRep: number; maxStake: number; minLevel: number };
 export interface ClanEvent { key: 'rush' | 'arcade' | 'social' | 'arena'; name: string; emoji: string; desc: string }
 export declare const CLAN_EVENTS: ClanEvent[];

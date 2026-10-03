@@ -65,8 +65,8 @@ export const CLAN_LEVELS = [
 ];
 export const clanLevelFor = (rep) => [...CLAN_LEVELS].reverse().find((l) => rep >= l.rep) ?? CLAN_LEVELS[0];
 export const nextClanLevel = (rep) => CLAN_LEVELS.find((l) => l.rep > rep) ?? null;
-/** Does a clan with this much Rep have this perk? */
-export const clanHas = (rep, key) => CLAN_LEVELS.some((l) => l.key === key && rep >= l.rep);
+/** Does a clan with this much Clan XP have this perk? Prestiged clans keep every perk while they climb again. */
+export const clanHas = (rep, key, prestige = 0) => prestige > 0 || CLAN_LEVELS.some((l) => l.key === key && rep >= l.rep);
 
 /** Clan Wars: 48 hours; the clan whose members earn more Rep in that time wins the pot (both stakes) and bonus Rep. */
 export const CLAN_WAR = { hours: 48, winRep: 750, maxStake: 50_000, minLevel: 3 };

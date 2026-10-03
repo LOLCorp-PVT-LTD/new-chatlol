@@ -1,14 +1,15 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { CLAN_CUSTOM_ROLES, CLAN_FOUND, CLAN_WAR_MODES, CONTRIBUTION, WAR_HOURS, clanSeasonFor, warMissions, warModeFor, warRaces, warScore, CLAN_JOIN_POLICIES, CLAN_PERMS, CLAN_RANKS, clanCan, clanRank, normalizePolicy, CLAN_TAG_RE, CLAN_WAR, HQ_BUILDINGS, HQ_LEVELS, SIEGE, TERRITORIES, clanEventFor, clanHas, clanLevelFor, clanMaxMembers, hqLevel, levelForXp, nextClanLevel, objectiveTier, siegeFor } from '@chatlol/shared';
+import { CLAN_BOARDS, CLAN_LIVE_EVENTS, CLAN_PRESTIGE, CLAN_CUSTOM_ROLES, CLAN_FOUND, CLAN_WAR_MODES, CONTRIBUTION, WAR_HOURS, clanSeasonFor, warMissions, warModeFor, warRaces, warScore, CLAN_JOIN_POLICIES, CLAN_PERMS, CLAN_RANKS, clanCan, clanRank, normalizePolicy, CLAN_TAG_RE, CLAN_WAR, HQ_BUILDINGS, HQ_LEVELS, SIEGE, TERRITORIES, clanEventFor, clanHas, clanLevelFor, clanMaxMembers, hqLevel, levelForXp, nextClanLevel, objectiveTier, siegeFor } from '@chatlol/shared';
 import { db, newId, now } from '../db.js';
-import { optionalAuth, requireAuth, uid } from '../lib/auth.js';
+import { optionalAuth, requireAuth, requirePerm, uid } from '../lib/auth.js';
 import { HttpError, parse, rateLimit } from '../lib/http.js';
 import { authorCache, stats as userStats } from '../lib/serialize.js';
 import { emitWallet, notify } from '../lib/rewards.js';
 import { assertClean } from '../lib/moderation.js';
 import { track } from '../lib/activity.js';
 import { forgetMember, membershipOf, syncMemberBadges } from '../lib/clans.js';
+import { bountiesFor, clanBoard, countDay, liveEvent, startLiveEvent } from '../lib/clanSeason.js';
 import { checkAchievements, contribute, forgetBonuses, objectivesFor, siegeTarget, topContributors, trackObjective } from '../lib/clanWorld.js';
 
 /**
@@ -152,10 +153,18 @@ clansRouter.get('/clans/:id', optionalAuth, async (req, res) => {
       const [row] = await topContributors(c._id, last.week);
       return { week: last.week, user: await author(last.userId), points: last.points, quests: row?.quests ?? 0, wars: row?.wars ?? 0, reputation: Math.floor(row?.reputation ?? 0) };
     })(),
+    bounties: me ? await bountiesFor(c) : [],
+    season: await (async () => {
+      const ss = clanSeasonFor();
+      const row = await db.clanSeasons.findOne({ season: ss.season, clanId: c._id });
+      const points = Math.floor(row?.points ?? 0);
+      const rank = points ? (await db.clanSeasons.countDocuments({ season: ss.season, points: { $gt: row.points } })) + 1 : null;
+      return { ...ss, points, rank, trophies: c.seasonTrophies ?? [] };
+    })(),
     ledger: me
       ? await Promise.all((await db.clanLedger.find({ clanId: c._id }).sort({ at: -1 }).limit(30).toArray()).map(async (l) => ({ user: l.userId ? await author(l.userId) : null, amount: l.amount, what: l.what, at: l.at })))
       : [],
-    perks: { tag: clanHas(c.rep, 'tag'), wars: clanHas(c.rep, 'wars'), lounge: clanHas(c.rep, 'lounge'), banner: clanHas(c.rep, 'banner'), bonus: clanHas(c.rep, 'bonus'), radio: clanHas(c.rep, 'radio'), legend: clanHas(c.rep, 'legend') },
+    perks: { tag: clanHas(c.rep, 'tag', c.prestige), wars: clanHas(c.rep, 'wars', c.prestige), lounge: clanHas(c.rep, 'lounge', c.prestige), banner: clanHas(c.rep, 'banner', c.prestige), bonus: clanHas(c.rep, 'bonus', c.prestige), radio: clanHas(c.rep, 'radio', c.prestige), legend: clanHas(c.rep, 'legend', c.prestige) },
   });
 });
 
@@ -202,7 +211,7 @@ clansRouter.patch('/clans/:id', requireAuth, async (req, res) => {
     clanBody.partial().extend({ color: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(), bannerUrl: z.string().url().max(600).nullable().optional() }),
     req.body,
   );
-  if ((b.color !== undefined || b.bannerUrl !== undefined) && !clanHas(c.rep, 'banner')) throw new HttpError(403, 'Custom colour and banner unlock at clan level 5');
+  if ((b.color !== undefined || b.bannerUrl !== undefined) && !clanHas(c.rep, 'banner', c.prestige)) throw new HttpError(403, 'Custom colour and banner unlock at clan level 5');
   assertClean(`${b.name ?? ''} ${b.description ?? ''}`);
   const set = Object.fromEntries(Object.entries(b).filter(([, v]) => v !== undefined));
   if (set.name) set.nameLower = set.name.toLowerCase();
@@ -241,6 +250,7 @@ clansRouter.post('/clans/:id/join', requireAuth, async (req, res) => {
   if (policy === 'open' || invite) {
     await addMember(c, me);
     if (invite?.invitedBy && invite.invitedBy !== me) await contribute(c._id, invite.invitedBy, { points: CONTRIBUTION.recruit, recruits: 1 });
+    await countDay(c._id, { recruits: 1 });
     track(me, 'clan');
     return res.json({ joined: true });
   }
@@ -265,6 +275,7 @@ clansRouter.post('/clans/:id/requests/:userId/:verdict', requireAuth, async (req
       throw new HttpError(409, 'They joined another clan meanwhile');
     }
     await addMember(c, userId);
+    await countDay(c._id, { recruits: 1 });
     await notify(userId, { kind: 'system', title: `🏰 Welcome to ${c.name}!`, body: 'Your request was accepted', link: `/clans/${c._id}` });
   } else await db.clanRequests.deleteOne({ _id: r._id });
   res.json({ ok: true });
@@ -329,7 +340,7 @@ clansRouter.post('/clans/:id/members/:userId/role', requireAuth, async (req, res
 clansRouter.put('/clans/:id/roles', requireAuth, async (req, res) => {
   const c = await clanOr404(req.params.id);
   if (!isFounder((await roleIn(c, uid(req))).role)) throw new HttpError(403, 'Only the Founder can edit custom roles');
-  if (clanLevelFor(c.rep).level < CLAN_CUSTOM_ROLES.minLevel) throw new HttpError(403, `Custom roles unlock at clan level ${CLAN_CUSTOM_ROLES.minLevel}`);
+  if (clanLevelFor(c.rep).level < CLAN_CUSTOM_ROLES.minLevel && !c.prestige) throw new HttpError(403, `Custom roles unlock at clan level ${CLAN_CUSTOM_ROLES.minLevel}`);
   const { roles } = parse(
     z.object({
       roles: z.array(z.object({ key: z.string().max(20).optional(), name: z.string().trim().min(2).max(20), emoji: z.string().trim().min(1).max(8), rank: z.number().min(0.5).max(3.5), perms: z.array(z.enum(CLAN_PERMS.map((p) => p.key))).max(8) })).max(CLAN_CUSTOM_ROLES.max),
@@ -378,11 +389,11 @@ clansRouter.post('/clans/:id/donate', requireAuth, async (req, res) => {
 clansRouter.post('/clans/:id/lounge', requireAuth, async (req, res) => {
   const c = await clanOr404(req.params.id);
   await roleIn(c, uid(req), 'settings');
-  if (!clanHas(c.rep, 'lounge')) throw new HttpError(403, 'The clan lounge unlocks at clan level 4');
+  if (!clanHas(c.rep, 'lounge', c.prestige)) throw new HttpError(403, 'The clan lounge unlocks at clan level 4');
   if (c.loungeId && (await db.lounges.findOne({ _id: c.loungeId }))) return res.json({ loungeId: c.loungeId });
   const l = {
     _id: newId(), slug: `clan-${c.tag.toLowerCase()}-${newId().slice(-4)}`, name: `${c.name} HQ`, emoji: c.emoji, topic: `${c.name}’s private clan lounge`, nowPlaying: '',
-    coverUrl: `https://picsum.photos/seed/clan-${c._id}/800/500`, ownerId: c.leaderId, clanId: c._id, radio: clanHas(c.rep, 'radio'), position: 999, createdAt: now(),
+    coverUrl: `https://picsum.photos/seed/clan-${c._id}/800/500`, ownerId: c.leaderId, clanId: c._id, radio: clanHas(c.rep, 'radio', c.prestige), position: 999, createdAt: now(),
   };
   await db.lounges.insertOne(l);
   await db.clans.updateOne({ _id: c._id }, { $set: { loungeId: l._id } });
@@ -403,7 +414,7 @@ clansRouter.post('/clans/:id/wars', requireAuth, async (req, res) => {
   );
   const o = await clanOr404(opponentId);
   if (o._id === c._id) throw new HttpError(400, 'Pick another clan');
-  if (!clanHas(c.rep, 'wars') || !clanHas(o.rep, 'wars')) throw new HttpError(403, `Both clans need to be level ${CLAN_WAR.minLevel}+ for Clan Wars`);
+  if (!clanHas(c.rep, 'wars', c.prestige) || !clanHas(o.rep, 'wars', o.prestige)) throw new HttpError(403, `Both clans need to be level ${CLAN_WAR.minLevel}+ for Clan Wars`);
   if (await db.clanWars.findOne({ status: { $in: ['pending', 'active'] }, $or: [{ aId: { $in: [c._id, o._id] } }, { bId: { $in: [c._id, o._id] } }] }))
     throw new HttpError(409, 'One of these clans is already in a war or has a challenge waiting');
   if (stake) {
@@ -514,7 +525,7 @@ clansRouter.post('/clans/:id/siege', requireAuth, async (req, res) => {
   const c = await clanOr404(req.params.id);
   await roleIn(c, uid(req), 'siege');
   const { territory } = parse(z.object({ territory: z.enum(TERRITORIES.map((t) => t.key)) }), req.body);
-  if (clanLevelFor(c.rep).level < SIEGE.minLevel) throw new HttpError(403, `Clans join the Siege from level ${SIEGE.minLevel}`);
+  if (clanLevelFor(c.rep).level < SIEGE.minLevel && !c.prestige) throw new HttpError(403, `Clans join the Siege from level ${SIEGE.minLevel}`);
   if ((c.reputation ?? 0) < SIEGE.minReputation) throw new HttpError(403, `Clans need ${SIEGE.minReputation} Reputation to join the Siege — complete quests and win wars first`);
   const s = siegeFor();
   if (s.over) throw new HttpError(409, 'This week’s Siege is over — the next one opens Monday');
@@ -555,4 +566,40 @@ clansRouter.post('/clans/:id/rival', requireAuth, async (req, res) => {
     for (const m of await membersWith(o, 'wars')) await notify(m.userId, { kind: 'system', title: `😤 ${c.emoji} ${c.name} named your clan their rival!`, body: 'Settle it with a Clan War.', link: `/clans/${c._id}` });
   } else await db.clans.updateOne({ _id: c._id }, { $unset: { rivalId: '' } });
   res.json({ ok: true });
+});
+
+// ——— Leaderboards, live events, Prestige ———
+clansRouter.get('/clan-leaderboards', optionalAuth, async (req, res) => {
+  const board = CLAN_BOARDS.some((b) => b.key === req.query.board) ? String(req.query.board) : 'season';
+  res.json({ board, rows: await clanBoard(board, authorCache(req.userId)), season: clanSeasonFor() });
+});
+
+clansRouter.get('/clan-live-event', async (_req, res) => {
+  const ev = await liveEvent();
+  const s = await db.settings.findOne({ _id: 'clanLiveEvent' });
+  res.json({ event: ev ? { ...ev, id: undefined } : null, nextAt: ev ? null : s?.next ?? null });
+});
+
+/** Staff can fire a live event on demand (e.g. for a stream or a launch). */
+clansRouter.post('/clan-live-event', requireAuth, requirePerm('tournaments'), async (req, res) => {
+  const { key, hours } = parse(z.object({ key: z.enum(CLAN_LIVE_EVENTS.map((e) => e.key)), hours: z.number().min(0.25).max(24).default(2) }), req.body);
+  res.json({ event: await startLiveEvent(key, hours) });
+});
+
+/** Prestige: a max-level clan starts the climb again for a star, Reputation and rarer looks. */
+clansRouter.post('/clans/:id/prestige', requireAuth, async (req, res) => {
+  const c = await clanOr404(req.params.id);
+  if (!isFounder((await roleIn(c, uid(req))).role)) throw new HttpError(403, 'Only the Founder can Prestige the clan');
+  if (clanLevelFor(c.rep).level < CLAN_PRESTIGE.minLevel) throw new HttpError(403, `Reach clan level ${CLAN_PRESTIGE.minLevel} to Prestige`);
+  if ((c.prestige ?? 0) >= CLAN_PRESTIGE.max) throw new HttpError(409, 'Your clan is already at max Prestige');
+  const r = await db.clans.updateOne(
+    { _id: c._id, rep: c.rep },
+    { $set: { rep: 0 }, $inc: { prestige: 1, reputation: CLAN_PRESTIGE.reputation }, $push: { prestigeLog: { at: now(), fromRep: Math.floor(c.rep) } } },
+  );
+  if (!r.modifiedCount) throw new HttpError(409, 'Try again');
+  await syncMemberBadges(c._id);
+  forgetBonuses(c._id);
+  for (const m of await db.clanMembers.find({ clanId: c._id }, { projection: { userId: 1 } }).toArray())
+    await notify(m.userId, { kind: 'level', title: `✦ ${c.name} reached Prestige ${(c.prestige ?? 0) + 1}!`, body: `+${CLAN_PRESTIGE.reputation} Reputation · the climb starts again`, link: `/clans/${c._id}` });
+  res.json({ clan: clanPublic(await db.clans.findOne({ _id: c._id }), await countMembers(c._id)) });
 });

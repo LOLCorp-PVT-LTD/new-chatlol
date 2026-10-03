@@ -186,7 +186,7 @@ export async function userPublic(u, viewerId) {
     // Clan MVP badge for the week after they earned it.
     clanMvp: u.clanMvp && u.clanMvp.week >= clanEventFor().week - 1 ? { clanId: u.clanMvp.clanId, clan: u.clanMvp.clan } : null,
     // Their clan: a badge on their profile; the tag next to their name once the clan reaches level 2.
-    clan: u.clan ? { id: u.clan.id, tag: u.clan.tag, name: u.clan.name, emoji: u.clan.emoji ?? '🏰', color: u.clan.color ?? null, level: u.clan.level ?? 1, legend: u.clan.level >= 8, glow: u.clan.glow ?? 0 } : null,
+    clan: u.clan ? { id: u.clan.id, tag: u.clan.tag, name: u.clan.name, emoji: u.clan.emoji ?? '🏰', color: u.clan.color ?? null, level: u.clan.prestige ? Math.max(2, u.clan.level ?? 1) : u.clan.level ?? 1, legend: u.clan.level >= 8 || u.clan.prestige > 0, glow: u.clan.glow ?? 0, prestige: u.clan.prestige ?? 0 } : null,
     createdAt: u.createdAt,
   };
   if (viewerId && viewerId !== u._id) {

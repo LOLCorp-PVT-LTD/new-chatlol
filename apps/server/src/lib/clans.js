@@ -2,6 +2,7 @@ import { CLAN_EVENT_PRIZES, CLAN_WAR, RECRUIT_DAYS, REP_PER_SPARKS, clanEventFor
 import { db, newId, now } from '../db.js';
 import { addReputation, awardMvps, checkAchievements, clanBonuses, clanBoost, contribute, isArenaWin, isSocial, scoreSiege, trackReward } from './clanWorld.js';
 import { warTrack } from './clanWars.js';
+import { addSeasonPoints, checkBounties, countDay, eventBoost } from './clanSeason.js';
 import { CONTRIBUTION, warModeFor, warScore } from '@chatlol/shared';
 
 /**
@@ -46,12 +47,15 @@ export async function addRepFromSparks(userId, sparks, reason) {
     forgetMember(userId);
   }
   const b = await clanBonuses(m.clanId);
-  const rep = (sparks / REP_PER_SPARKS) * multiplier(reason) * (1 + b.clanxp / 100);
+  const rep = await eventBoost(m.clanId, (sparks / REP_PER_SPARKS) * multiplier(reason) * (1 + b.clanxp / 100), sparks, isSocial(reason));
   await addClanRep(m.clanId, rep, userId);
   await contribute(m.clanId, userId, { points: rep, xp: rep });
+  await addSeasonPoints(m.clanId, rep);
+  await countDay(m.clanId, { xp: rep }, userId);
   await scoreSiege(m.clanId, rep);
   await warTrack(m.clanId, userId, { xp: rep * (1 + b.war / 100), social: isSocial(reason) ? 1 : 0, wins: isArenaWin(reason) ? 1 : 0 });
   await trackReward(m.clanId, userId, sparks, reason);
+  await checkBounties(m.clanId);
 }
 
 export async function addClanRep(clanId, rep, userId = null) {
@@ -79,7 +83,7 @@ export async function syncMemberBadges(clanId) {
   const c = await db.clans.findOne({ _id: clanId });
   if (!c) return;
   const ids = (await db.clanMembers.find({ clanId }, { projection: { userId: 1 } }).toArray()).map((m) => m.userId);
-  await db.users.updateMany({ _id: { $in: ids } }, { $set: { clan: { id: c._id, tag: c.tag, name: c.name, emoji: c.emoji, color: c.color ?? null, level: clanLevelFor(c.rep).level, glow: c.hq?.prestige ?? 0 } } });
+  await db.users.updateMany({ _id: { $in: ids } }, { $set: { clan: { id: c._id, tag: c.tag, name: c.name, emoji: c.emoji, color: c.color ?? null, level: clanLevelFor(c.rep).level, glow: c.hq?.prestige ?? 0, prestige: c.prestige ?? 0 } } });
 }
 
 // ——— Clan Wars ———
@@ -104,6 +108,8 @@ export async function resolveClanWars() {
       await db.clans.updateOne({ _id: winner }, { $inc: { treasury: w.stake * 2, wins: 1, streak: 1 } });
       await db.clans.updateOne({ _id: winner }, [{ $set: { bestStreak: { $max: ['$bestStreak', '$streak'] } } }]);
       await db.clans.updateOne({ _id: loser }, { $inc: { losses: 1, reputation: 5 }, $set: { streak: 0 } });
+      await addSeasonPoints(winner, 250);
+      await addSeasonPoints(loser, 50);
       await addClanRep(winner, CLAN_WAR.winRep);
       await addReputation(winner, 20);
       // Everyone who pitched in during the war gets the victory on their record.

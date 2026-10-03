@@ -13,11 +13,11 @@ export const forgetBonuses = (clanId) => bonusCache.delete(clanId);
 export async function clanBonuses(clanId) {
   const c0 = bonusCache.get(clanId);
   if (c0 && Date.now() - c0.at < 60_000) return c0.b;
-  const c = await db.clans.findOne({ _id: clanId }, { projection: { rep: 1, hq: 1 } });
+  const c = await db.clans.findOne({ _id: clanId }, { projection: { rep: 1, hq: 1, prestige: 1 } });
   const held = await db.territories.find({ clanId }, { projection: { _id: 1 } }).toArray();
   const b = { sparks: 0, clanxp: 0, arcade: 0, social: 0, war: 0, xp: 0, economy: 0 };
   if (c) {
-    if (clanHas(c.rep, 'bonus')) b.sparks += 5;
+    if (clanHas(c.rep, 'bonus', c.prestige)) b.sparks += 5;
     b.social += hqLevel(c.hq, 'social') * 4;
     b.economy += hqLevel(c.hq, 'economy');
     b.clanxp += hqLevel(c.hq, 'growth') * 5;
@@ -158,6 +158,9 @@ export async function trackObjective(clanId, kind, amount, userId = null) {
     const { addClanRep } = await import('./clans.js');
     await addClanRep(clanId, o.reward.xp);
     for (const u of row?.active ?? []) await contribute(clanId, u, { points: CONTRIBUTION.quest, quests: 1 });
+    const season = await import('./clanSeason.js');
+    await season.addSeasonPoints(clanId, 100);
+    await season.countDay(clanId, { quests: 1 });
     const { notify } = await import('./rewards.js');
     for (const m of await db.clanMembers.find({ clanId }, { projection: { userId: 1 } }).toArray())
       await notify(m.userId, { kind: 'reward', title: `${o.emoji} Clan Quest complete: ${o.name}`, body: `+${o.reward.xp} Clan XP · +${o.reward.treasury.toLocaleString()} ✦ treasury · +${o.reward.reputation} Reputation`, link: `/clans/${clanId}` });
@@ -194,7 +197,8 @@ export async function scoreSiege(clanId, rep) {
   if (!target) return;
   const b = await clanBonuses(clanId);
   const holder = await db.territories.findOne({ _id: target }, { projection: { clanId: 1 } });
-  const mult = (1 + b.war / 100) * (holder?.clanId === clanId ? 1 + SIEGE.defenderPct / 100 : 1);
+  const { siegeEventMult } = await import('./clanSeason.js');
+  const mult = (1 + b.war / 100) * (holder?.clanId === clanId ? 1 + SIEGE.defenderPct / 100 : 1) * (await siegeEventMult());
   await db.clanSieges.updateOne({ week: s.week, clanId }, { $inc: { score: rep * mult }, $setOnInsert: { territory: target, at: now() } }, { upsert: true });
 }
 
@@ -232,6 +236,7 @@ export async function resolveSiege() {
         { upsert: true },
       );
       await db.clans.updateOne({ _id: winner }, { $inc: { captured: 1, reputation: SIEGE.captureRep } });
+      await (await import('./clanSeason.js')).addSeasonPoints(winner, 200);
       await tell(winner, { title: `🚩 Your clan captured ${t.emoji} ${t.name}!`, body: `${t.label} · +${SIEGE.captureRep} Reputation` });
       if (prev?.clanId) {
         touched.add(prev.clanId);
@@ -239,6 +244,7 @@ export async function resolveSiege() {
       }
     } else {
       await db.clans.updateOne({ _id: winner }, { $inc: { reputation: SIEGE.holdRep } });
+      await (await import('./clanSeason.js')).addSeasonPoints(winner, 75);
       await tell(winner, { title: `🛡️ Your clan held ${t.emoji} ${t.name}`, body: `+${SIEGE.holdRep} Reputation` });
     }
     // Weekly holder payouts.

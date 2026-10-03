@@ -15,6 +15,7 @@ import { startPersonaEngine } from './ai/engine.js';
 import { resumeRadio, startRadioLoop } from './lib/radio.js';
 import { payClanWeek, resolveClanWars } from './lib/clans.js';
 import { resolveSiege } from './lib/clanWorld.js';
+import { paySeason, runLiveEvents } from './lib/clanSeason.js';
 import { refreshModels, setModelStore } from './ai/nim.js';
 import { resolveExpiredTakes } from './routes/arena.js';
 import { runBirthdays } from './lib/birthdays.js';
@@ -97,6 +98,8 @@ async function main() {
     await resolveClanWars();
     await payClanWeek();
     await resolveSiege();
+    await paySeason();
+    await runLiveEvents();
     if (config.ai.enabled && !engineStarted) {
       engineStarted = true;
       await startPersonaEngine(() => acquireWorkerLease());

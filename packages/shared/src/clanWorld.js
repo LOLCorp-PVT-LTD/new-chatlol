@@ -115,3 +115,69 @@ export function clanSeasonFor(week = clanEventFor().week) {
   const start = (startWeek * 7 + 4) * 86_400_000; // weeks count from the Monday after 1 Jan 1970
   return { season, number: season - 492, startWeek, endWeek: startWeek + CLAN_SEASON.weeks - 1, startsAt: new Date(start).toISOString(), endsAt: new Date(start + CLAN_SEASON.weeks * 7 * 86_400_000).toISOString() };
 }
+
+/** Season points: what moves a clan up the season ladder. Seasonal points reset each season; lifetime stats don't. */
+export const SEASON_POINTS = { perXp: 1, quest: 100, warWin: 250, warLoss: 50, capture: 200, hold: 75, bounty: 150, event: 150 };
+/** End-of-season rewards for the top clans: trophy, Reputation, and Gems for every member. */
+export const SEASON_PRIZES = [
+  { place: 1, reputation: 500, gems: 60, title: 'Season Champions' },
+  { place: 2, reputation: 300, gems: 35, title: 'Season Runners-up' },
+  { place: 3, reputation: 200, gems: 20, title: 'Season Podium' },
+  { place: 4, reputation: 100, gems: 10, title: 'Season Top 10' },
+  { place: 5, reputation: 100, gems: 10, title: 'Season Top 10' },
+  { place: 6, reputation: 60, gems: 6, title: 'Season Top 10' },
+  { place: 7, reputation: 60, gems: 6, title: 'Season Top 10' },
+  { place: 8, reputation: 60, gems: 6, title: 'Season Top 10' },
+  { place: 9, reputation: 60, gems: 6, title: 'Season Top 10' },
+  { place: 10, reputation: 60, gems: 6, title: 'Season Top 10' },
+];
+
+/** Clan leaderboards. */
+export const CLAN_BOARDS = [
+  { key: 'season', name: 'Season', emoji: '🏆' },
+  { key: 'reputation', name: 'Reputation', emoji: '⭐' },
+  { key: 'level', name: 'Level', emoji: '📈' },
+  { key: 'weekly', name: 'Clan XP this week', emoji: '⚡' },
+  { key: 'active', name: 'Most active', emoji: '🙌' },
+  { key: 'wins', name: 'War wins', emoji: '⚔️' },
+  { key: 'streak', name: 'Win streak', emoji: '🔥' },
+  { key: 'achievements', name: 'Achievements', emoji: '🏅' },
+  { key: 'territory', name: 'Territory', emoji: '🗺️' },
+  { key: 'prestige', name: 'Prestige', emoji: '✦' },
+  { key: 'members', name: 'Top contributors', emoji: '👤' },
+];
+
+/**
+ * Daily bounties: two per clan per day, picked from this list. Spontaneous goals without a formal war.
+ * `overtake`: pass the clan just above you in this week's standings.
+ */
+export const CLAN_BOUNTY_POOL = [
+  { key: 'overtake', emoji: '🏃', label: (t) => `Overtake ${t.name} in this week’s standings` },
+  { key: 'xp', emoji: '⚡', label: (t) => `Earn ${t.target.toLocaleString('en')} Clan XP today` },
+  { key: 'quest', emoji: '📜', label: () => 'Complete a Clan Quest today' },
+  { key: 'recruit', emoji: '🤝', label: () => 'Recruit a new member today' },
+  { key: 'active', emoji: '🙌', label: (t) => `Get ${t.target} members earning today` },
+];
+export const BOUNTY_REWARD = { reputation: 25, treasury: 5_000 };
+
+/**
+ * Live server events: one fires at random every few hours and lasts two hours (admins can start one too).
+ * `xp`: Clan XP multiplier · `social`: extra multiplier for social activity · `mint`: % of members' Spark rewards
+ * minted into the treasury · `sprint`: top three clans by Clan XP during the event win prizes · `siege`: Siege score ×.
+ */
+export const CLAN_LIVE_EVENTS = [
+  { key: 'double', name: 'DOUBLE CLAN XP', emoji: '⚡', desc: 'All Clan XP is doubled.', xp: 2 },
+  { key: 'frenzy', name: 'SOCIAL FRENZY', emoji: '💬', desc: 'Posts, shouts and comments earn triple Clan XP.', social: 3 },
+  { key: 'goldrush', name: 'GOLD RUSH', emoji: '💰', desc: '5% of every Spark members earn is minted into their clan treasury.', mint: 5 },
+  { key: 'laststand', name: 'LAST CLAN STANDING', emoji: '🏁', desc: 'A two-hour sprint: the top three clans by Clan XP win Reputation and treasury prizes.', sprint: true },
+  { key: 'neonwar', name: 'NEON WAR', emoji: '🌃', desc: 'Siege scores count double — districts are up for grabs.', siege: 2 },
+];
+export const LIVE_EVENT_HOURS = 2;
+export const SPRINT_PRIZES = [{ reputation: 120, treasury: 30_000 }, { reputation: 70, treasury: 15_000 }, { reputation: 40, treasury: 8_000 }];
+
+/**
+ * Prestige: a level-8 clan can Prestige — Clan XP and level reset and it climbs again, keeping its Reputation,
+ * upgrades, achievements, trophies and history. Each Prestige adds a star (max 5), Reputation and rarer looks.
+ */
+export const CLAN_PRESTIGE = { max: 5, reputation: 500, minLevel: 8 };
+export const prestigeStars = (n) => '★'.repeat(n) + '☆'.repeat(Math.max(0, CLAN_PRESTIGE.max - n));

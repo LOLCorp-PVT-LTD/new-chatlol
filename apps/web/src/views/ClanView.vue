@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { CLAN_ACHIEVEMENTS, CLAN_CUSTOM_ROLES, CLAN_JOIN_POLICIES, CLAN_LEVELS, CLAN_PERMS, CLAN_RANKS, CLAN_WAR, clanRank, type ClanPerm, type ClanPolicy, type ClanRank, HQ_BUILDINGS, HQ_LEVELS, TERRITORIES, clanEventFor, hqLevel, siegeFor, clanSeasonFor, CLAN_WAR_MODES, WAR_HOURS, type HqKey, type WarModeKey } from '@chatlol/shared';
+import { CLAN_ACHIEVEMENTS, CLAN_CUSTOM_ROLES, CLAN_JOIN_POLICIES, CLAN_LEVELS, CLAN_PERMS, CLAN_RANKS, CLAN_WAR, clanRank, type ClanPerm, type ClanPolicy, type ClanRank, HQ_BUILDINGS, HQ_LEVELS, TERRITORIES, clanEventFor, hqLevel, siegeFor, clanSeasonFor, CLAN_WAR_MODES, CLAN_PRESTIGE, WAR_HOURS, prestigeStars, type HqKey, type WarModeKey } from '@chatlol/shared';
 import { api } from '../lib/api';
 import { useSession } from '../stores/session';
 import { confirmDialog, promptDialog } from '../lib/dialog';
@@ -150,6 +150,10 @@ async function openWar() {
   warring.value = true;
 }
 const myClanId = computed(() => s.user?.clan?.id ?? null);
+async function prestige() {
+  if (await confirmDialog({ title: `Prestige ${c.value!.name}?`, body: `Clan XP and level go back to the start and you climb again. You keep Reputation, upgrades, achievements, trophies and every perk, and gain a Prestige star and ${CLAN_PRESTIGE.reputation} Reputation.`, confirmText: '✦ Prestige' }))
+    await run(api.prestigeClan(c.value!.id), '✦ Prestige reached!');
+}
 async function nameRival() {
   if (!myClanId.value || !c.value) return;
   if (await confirmDialog({ title: `Name ${c.value.name} your rival?`, body: 'Your head-to-head record shows on both clan pages.' })) await run(api.setClanRival(myClanId.value, c.value.id), `😤 ${c.value.name} is now your rival`);
@@ -166,9 +170,11 @@ async function declare() {
       <div class="absolute -right-4 -bottom-8 text-[140px] opacity-25 select-none">{{ c.emoji }}</div>
       <p class="label !text-white/80">Clan · level {{ c.level }}</p>
       <h1 class="text-headline-xl">{{ c.emoji }} {{ c.name }} <span class="opacity-80">[{{ c.tag }}]</span></h1>
+      <p v-if="c.prestige" class="text-headline-sm tracking-widest text-[#fcd34d]" :title="`Prestige ${c.prestige}`">Prestige {{ ['I', 'II', 'III', 'IV', 'V'][c.prestige - 1] }} {{ prestigeStars(c.prestige) }}</p>
       <p v-if="c.description" class="text-body-md opacity-90 max-w-xl mt-1 whitespace-pre-line">{{ c.description }}</p>
       <div class="flex flex-wrap gap-2 mt-3">
         <span class="chip h-8 bg-white/20 text-white border-white/30">⭐ {{ c.reputation.toLocaleString() }} Reputation</span>
+        <span class="chip h-8 bg-white/20 text-white border-white/30">🏆 Season {{ d.season.number }}: {{ d.season.points.toLocaleString() }} pts<template v-if="d.season.rank"> · #{{ d.season.rank }}</template></span>
         <span v-for="t in held" :key="t.key" class="chip h-8 bg-white/20 text-white border-white/30" :title="t.label">{{ t.emoji }} {{ t.name }}</span>
         <span class="chip h-8 bg-white/20 text-white border-white/30">{{ policyLabel(c.policy) }}</span>
         <span v-if="c.requirements.minLevel" class="chip h-8 bg-white/20 text-white border-white/30">Level {{ c.requirements.minLevel }}+</span>
@@ -193,7 +199,8 @@ async function declare() {
           <button v-if="can('invite')" class="btn bg-white/20 text-white" @click="invite">➕ Invite</button>
           <button v-if="can('wars') && d.perks.wars" class="btn bg-white/20 text-white" @click="openWar">⚔️ Declare war</button>
           <button v-if="can('settings')" class="btn bg-white/20 text-white" @click="startEdit">⚙️ Settings</button>
-          <button v-if="leader && c.level >= CLAN_CUSTOM_ROLES.minLevel" class="btn bg-white/20 text-white" @click="editRoles">🎭 Roles</button>
+          <button v-if="leader && c.level >= CLAN_PRESTIGE.minLevel && c.prestige < CLAN_PRESTIGE.max" class="btn bg-[#fcd34d] text-[#3b0764]" @click="prestige">✦ Prestige</button>
+          <button v-if="leader && (c.level >= CLAN_CUSTOM_ROLES.minLevel || c.prestige)" class="btn bg-white/20 text-white" @click="editRoles">🎭 Roles</button>
           <button class="btn bg-white/10 text-white" @click="leave">Leave</button>
         </template>
       </div>
@@ -216,6 +223,14 @@ async function declare() {
           <p class="text-body-sm text-on-surface-variant mt-1">Reward: +{{ o.reward.xp }} Clan XP · ✦ {{ o.reward.treasury.toLocaleString() }} to the treasury · ⭐ +{{ o.reward.reputation }} Reputation</p>
         </div>
         <p class="text-body-sm text-on-surface-variant">Quests get harder — and pay more — as your clan levels up.</p>
+      </section>
+      <section v-if="d.bounties.length" class="card p-5 space-y-2">
+        <p class="text-headline-sm">🎯 Today’s bounties</p>
+        <div v-for="b in d.bounties" :key="b.key" class="flex items-center gap-3 rounded-md bg-surface-container-low p-3" :class="{ 'ring-2 ring-green-500/50': b.done }">
+          <span class="text-2xl">{{ b.emoji }}</span><p class="flex-1 text-label-lg">{{ b.label }} <span v-if="b.done">✅</span></p>
+          <span class="tabular-nums text-label-md">{{ b.progress.toLocaleString() }}/{{ b.target.toLocaleString() }}</span>
+        </div>
+        <p class="text-body-sm text-on-surface-variant">Each pays ⭐ +25 Reputation, ✦ 5,000 to the treasury and 150 season points. New bounties every day.</p>
       </section>
       <section class="card p-5 space-y-2">
         <div class="flex items-center gap-2"><p class="text-headline-sm flex-1">🗺️ The Siege</p><RouterLink to="/clans/map" class="btn-secondary h-9">Open the Social Map</RouterLink></div>
@@ -246,6 +261,13 @@ async function declare() {
 
     <!-- Achievements -->
     <section v-else-if="tab === 'achievements'" class="card p-5 space-y-3">
+      <div v-if="d.season.trophies.length || c.trophies.length" class="space-y-1">
+        <p class="text-headline-sm">🏆 Trophy room</p>
+        <div class="flex flex-wrap gap-2">
+          <span v-for="t in d.season.trophies" :key="`s${t.season}`" class="chip h-9" :title="`${t.points.toLocaleString()} season points`">🏆 Season {{ t.season }} · #{{ t.place }} {{ t.title }}</span>
+          <span v-for="t in c.trophies" :key="`w${t.week}`" class="chip h-9">{{ ['🥇', '🥈', '🥉'][t.place - 1] }} Weekly event · week {{ t.week }}</span>
+        </div>
+      </div>
       <p class="text-headline-sm">🏅 Achievements · {{ earned.size }}/{{ CLAN_ACHIEVEMENTS.length }}</p>
       <div class="grid sm:grid-cols-2 gap-2">
         <div v-for="a in CLAN_ACHIEVEMENTS" :key="a.key" class="flex items-center gap-3 rounded-md p-3" :class="earned.has(a.key) ? (a.rare ? 'bg-[linear-gradient(135deg,rgb(252_211_77/.35),rgb(255_94_0/.2))]' : 'bg-surface-container-low') : 'bg-surface-container-low opacity-50'">

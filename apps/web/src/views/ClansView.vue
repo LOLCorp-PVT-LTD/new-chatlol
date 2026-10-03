@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue';
+import { onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { CLAN_JOIN_POLICIES, CLAN_LEVELS, type ClanPolicy } from '@chatlol/shared';
+import { CLAN_BOARDS, CLAN_JOIN_POLICIES, CLAN_LEVELS, CLAN_LIVE_EVENTS, can as canPerm, clanSeasonFor, prestigeStars, type ClanBoardKey, type ClanLiveEvent, type ClanPolicy } from '@chatlol/shared';
 import { api } from '../lib/api';
 import { useSession } from '../stores/session';
 import Modal from '../components/Modal.vue';
 import Icon from '../components/Icon.vue';
 import Countdown from '../components/Countdown.vue';
+import ScrollRow from '../components/ScrollRow.vue';
+import Avatar from '../components/Avatar.vue';
 import ClanWarCard from '../components/ClanWarCard.vue';
 
 /** Clans: this week's event, wars going on right now, the clan leaderboard, and founding your own. */
@@ -22,6 +24,23 @@ const load = async () => {
 onMounted(load);
 let t: ReturnType<typeof setTimeout>;
 watch([q, sort], () => { clearTimeout(t); t = setTimeout(() => void load(), 300); });
+
+// Season, leaderboards, live events
+const season = clanSeasonFor();
+const board = ref<ClanBoardKey>('season');
+const rows = ref<Awaited<ReturnType<typeof api.clanLeaderboard>>['rows']>([]);
+const loadBoard = async () => (rows.value = (await api.clanLeaderboard(board.value)).rows);
+watch(board, () => void loadBoard());
+const live = ref<ClanLiveEvent | null>(null);
+const nextAt = ref<string | null>(null);
+const loadLive = async () => { const r = await api.clanLiveEvent(); live.value = r.event; nextAt.value = r.nextAt; };
+const onEvent = (e: ClanLiveEvent) => (live.value = e);
+onMounted(() => { void loadBoard(); void loadLive(); s.socket().on('clan:event', onEvent); });
+onUnmounted(() => s.socket().off('clan:event', onEvent));
+const staff = () => !!s.user && canPerm(s.user, 'tournaments');
+async function fire(key: string) {
+  try { live.value = (await api.startClanLiveEvent(key)).event; } catch (e) { s.toast({ kind: 'error', title: (e as Error).message }); }
+}
 
 const founding = ref(false);
 const f = ref({ name: '', tag: '', emoji: '🏰', description: '', policy: 'open' as ClanPolicy });
@@ -50,6 +69,31 @@ async function found() {
       </div>
     </section>
 
+    <!-- Live server event -->
+    <section v-if="live" class="rounded-lg p-5 text-white shadow-float bg-[linear-gradient(135deg,#ff3d6e,#ff9900)] flex flex-wrap items-center gap-3 live-ev">
+      <span class="text-5xl">{{ live.emoji }}</span>
+      <div class="flex-1 min-w-[200px]"><p class="label !text-white/80">Live now</p><p class="text-headline-md">{{ live.name }}</p><p class="text-body-md opacity-90">{{ live.desc }}</p></div>
+      <span class="chip h-9 bg-white/25 text-white border-white/30">Ends in <Countdown :to="live.endsAt" /></span>
+    </section>
+    <p v-else-if="nextAt" class="text-body-sm text-on-surface-variant text-center">⚡ Next surprise clan event in about <Countdown :to="nextAt" /></p>
+    <details v-if="staff()" class="card p-4 text-body-sm"><summary class="cursor-pointer text-label-lg">🎛️ Start a live clan event (staff)</summary>
+      <div class="flex flex-wrap gap-2 mt-2"><button v-for="e in CLAN_LIVE_EVENTS" :key="e.key" class="chip h-9" @click="fire(e.key)">{{ e.emoji }} {{ e.name }}</button></div>
+    </details>
+
+    <!-- Season & leaderboards -->
+    <section class="card p-5 space-y-3">
+      <div class="flex flex-wrap items-center gap-2"><p class="text-headline-sm flex-1">🏆 Clan Season {{ season.number }}</p><span class="chip h-8">Ends in <Countdown :to="season.endsAt" /></span></div>
+      <p class="text-body-sm text-on-surface-variant">Season points come from Clan XP, quests, wars, territories, bounties and events. The top 10 win trophies, Reputation and Gems for every member. Levels, Prestige and history are forever.</p>
+      <ScrollRow><button v-for="b in CLAN_BOARDS" :key="b.key" class="chip h-9 shrink-0" :class="{ 'chip-active': board === b.key }" @click="board = b.key">{{ b.emoji }} {{ b.name }}</button></ScrollRow>
+      <p v-if="!rows.length" class="text-body-md text-on-surface-variant">Nobody on this board yet.</p>
+      <component :is="r.clan ? 'RouterLink' : 'div'" v-for="r in rows" :key="r.rank" :to="r.clan ? `/clans/${r.clan.id}` : undefined" class="flex items-center gap-3 rounded-md px-2 py-2 hover:bg-surface-container-low">
+        <span class="w-7 text-center font-bold">{{ ['🥇', '🥈', '🥉'][r.rank - 1] ?? r.rank }}</span>
+        <template v-if="r.user"><Avatar :user="r.user" :size="32" /><span class="flex-1 truncate text-label-lg">{{ r.user.displayName }} <span v-if="r.clan" class="text-on-surface-variant">{{ r.clan.emoji }} [{{ r.clan.tag }}]</span></span></template>
+        <template v-else-if="r.clan"><span class="text-xl">{{ r.clan.emoji }}</span><span class="flex-1 truncate text-label-lg">{{ r.clan.name }} <span class="text-on-surface-variant">[{{ r.clan.tag }}]</span> <span v-if="r.clan.prestige" class="text-primary" :title="`Prestige ${r.clan.prestige}`">{{ prestigeStars(r.clan.prestige) }}</span></span></template>
+        <span class="text-right"><span class="block tabular-nums text-label-lg">{{ r.value.toLocaleString() }}</span><span v-if="r.sub" class="block text-body-sm text-on-surface-variant">{{ r.sub }}</span></span>
+      </component>
+    </section>
+
     <!-- This week's event -->
     <section v-if="data" class="card p-5">
       <div class="flex flex-wrap items-center gap-2">
@@ -74,7 +118,7 @@ async function found() {
 
     <!-- Leaderboard -->
     <section class="card p-5 space-y-3">
-      <div class="flex items-center gap-3"><p class="text-headline-sm flex-1">🏆 Clan leaderboard</p>
+      <div class="flex items-center gap-3"><p class="text-headline-sm flex-1">🔎 Browse clans</p>
         <button class="chip h-9" :class="{ 'chip-active': sort === 'rep' }" @click="sort = 'rep'">Level</button><button class="chip h-9" :class="{ 'chip-active': sort === 'reputation' }" @click="sort = 'reputation'">⭐ Reputation</button>
         <input v-model="q" class="input h-10 max-w-[240px]" placeholder="Search name or tag" /></div>
       <RouterLink v-for="(c, i) in data?.clans ?? []" :key="c.id" :to="`/clans/${c.id}`" class="flex items-center gap-3 rounded-md px-2 py-2 hover:bg-surface-container-low">
@@ -105,3 +149,8 @@ async function found() {
     </Modal>
   </div>
 </template>
+<style scoped>
+.live-ev { animation: live-pulse 2.4s ease-in-out infinite; }
+@keyframes live-pulse { 50% { box-shadow: 0 0 0 6px rgb(255 94 0 / 0.25), 0 20px 50px -10px rgb(255 61 110 / 0.6); } }
+@media (prefers-reduced-motion: reduce) { .live-ev { animation: none; } }
+</style>
