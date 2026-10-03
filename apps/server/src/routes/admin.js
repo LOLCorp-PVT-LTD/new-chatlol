@@ -4,6 +4,7 @@ import { db, escapeRegex, newId, now, today } from '../db.js';
 import { config } from '../config.js';
 import { LEVEL_GATES, PERMISSION_KEYS, activePowers, levelForXp, permissionsOf } from '@chatlol/shared';
 import { featureTotals, userFeatureUse } from '../lib/activity.js';
+import { dismissFinding, reinstateStaff, reviewStaffAction } from '../lib/oversight.js';
 import { getLevelGates, setLevelGates } from '../lib/progression.js';
 import { gemGoldWagers, setGemGoldWagers } from '../lib/arenas.js';
 import { requireAuth, requirePerm, uid } from '../lib/auth.js';
@@ -42,14 +43,17 @@ async function findTarget(req) {
   return u;
 }
 /** Staff actions that aren't moderation (grants, boosts, roles) go in the same log, so everything is accountable. */
-const audit = (userId, kind, reason, by, extra = {}) =>
-  db.modEvents.insertOne({ _id: newId(), userId, kind, reason, byUserId: by, createdAt: now(), ...extra });
+const audit = async (userId, kind, reason, by, { review, ...extra } = {}) => {
+  await db.modEvents.insertOne({ _id: newId(), userId, kind, reason, byUserId: by, createdAt: now(), ...extra });
+  // LOLShield oversight: non-admin staff actions are checked for missing reasons, missing evidence and self-dealing.
+  void reviewStaffAction({ staffId: by, kind, targetId: userId, reason: review?.reason ?? reason, meta: review ?? {} });
+};
 /** Staff removal: leaves a "removed by Admin" card, logs it on the author's record and tells them. */
 async function staffRemove(ref, reason, staffId) {
   const doc = await removeByStaff(ref, reason, staffId);
   if (!doc) throw new HttpError(404, 'Content not found');
   if (doc.authorId) {
-    await audit(doc.authorId, 'content_removed', `${ref.type} removed: ${reason}`, staffId, { ref });
+    await audit(doc.authorId, 'content_removed', `${ref.type} removed: ${reason}`, staffId, { ref, review: { reason } });
     await notify(doc.authorId, { kind: 'system', title: `🛡️ Your ${ref.type} was removed by an Admin`, body: `Reason: ${reason}`, link: '/settings' });
   }
   io()?.to(room.global).emit('content:removed', { type: ref.type, id: ref.id, reason });
@@ -296,7 +300,7 @@ adminRouter.post('/admin/users/:id/premium', requirePerm('premium'), async (req,
       link: '/insights',
     });
   } else await db.users.updateOne({ _id: target._id }, { $set: { 'premium.until': null } });
-  await audit(target._id, 'premium', days > 0 ? `+${days} days of Premium` : 'Premium removed', uid(req));
+  await audit(target._id, 'premium', days > 0 ? `+${days} days of Premium` : 'Premium removed', uid(req), { review: { positive: days > 0 } });
   res.json({ user: await adminUser(await db.users.findOne({ _id: target._id })) });
 });
 
@@ -326,7 +330,7 @@ adminRouter.post('/admin/users/:id/wallet', requirePerm('wallet'), async (req, r
   const fmt = (n, what) => `${n > 0 ? '+' : ''}${n.toLocaleString()} ${what}`;
   const parts = [b.sparks && fmt(b.sparks, 'Sparks'), b.gems && fmt(b.gems, 'Gems'), b.gold && fmt(b.gold, 'Gold')].filter(Boolean).join(', ');
   const gifts = [b.sparks > 0 && fmt(b.sparks, 'Sparks'), b.gems > 0 && fmt(b.gems, 'Gems'), b.gold > 0 && fmt(b.gold, 'Gold')].filter(Boolean).join(' and ');
-  await audit(target._id, 'wallet', `${parts}${b.reason ? ` — ${b.reason}` : ''}`, uid(req), { sparks: b.sparks, gems: b.gems, gold: b.gold });
+  await audit(target._id, 'wallet', `${parts}${b.reason ? ` — ${b.reason}` : ''}`, uid(req), { sparks: b.sparks, gems: b.gems, gold: b.gold, review: { positive: b.sparks > 0 || b.gems > 0 || b.gold > 0 } });
   if (b.sparks > 0 || b.gems > 0 || b.gold > 0)
     await notify(target._id, { kind: 'system', title: `🎁 ${gifts} from the ChatLOL team`, body: b.reason || 'Enjoy!', link: '/vault' });
   await emitWallet(target._id);
@@ -399,7 +403,7 @@ adminRouter.patch('/admin/users/:id/profile', requirePerm('profiles'), async (re
   if (b.removeSong) (set['profile.song'] = null), changed.push('song removed');
   if (!changed.length) throw new HttpError(400, 'Nothing changed');
   await db.users.updateOne({ _id: target._id }, { $set: set });
-  await audit(target._id, 'profile_edit', `${changed.join(', ')}${b.reason ? ` — ${b.reason}` : ''}`, uid(req));
+  await audit(target._id, 'profile_edit', `${changed.join(', ')}${b.reason ? ` — ${b.reason}` : ''}`, uid(req), { review: { reason: b.reason } });
   if (b.removeAvatar || b.removeCover || b.handle)
     await notify(target._id, { kind: 'system', title: '🛡️ An Admin updated your profile', body: `${changed.join(', ')}${b.reason ? ` — ${b.reason}` : ''}`, link: '/settings' });
   res.json({ user: await adminUser(await db.users.findOne({ _id: target._id })) });
@@ -479,6 +483,29 @@ adminRouter.get('/admin/features', requirePerm('overview'), async (_req, res) =>
   res.json({ week: await featureTotals(7), month: await featureTotals(30) });
 });
 
+// ——— LOLShield oversight of moderators ———
+adminRouter.get('/admin/oversight', requirePerm('staff'), async (_req, res) => {
+  const author = authorCache();
+  const rows = await db.modEvents.find({ kind: { $in: ['mod_violation', 'staff_revoked'] } }).sort({ createdAt: -1 }).limit(200).toArray();
+  const revoked = await db.users.find({ staffRevokedFrom: { $exists: true } }, { projection: { _id: 1, staffRevokedFrom: 1, staffRevokedAt: 1 } }).toArray();
+  res.json({
+    items: await Promise.all(rows.map(async (e) => ({ id: e._id, kind: e.kind, code: e.category ?? null, reason: e.reason, action: e.ref ?? null, cleared: !!e.cleared, staff: await author(e.userId), createdAt: e.createdAt }))),
+    revoked: await Promise.all(revoked.map(async (u) => ({ user: await author(u._id), from: u.staffRevokedFrom, at: u.staffRevokedAt }))),
+  });
+});
+adminRouter.post('/admin/oversight/:id/dismiss', requirePerm('staff'), async (req, res) => {
+  if (req.userRole !== 'admin') throw new HttpError(403, 'Only admins can dismiss oversight findings');
+  await dismissFinding(String(req.params.id));
+  await audit(uid(req), 'settings', 'Dismissed a LOLShield oversight finding', uid(req));
+  res.json({ ok: true });
+});
+adminRouter.post('/admin/oversight/reinstate/:userId', requirePerm('staff'), async (req, res) => {
+  if (req.userRole !== 'admin') throw new HttpError(403, 'Only admins can reinstate staff');
+  if (!(await reinstateStaff(String(req.params.userId)))) throw new HttpError(404, 'Nothing to reinstate');
+  await audit(String(req.params.userId), 'role', 'Staff role reinstated after LOLShield revoked it', uid(req));
+  res.json({ ok: true });
+});
+
 /** Level gates: the level members need before they can DM non-friends, post in forums, go live, make arenas. */
 adminRouter.get('/admin/level-gates', requirePerm('staff'), async (_req, res) => {
   res.json({ gates: LEVEL_GATES, values: await getLevelGates() });
@@ -521,7 +548,7 @@ adminRouter.post('/admin/users/:id/boost', requirePerm('boost'), async (req, res
   if (target.deletedAt) throw new HttpError(400, 'That account is closed');
   const until = hours ? new Date(Math.max(Date.now(), Date.parse(boostUntil(target) ?? 0)) + hours * 3_600_000).toISOString() : null;
   await db.users.updateOne({ _id: target._id }, { $set: { boost: until ? { until, by: uid(req) } : null } });
-  await audit(target._id, 'boost', until ? `Boosted until ${new Date(until).toUTCString()}` : 'Boost ended', uid(req), { until });
+  await audit(target._id, 'boost', until ? `Boosted until ${new Date(until).toUTCString()}` : 'Boost ended', uid(req), { until, review: { positive: !!until } });
   if (until && !target.isAi)
     await notify(target._id, {
       kind: 'system',

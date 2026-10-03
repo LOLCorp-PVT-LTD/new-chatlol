@@ -1009,3 +1009,26 @@ test('LOLShield: strikes cite the broken rule, admins are never moderated', asyn
   await signUp('modmember');
   await assert.rejects(as('modmember').shout({ body: 'kill yourself' }), (e) => e.status === 422);
 });
+
+test('LOLShield oversight: moderators get findings for vague reasons and no evidence; the third removes their role', async () => {
+  const { reviewStaffAction } = await import('./lib/oversight.js');
+  const mod = await signUp('ovmod');
+  await db.users.updateOne({ _id: mod.id }, { $set: { role: 'mod' } });
+  const victim = await signUp('ovvictim');
+  await reviewStaffAction({ staffId: mod.id, kind: 'mute', targetId: victim.id, reason: 'bad' });
+  const findings = await db.modEvents.find({ userId: mod.id, kind: 'mod_violation' }).toArray();
+  assert.deepEqual(findings.map((f) => f.category).sort(), ['no_evidence', 'no_reason']);
+  assert.equal((await db.users.findOne({ _id: mod.id })).role, 'mod', 'two findings: still a mod');
+  await reviewStaffAction({ staffId: mod.id, kind: 'wallet', targetId: mod.id, reason: '+1000 Sparks', meta: { positive: true } });
+  const after = await db.users.findOne({ _id: mod.id });
+  assert.equal(after.role, 'user', 'third finding: role removed');
+  assert.equal(after.staffRevokedFrom.role, 'mod');
+  // Admins are never reviewed.
+  const admin = await signUp('ovadmin');
+  await db.users.updateOne({ _id: admin.id }, { $set: { role: 'admin' } });
+  await reviewStaffAction({ staffId: admin.id, kind: 'ban', targetId: victim.id, reason: 'x' });
+  assert.equal(await db.modEvents.countDocuments({ userId: admin.id, kind: 'mod_violation' }), 0);
+  const { reinstateStaff } = await import('./lib/oversight.js');
+  assert.equal(await reinstateStaff(mod.id), true);
+  assert.equal((await db.users.findOne({ _id: mod.id })).role, 'mod');
+});

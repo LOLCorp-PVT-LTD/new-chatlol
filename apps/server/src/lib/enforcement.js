@@ -85,6 +85,9 @@ export async function applyAction(
   if (action === 'strike_clear')
     await db.modEvents.updateMany({ userId, kind: 'strike', cleared: { $ne: true } }, { $set: { cleared: true } });
   await db.modEvents.insertOne({ _id: newId(), userId, kind: action, minutes, until, reason, category, ref, byUserId: by, createdAt: now() });
+  // Staff actions (not LOLShield's own, not tickets) are reviewed by LOLShield oversight.
+  if (by !== 'ai' && !String(category ?? '').startsWith('ticket_') && ['warn', 'mute', 'suspend', 'ban'].includes(action))
+    void import('./oversight.js').then((m) => m.reviewStaffAction({ staffId: by, kind: action, targetId: userId, reason }));
 
   const copy = ACTION_COPY[action]?.(reason, until);
   if (copy) {

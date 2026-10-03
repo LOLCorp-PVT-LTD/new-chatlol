@@ -425,6 +425,9 @@ export declare function createApi(opts: ApiClientOptions): {
         cancelTournament: (id: ID) => Promise<{ ok: true }>;
         finishTournament: (id: ID) => Promise<{ ok: true }>;
         markCashPaid: (id: ID, place: number) => Promise<{ ok: true }>;
+        oversight: () => Promise<{ items: { id: ID; kind: 'mod_violation' | 'staff_revoked'; code: string | null; reason: string; action: { kind: string; targetId: string | null; reason: string } | null; cleared: boolean; staff: UserPublic; createdAt: string }[]; revoked: { user: UserPublic; from: { role: string; perms: string[] }; at: string }[] }>;
+        dismissFinding: (id: ID) => Promise<{ ok: true }>;
+        reinstateStaff: (userId: ID) => Promise<{ ok: true }>;
         levelGates: () => Promise<{ gates: import('./progression').LevelGate[]; values: Record<string, number> }>;
         setLevelGates: (values: Record<string, number>) => Promise<{ gates: import('./progression').LevelGate[]; values: Record<string, number> }>;
         terminate: (id: ID, reason: string) => Promise<{ user: AdminUser }>;
