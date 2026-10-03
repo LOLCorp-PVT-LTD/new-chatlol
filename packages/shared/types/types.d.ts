@@ -463,6 +463,8 @@ export interface Insights {
 }
 export interface HomeData {
     stats: { members: number; online: number };
+    /** The festival on right now, if any (Home banner). */
+    festival: (import('./festivals').FestivalSummary & { loungeId: ID | null }) | null;
     /** Richest members (wealth in Sparks, Gems and Gold valued at the exchange rate). */
     royalty: { rank: number; user: UserPublic; sparks: number; gems: number; gold: number; worth: number }[];
     popularMembers: UserPublic[];

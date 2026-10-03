@@ -15,6 +15,7 @@ import TierPad from '../components/TierPad.vue';
 import TierBars from '../components/TierBars.vue';
 import Icon from '../components/Icon.vue';
 import DropWidget from '../components/DropWidget.vue';
+import FestivalBanner from '../components/FestivalBanner.vue';
 import TournamentCard from '../components/TournamentCard.vue';
 
 /** Home: a slice of every part of ChatLOL, each with an arrow to its full page. */
@@ -61,6 +62,7 @@ async function nextRate() {
 <template>
   <div v-if="h" class="space-y-6 w-full">
     <DropWidget :drop="h.drop" />
+    <FestivalBanner v-if="h.festival" :festival="h.festival" />
     <!-- The reigning King of ChatLOL -->
     <RouterLink v-if="king" :to="`/u/${king.user.handle}`" class="block rounded-lg p-5 pt-8 shadow-float relative overflow-hidden text-[#3b2a00] bg-[linear-gradient(135deg,#fff3b0,#fcd34d_45%,#d4a017)] hover:brightness-105 transition">
       <div class="absolute -right-6 -bottom-10 text-[140px] opacity-20 rotate-12 select-none">👑</div>

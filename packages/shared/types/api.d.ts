@@ -368,6 +368,10 @@ export declare function createApi(opts: ApiClientOptions): {
     songSearch: (q: string) => Promise<{ enabled: boolean; source: 'spotify' | 'apple'; tracks: ProfileSong[] }>;
     updateLayout: (layout: import('./profileLayout').ProfileLayout) => Promise<{ user: UserPrivate; layout: import('./profileLayout').ProfileLayout; premiumRemoved: string[] }>;
     showcase: (userId: ID, types: import('./profileLayout').SectionType[], limit?: number) => Promise<Showcase>;
+    festival: () => Promise<{ festival: import('./festivals').FestivalSummary | null; loungeId?: ID | null; quiz?: { questions: { q: string; choices: string[] }[]; done: boolean; score: number | null; perRight: number; perfectBonus: number } }>;
+    festivalQuiz: (answers: number[]) => Promise<{ right: number; total: number; answers: number[]; reward: RewardEvent | null }>;
+    adminFestivals: () => Promise<{ current: import('./festivals').FestivalSummary | null; upcoming: (import('./festivals').FestivalSummary & { enabled: boolean })[]; all: { key: string; name: string; emoji: string }[] }>;
+    adminSetFestivals: (disabled: string[]) => Promise<{ current: import('./festivals').FestivalSummary | null; upcoming: (import('./festivals').FestivalSummary & { enabled: boolean })[] }>;
     youtubeResolve: (url: string) => Promise<{ song: ProfileSong }>;
     spotifyResolve: (url: string) => Promise<{ song: ProfileSong }>;
     premium: () => Promise<{ plans: import('./profile').PremiumPlan[]; premiumUntil: string | null; sparks: number; stripe: boolean; iap: boolean }>;

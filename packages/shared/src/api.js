@@ -131,6 +131,10 @@ export function createApi(opts) {
     showcase: (userId, types, limit) => req('GET', `/users/${userId}/showcase${q({ types: types.join(','), limit })}`),
     spotifyResolve: (url) => req('GET', `/spotify/resolve${q({ url })}`),
     youtubeResolve: (url) => req('GET', `/youtube/resolve${q({ url })}`),
+    festival: () => req('GET', '/festival'),
+    festivalQuiz: (answers) => req('POST', '/festival/quiz', { answers }),
+    adminFestivals: () => req('GET', '/admin/festivals'),
+    adminSetFestivals: (disabled) => req('PUT', '/admin/festivals', { disabled }),
 
     // premium
     premium: () => req('GET', '/premium'),

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db.js';
 import { EXCHANGE } from '@chatlol/shared';
+import { currentFestival, ensureFestivalLounge } from '../lib/festivals.js';
 import { optionalAuth } from '../lib/auth.js';
 import { authorCache, serializePost, serializePosts, serializeTake, serializeThread } from '../lib/serialize.js';
 import { presence } from '../lib/presence.js';
@@ -66,7 +67,7 @@ homeRouter.get('/home', optionalAuth, async (req, res) => {
       .toArray(),
     ensureDrop(),
     db.hotTakes.find({ resolved: false }).sort({ agreePool: -1 }).limit(3).toArray(),
-    db.lounges.find({}).sort({ position: 1 }).toArray(),
+    db.lounges.find({ $or: [{ expiresAt: null }, { expiresAt: { $exists: false } }, { expiresAt: { $gt: new Date().toISOString() } }] }).sort({ position: 1 }).toArray(),
     db.users
       .find({ deletedAt: null, isAi: false, 'moderation.status': { $ne: 'banned' } })
       .sort({ createdAt: -1 })
@@ -122,8 +123,13 @@ homeRouter.get('/home', optionalAuth, async (req, res) => {
     ])
     .toArray();
 
+  // Festival season: the Home banner, and its lounge (opened on first visit).
+  const festival = await currentFestival();
+  const festivalLounge = festival ? await ensureFestivalLounge(festival) : null;
+
   res.json({
     stats: { members, online: await presence.count() },
+    festival: festival ? { ...festival, loungeId: festivalLounge?._id ?? null } : null,
     royalty: await Promise.all(
       richest.map(async (u, i) => ({ rank: i + 1, user: await author(u._id), sparks: u.sparks ?? 0, gems: u.gems ?? 0, gold: u.gold ?? 0, worth: u.worth })),
     ),

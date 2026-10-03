@@ -15,6 +15,7 @@ import AdminUserPanel from '../components/admin/AdminUserPanel.vue';
 import AdminTournaments from '../components/admin/AdminTournaments.vue';
 import AdminAds from '../components/admin/AdminAds.vue';
 import AdminOversight from '../components/admin/AdminOversight.vue';
+import AdminFestivals from '../components/admin/AdminFestivals.vue';
 
 type Api = typeof api.admin;
 type Awaited2<T> = T extends Promise<infer U> ? U : never;
@@ -38,6 +39,7 @@ const ALL_TABS = [
   ['oversight', 'shield', 'Oversight', 'staff'],
   ['arenas', 'sports_esports', 'Arenas', 'overview'],
   ['gates', 'lock_open', 'Level gates', 'staff'],
+  ['festivals', 'calendar_month', 'Festivals', 'overview'],
 ] as const;
 const TABS = computed(() => ALL_TABS.filter((t) => !t[3] || has(t[3])));
 const section = computed(() => (route.params.section as string) || TABS.value[0]?.[0] || 'users');
@@ -167,6 +169,7 @@ const INTEGRATION_LABELS: Record<string, string> = { database: 'Database', redis
     <AdminTournaments v-else-if="section === 'tournaments'" />
     <AdminAds v-else-if="section === 'ads'" />
     <AdminOversight v-else-if="section === 'oversight'" />
+    <AdminFestivals v-else-if="section === 'festivals'" />
 
     <!-- Feature adoption -->
     <section v-else-if="section === 'features' && features" class="card p-5 space-y-3">

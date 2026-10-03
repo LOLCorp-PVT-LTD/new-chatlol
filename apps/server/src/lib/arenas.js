@@ -1,5 +1,6 @@
 import { randomBytes, randomInt } from 'node:crypto';
 import { ARENA_RAKE_PCT, GAMES } from '@chatlol/shared';
+import { currentFestival } from './festivals.js';
 import { db, newId, now } from '../db.js';
 import { HttpError } from './http.js';
 import { io, room } from './io.js';
@@ -146,7 +147,9 @@ export async function startArena(a, userId) {
   }
   // Seats in random order (white / first to act isn't always the host).
   const seats = [...a.playerIds].sort(() => randomInt(3) - 1);
-  const state = g.init(seats.length, randomInt(2 ** 31), { now: Date.now() });
+  // Trivia during a festival mixes in themed questions.
+  const festival = (await currentFestival())?.key ?? null;
+  const state = g.init(seats.length, randomInt(2 ** 31), { now: Date.now(), festival });
   const next = await save(a, {
     status: 'playing',
     playerIds: seats,
