@@ -137,6 +137,8 @@ export async function notify(userId, n) {
     body: n.body,
     actorId: n.actorId ?? null,
     link: n.link ?? null,
+    /** Requests and invitations: { type, id } — the app shows Accept / Decline buttons for it. */
+    action: n.action ?? null,
     read: false,
     createdAt: now(),
   };

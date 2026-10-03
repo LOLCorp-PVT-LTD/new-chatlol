@@ -437,6 +437,7 @@ export async function serializeNotification(n, author = authorCache(), viewerPre
     teaserAvatar: anonymous ? teaserAvatar(n._id) : null,
     link: anonymous && n.kind === 'profile_view' ? '/premium' : (n.link ?? null),
     read: !!n.read,
+    action: n.action ?? null,
     createdAt: n.createdAt,
   };
 }

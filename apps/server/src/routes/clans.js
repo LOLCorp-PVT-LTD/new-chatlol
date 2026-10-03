@@ -176,7 +176,7 @@ clansRouter.post('/clans/:id/join', requireAuth, async (req, res) => {
   await db.clanRequests.updateOne({ clanId: c._id, userId: me }, { $setOnInsert: { _id: newId(), createdAt: now() } }, { upsert: true });
   const officers = await db.clanMembers.find({ clanId: c._id, role: { $in: ['leader', 'officer'] } }).toArray();
   const who = await db.users.findOne({ _id: me }, { projection: { displayName: 1 } });
-  for (const o of officers) await notify(o.userId, { kind: 'system', title: `${who.displayName} wants to join ${c.name}`, body: 'Approve or decline on the clan page', link: `/clans/${c._id}` });
+  for (const o of officers) await notify(o.userId, { kind: 'system', actorId: me, title: `${who.displayName} wants to join ${c.name}`, body: 'Approve or decline', link: `/clans/${c._id}`, action: { type: 'clan_request', id: `${c._id}:${me}` } });
   res.json({ requested: true });
 });
 
@@ -207,7 +207,7 @@ clansRouter.post('/clans/:id/invite', requireAuth, async (req, res) => {
   if (!u) throw new HttpError(404, 'User not found');
   if (await membershipOf(userId)) throw new HttpError(409, 'They’re already in a clan');
   await db.clanRequests.updateOne({ clanId: c._id, userId }, { $set: { invited: true }, $setOnInsert: { _id: newId(), createdAt: now() } }, { upsert: true });
-  await notify(userId, { kind: 'system', title: `🏰 You’re invited to join ${c.emoji} ${c.name} [${c.tag}]`, body: 'Open the clan page to join', link: `/clans/${c._id}` });
+  await notify(userId, { kind: 'system', title: `🏰 You’re invited to join ${c.emoji} ${c.name} [${c.tag}]`, body: 'Join now, or open the clan page', link: `/clans/${c._id}`, action: { type: 'clan_invite', id: c._id } });
   res.json({ ok: true });
 });
 
@@ -302,7 +302,7 @@ clansRouter.post('/clans/:id/wars', requireAuth, async (req, res) => {
   const w = { _id: newId(), aId: c._id, bId: o._id, stake, status: 'pending', aScore: 0, bScore: 0, createdAt: now(), by: me };
   await db.clanWars.insertOne(w);
   for (const m of await db.clanMembers.find({ clanId: o._id, role: { $in: ['leader', 'officer'] } }).toArray())
-    await notify(m.userId, { kind: 'system', title: `⚔️ ${c.emoji} ${c.name} declared war on ${o.name}!`, body: stake ? `Stake: ${stake.toLocaleString()} ✦ from each treasury` : 'For glory (no stake)', link: `/clans/${o._id}` });
+    await notify(m.userId, { kind: 'system', title: `⚔️ ${c.emoji} ${c.name} declared war on ${o.name}!`, body: stake ? `Stake: ${stake.toLocaleString()} ✦ from each treasury` : 'For glory (no stake)', link: `/clans/${o._id}`, action: { type: 'clan_war', id: w._id } });
   res.status(201).json({ ok: true });
 });
 
