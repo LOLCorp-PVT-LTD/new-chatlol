@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import multer from 'multer';
-import { CRATE_ODDS, gemPriceFor } from '@chatlol/shared';
+import { CRATE_ODDS, activePowers, gemPriceFor } from '@chatlol/shared';
+import { usePower } from '../lib/progression.js';
 import { db, now, today } from '../db.js';
 import { optionalAuth, requireAuth, uid } from '../lib/auth.js';
 import { HttpError, parse, rateLimit } from '../lib/http.js';
@@ -20,10 +21,12 @@ async function equippedSet(userId) {
 }
 
 storeRouter.get('/store', optionalAuth, async (req, res) => {
-  const owned = new Set(req.userId ? await db.inventory.distinct('itemId', { userId: req.userId, qty: { $gt: 0 } }) : []);
+  const held = new Map(
+    req.userId ? (await db.inventory.find({ userId: req.userId, qty: { $gt: 0 } }).toArray()).map((i) => [String(i.itemId), i.qty]) : [],
+  );
   const eq = req.userId ? await equippedSet(req.userId) : new Set();
   const items = (await db.storeItems.find({}).sort({ position: 1 }).toArray()).map((r) =>
-    serializeStoreItem(r, owned.has(r._id), eq.has(r.key)),
+    serializeStoreItem(r, held.has(String(r._id)), eq.has(r.key), held.get(String(r._id)) ?? 0),
   );
   const wallet = req.userId ? await db.users.findOne({ _id: req.userId }, { projection: { sparks: 1, gems: 1 } }) : null;
   res.json({ items, sparks: wallet?.sparks ?? 0, gems: wallet?.gems ?? 0, crateOdds: CRATE_ODDS });
@@ -41,7 +44,7 @@ storeRouter.get('/store/inventory', requireAuth, async (req, res) => {
   res.json({ items: rows.map((r) => serializeStoreItem(r, true, eq.has(r.key))) });
 });
 
-const STACKABLE = new Set(['streak_freeze', 'boost', 'gift']);
+const STACKABLE = new Set(['streak_freeze', 'boost', 'gift', 'power']);
 
 storeRouter.post('/store/:id/buy', requireAuth, async (req, res) => {
   const me = uid(req);
@@ -69,13 +72,15 @@ storeRouter.post('/store/:id/buy', requireAuth, async (req, res) => {
         .toArray();
       if (pick) {
         const fresh = await db.inventory.insertIfMissing({ userId: me, itemId: pick._id }, { qty: 1, acquiredAt: now() });
-        if (!fresh) await db.users.updateOne({ _id: me }, { $inc: { sparks: Math.round(pick.price * 0.4) } });
+        if (fresh) await db.inventory.updateOne({ userId: me, itemId: pick._id }, { $set: { via: 'crate' } });
+        else await db.users.updateOne({ _id: me }, { $inc: { sparks: Math.round(pick.price * 0.4) } });
       }
       return pick ?? null;
     }
     await db.inventory.updateOne(
       { userId: me, itemId: item._id },
-      { $inc: { qty: 1 }, $setOnInsert: { acquiredAt: now() } },
+      // `via` decides what an inactivity reset takes back: only things bought with earned Sparks.
+      { $inc: { qty: 1 }, $set: { via: col }, $setOnInsert: { acquiredAt: now() } },
       { upsert: true },
     );
     return null;
@@ -93,6 +98,15 @@ storeRouter.post('/store/:id/buy', requireAuth, async (req, res) => {
     won: won ? serializeStoreItem(won, true) : null,
     reward,
   });
+});
+
+/** Activates a power-up from the locker (XP Surge, Spark Surge, Spotlight, All-Access Pass, Ghost Mode). */
+storeRouter.post('/store/:id/use', requireAuth, async (req, res) => {
+  const me = uid(req);
+  await rateLimit(`use:${me}`, 20);
+  const used = await usePower(me, String(req.params.id));
+  const u = await db.users.findOne({ _id: me }, { projection: { powers: 1 } });
+  res.json({ used, powers: activePowers(u) });
 });
 
 storeRouter.post('/store/daily', requireAuth, async (req, res) => {

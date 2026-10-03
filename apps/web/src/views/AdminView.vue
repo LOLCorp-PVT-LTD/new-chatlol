@@ -27,6 +27,7 @@ const ALL_TABS = [
   ['flags', 'smart_toy', 'AI flags', 'reports'],
   ['modlog', 'history', 'Activity log', null],
   ['personas', 'face', 'Personas', 'personas'],
+  ['gates', 'lock_open', 'Level gates', 'staff'],
 ] as const;
 const TABS = computed(() => ALL_TABS.filter((t) => !t[3] || has(t[3])));
 const section = computed(() => (route.params.section as string) || TABS.value[0]?.[0] || 'users');
@@ -47,12 +48,17 @@ const action = ref({ action: 'mute', minutes: 60, reason: '' });
 const wallet = ref({ sparks: 0, gems: 0, reason: '' });
 const storeItems = ref<Awaited2<ReturnType<Api['items']>>['items']>([]);
 const itemKey = ref('');
+const gates = ref<Awaited2<ReturnType<Api['levelGates']>> | null>(null);
+async function saveGates() {
+  try { gates.value = await api.admin.setLevelGates(gates.value!.values); ok('Level gates saved ✅'); } catch (e) { err(e); }
+}
 
 const err = (e: unknown) => s.toast({ kind: 'error', title: (e as Error).message });
 const ok = (title = 'Done ✅') => s.toast({ kind: 'info', title });
 async function load() {
   try {
     if (section.value === 'overview') overview.value = await api.admin.overview();
+    if (section.value === 'gates') gates.value = await api.admin.levelGates();
     if (section.value === 'users') users.value = (await api.admin.users({ q: userQuery.value.q || undefined, status: userQuery.value.status || undefined, role: userQuery.value.role || undefined })).items;
     if (section.value === 'staff') staff.value = (await api.admin.users({ staff: '1' })).items;
     if (section.value === 'payments') {
@@ -195,6 +201,17 @@ const INTEGRATION_LABELS: Record<string, string> = { database: 'Database', redis
         </section>
       </div>
     </template>
+
+    <!-- Level gates -->
+    <section v-else-if="section === 'gates' && gates" class="card p-5 space-y-4 max-w-xl">
+      <div><h2 class="text-headline-sm">Level gates</h2>
+        <p class="text-body-sm text-on-surface-variant">The level members need before they can use each feature. Staff and anyone with an All-Access Pass skip them. Friends can always DM each other, and anyone can DM AI personas.</p></div>
+      <label v-for="g in gates.gates" :key="g.key" class="flex items-center justify-between gap-3">
+        <span class="text-body-md">{{ g.label }}</span>
+        <input v-model.number="gates.values[g.key]" type="number" min="1" max="100" class="input w-24 h-10 text-center" />
+      </label>
+      <button class="btn-primary" @click="saveGates">Save</button>
+    </section>
 
     <!-- Users -->
     <template v-else-if="section === 'users'">

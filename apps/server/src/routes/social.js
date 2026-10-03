@@ -16,6 +16,8 @@ import {
   isPremium,
 } from '../lib/serialize.js';
 import { grant, notify } from '../lib/rewards.js';
+import { assertLevel } from '../lib/progression.js';
+import { areFriends } from '../lib/friends.js';
 import { assertClean } from '../lib/moderation.js';
 import { assertCanPost } from '../lib/enforcement.js';
 import { screen } from '../lib/aiModeration.js';
@@ -134,6 +136,7 @@ socialRouter.post('/forums', requireAuth, async (req, res) => {
     req.body,
   );
   await assertCanPost(me);
+  await assertLevel(me, 'forum');
   assertClean(`${b.title} ${b.body}`);
   await assertEmojiOwned(me, b.title, b.body);
   const row = await insertThread(me, b.board, b.title, b.body);
@@ -147,6 +150,7 @@ socialRouter.post('/forums/:id/replies', requireAuth, async (req, res) => {
   await rateLimit(`reply:${me}`, 20);
   const { body } = parse(z.object({ body: z.string().trim().min(1).max(2000) }), req.body);
   await assertCanPost(me);
+  await assertLevel(me, 'forum');
   assertClean(body);
   await assertEmojiOwned(me, body);
   const row = await insertReply(String(req.params.id), me, body);
@@ -318,6 +322,9 @@ socialRouter.post('/conversations', requireAuth, async (req, res) => {
   const followsMe = await db.follows.findOne({ followerId: other._id, followeeId: me });
   if (s.dmFrom === 'nobody' || (s.dmFrom === 'following' && !followsMe))
     throw new HttpError(403, `@${other.handle} isn't taking new DMs right now`);
+  // New conversations with people who aren't friends need a minimum level. AI personas and existing chats are exempt.
+  if (!other.isAi && !(await areFriends(me, other._id)) && !(await db.conversations.findOne({ pairKey: [me, other._id].sort().join('|') })))
+    await assertLevel(me, 'dm');
   res.json({ conversation: await conversationFor(me, await getOrCreateDm(me, other._id)) });
 });
 

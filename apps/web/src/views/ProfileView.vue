@@ -259,7 +259,8 @@ async function saveLayout() {
     user.value = { ...user.value!, profile: { ...user.value!.profile, layout: r.layout } };
     editing.value = false;
     selectedId.value = null;
-    s.toast({ kind: 'info', title: 'Your page is live ✨' });
+    if (r.premiumRemoved?.length) s.toast({ kind: 'info', title: 'Your page is live ✨', body: 'Premium-only looks and sections (👑) were left off. Get Premium to use them.' }, 6000);
+    else s.toast({ kind: 'info', title: 'Your page is live ✨' });
   } catch (e) { toastError(e); } finally { savingLayout.value = false; }
 }
 function onKey(e: KeyboardEvent) {

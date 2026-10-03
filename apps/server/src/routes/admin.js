@@ -2,7 +2,8 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { db, escapeRegex, newId, now, today } from '../db.js';
 import { config } from '../config.js';
-import { PERMISSION_KEYS, permissionsOf } from '@chatlol/shared';
+import { LEVEL_GATES, PERMISSION_KEYS, permissionsOf } from '@chatlol/shared';
+import { getLevelGates, setLevelGates } from '../lib/progression.js';
 import { requireAuth, requirePerm, uid } from '../lib/auth.js';
 import { HttpError, parse } from '../lib/http.js';
 import { authorCache, userPublic, isPremium } from '../lib/serialize.js';
@@ -329,10 +330,12 @@ adminRouter.post('/admin/users/:id/items', requirePerm('items'), async (req, res
   const target = await findTarget(req);
   const item = await db.storeItems.findOne({ key: b.key });
   if (!item) throw new HttpError(404, 'Item not found');
-  const stackable = ['streak_freeze', 'boost', 'gift', 'crate'].includes(item.kind);
+  const stackable = ['streak_freeze', 'boost', 'gift', 'crate', 'power'].includes(item.kind);
   await db.inventory.updateOne(
     { userId: target._id, itemId: item._id },
-    stackable ? { $inc: { qty: b.qty }, $setOnInsert: { acquiredAt: now() } } : { $set: { qty: 1 }, $setOnInsert: { acquiredAt: now() } },
+    stackable
+      ? { $inc: { qty: b.qty }, $set: { via: 'admin' }, $setOnInsert: { acquiredAt: now() } }
+      : { $set: { qty: 1, via: 'admin' }, $setOnInsert: { acquiredAt: now() } },
     { upsert: true },
   );
   await audit(target._id, 'item', `Given ${stackable && b.qty > 1 ? `${b.qty}× ` : ''}${item.name}`, uid(req));
@@ -343,6 +346,17 @@ adminRouter.post('/admin/users/:id/items', requirePerm('items'), async (req, res
     link: '/locker',
   });
   res.json({ ok: true });
+});
+
+/** Level gates: the level members need before they can DM non-friends, post in forums, go live, make arenas. */
+adminRouter.get('/admin/level-gates', requirePerm('staff'), async (_req, res) => {
+  res.json({ gates: LEVEL_GATES, values: await getLevelGates() });
+});
+adminRouter.put('/admin/level-gates', requirePerm('staff'), async (req, res) => {
+  const values = parse(z.record(z.string(), z.number().int().min(1).max(100)), req.body ?? {});
+  const saved = await setLevelGates(values);
+  await audit(uid(req), 'settings', `Level gates: ${LEVEL_GATES.map((g) => `${g.key} ${saved[g.key]}`).join(', ')}`, uid(req));
+  res.json({ gates: LEVEL_GATES, values: saved });
 });
 
 /** Boost: feature someone first in Browse Members and more often in Rate & Meet, for a while. 0 hours ends it. */

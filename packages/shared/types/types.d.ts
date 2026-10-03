@@ -62,6 +62,12 @@ export interface UserPrivate extends UserPublic {
     /** Staff permissions (role defaults + grants). Empty for members. */
     perms: import('./permissions').Permission[];
     premiumUntil: ISODate | null;
+    /** Power-ups running right now: key → when it ends. */
+    powers: Partial<Record<import('./progression').PowerKey, ISODate>>;
+    /** Days in a row with a check-in. */
+    loginStreak: number;
+    /** When earned progress was last reset for inactivity. */
+    progressResetAt: ISODate | null;
     moderation: { status: import('./profile').ModStatus; until: ISODate | null; reason: string | null };
 }
 export interface ProfileSong {
@@ -255,7 +261,7 @@ export interface NotificationItem {
     read: boolean;
     createdAt: ISODate;
 }
-export type StoreItemKind = 'frame' | 'flair' | 'theme' | 'banner' | 'gift' | 'crate' | 'boost' | 'streak_freeze' | 'stickers' | 'emojis' | 'unlock';
+export type StoreItemKind = 'frame' | 'flair' | 'theme' | 'banner' | 'gift' | 'crate' | 'boost' | 'streak_freeze' | 'stickers' | 'emojis' | 'unlock' | 'power';
 export type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
 export interface StoreItem {
     id: ID;
@@ -271,6 +277,8 @@ export interface StoreItem {
     owned?: boolean;
     equipped?: boolean;
     limited?: boolean;
+    /** How many you hold (stackable items like power-ups). */
+    qty?: number;
 }
 export interface LiveStream {
     id: ID;
@@ -317,6 +325,10 @@ export interface RewardEvent {
         to: number;
     } | null;
     questCompleted?: string | null;
+    /** Doubled by a running Spark Surge / XP Surge. */
+    boosted?: boolean;
+    /** Set on the daily check-in reward. */
+    loginStreak?: number;
 }
 export interface AuthResponse {
     token: string;

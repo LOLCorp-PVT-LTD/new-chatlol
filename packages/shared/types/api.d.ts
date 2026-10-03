@@ -252,6 +252,10 @@ export declare function createApi(opts: ApiClientOptions): {
     inventory: () => Promise<{
         items: StoreItem[];
     }>;
+    usePower: (key: import('./progression').PowerKey) => Promise<{
+        used: { key: string; until: string };
+        powers: Partial<Record<import('./progression').PowerKey, string>>;
+    }>;
     claimDaily: () => Promise<WithReward<{
         claimed: boolean;
         nextAt: string;
@@ -325,7 +329,7 @@ export declare function createApi(opts: ApiClientOptions): {
     spotifySearch: (q: string) => Promise<{ enabled: boolean; source?: 'spotify' | 'apple'; tracks: ProfileSong[] }>;
     /** Spotify when the server has Spotify keys, otherwise Apple Music previews (no keys needed). */
     songSearch: (q: string) => Promise<{ enabled: boolean; source: 'spotify' | 'apple'; tracks: ProfileSong[] }>;
-    updateLayout: (layout: import('./profileLayout').ProfileLayout) => Promise<{ user: UserPrivate; layout: import('./profileLayout').ProfileLayout }>;
+    updateLayout: (layout: import('./profileLayout').ProfileLayout) => Promise<{ user: UserPrivate; layout: import('./profileLayout').ProfileLayout; premiumRemoved: string[] }>;
     showcase: (userId: ID, types: import('./profileLayout').SectionType[], limit?: number) => Promise<Showcase>;
     spotifyResolve: (url: string) => Promise<{ song: ProfileSong }>;
     premium: () => Promise<{ plans: import('./profile').PremiumPlan[]; premiumUntil: string | null; sparks: number; stripe: boolean; iap: boolean }>;
@@ -364,6 +368,8 @@ export declare function createApi(opts: ApiClientOptions): {
         items: () => Promise<{ items: { key: string; name: string; kind: string; emoji: string | null; rarity: string | null; price: number }[] }>;
         giveItem: (id: ID, key: string, qty?: number) => Promise<{ ok: true }>;
         boost: (id: ID, hours: number) => Promise<{ user: AdminUser }>;
+        levelGates: () => Promise<{ gates: import('./progression').LevelGate[]; values: Record<string, number> }>;
+        setLevelGates: (values: Record<string, number>) => Promise<{ gates: import('./progression').LevelGate[]; values: Record<string, number> }>;
         terminate: (id: ID, reason: string) => Promise<{ user: AdminUser }>;
         payments: (p?: { status?: string; provider?: string; user?: string; days?: number; cursor?: string }) => Promise<{
             items: AdminPayment[];

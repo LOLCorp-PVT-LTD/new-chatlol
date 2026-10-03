@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import type { GemPack, StoreItem, StoreItemKind } from '@chatlol/shared';
+import { powerByKey, type GemPack, type PowerKey, type StoreItem, type StoreItemKind } from '@chatlol/shared';
 import { api } from '../lib/api';
 import { useSession } from '../stores/session';
 import { confetti, ding } from '../lib/fx';
@@ -17,11 +17,11 @@ const cardsEnabled = ref(false);
 const history = ref<{ id: string; product_id: string; gems: number; amount_cents: number | null; currency: string | null; status: string; created_at: string }[]>([]);
 const checkingOut = ref<string | null>(null);
 const odds = ref<Record<string, number>>({});
-const tab = ref<StoreItemKind | 'all' | 'gems'>(route.query.tab === 'gems' ? 'gems' : 'all');
+const tab = ref<StoreItemKind | 'all' | 'gems'>(route.query.tab === 'gems' ? 'gems' : route.query.tab === 'power' ? 'power' : 'all');
 const won = ref<StoreItem | null>(null);
 const buying = ref<string | null>(null);
 const chest = ref<{ claimed: boolean; nextAt: string } | null>(null);
-const TABS: [StoreItemKind | 'all' | 'gems', string][] = [['gems', '💎 Get Gems'], ['all', '✨ All'], ['frame', '⭕ Frames'], ['flair', '🔥 Flairs'], ['theme', '🎨 Themes'], ['banner', '🏙️ Banners'], ['crate', '🎁 Crates'], ['streak_freeze', '🧊 Boosts']];
+const TABS: [StoreItemKind | 'all' | 'gems', string][] = [['gems', '💎 Get Gems'], ['power', '⚡ Power-ups'], ['all', '✨ All'], ['frame', '⭕ Frames'], ['flair', '🔥 Flairs'], ['theme', '🎨 Themes'], ['banner', '🏙️ Banners'], ['crate', '🎁 Crates'], ['streak_freeze', '🧊 Boosts']];
 const rarityStyle: Record<string, string> = { common: 'bg-surface-container text-on-surface-variant', rare: 'bg-sky-100 text-sky-700', epic: 'bg-violet-100 text-violet-700', legendary: 'bg-sunset text-white' };
 const shown = computed(() => items.value.filter((i) => tab.value === 'all' || i.kind === tab.value || (tab.value === 'streak_freeze' && i.kind === 'boost')));
 
@@ -75,6 +75,29 @@ async function buy(i: StoreItem, currency: 'sparks' | 'gems' = 'sparks') {
     await load();
   } catch (e) { s.toast({ kind: 'error', title: (e as Error).message }); } finally { buying.value = null; }
 }
+const using = ref<string | null>(null);
+const tickNow = ref(Date.now());
+const ticker = setInterval(() => (tickNow.value = Date.now()), 30_000);
+onUnmounted(() => clearInterval(ticker));
+/** Running power-ups with minutes left, soonest-ending first. */
+const running = computed(() =>
+  Object.entries(s.user?.powers ?? {})
+    .map(([k, until]) => ({ p: powerByKey(k), left: Math.ceil((Date.parse(until as string) - tickNow.value) / 60_000) }))
+    .filter((r) => r.p && r.left > 0)
+    .sort((a, b) => a.left - b.left),
+);
+const leftLabel = (m: number) => (m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`);
+async function usePower(i: StoreItem) {
+  if (!s.user) return;
+  using.value = i.id;
+  try {
+    const r = await api.usePower(i.id as PowerKey);
+    s.user.powers = r.powers;
+    ding('reward');
+    s.toast({ kind: 'reward', title: `${i.emoji} ${i.name} is on!`, body: i.description });
+    await load();
+  } catch (e) { s.toast({ kind: 'error', title: (e as Error).message }); } finally { using.value = null; }
+}
 async function equip(i: StoreItem) {
   const key = i.kind as 'frame' | 'flair' | 'theme' | 'banner';
   const r = await api.equip({ [key]: i.equipped ? null : i.id });
@@ -97,6 +120,10 @@ async function claim() {
       <p class="text-body-md opacity-90 max-w-md">Earn ✦ Sparks by dropping daily, matching the crowd and winning Hot Takes. 💎 Gems are the premium shortcut for cosmetics.</p>
       <button class="btn bg-white text-flame mt-4 shadow-float" @click="claim"><Icon name="redeem" /> Open Daily Sunset Chest</button>
     </section>
+    <section v-if="running.length" class="card p-4 flex flex-wrap gap-2 items-center">
+      <span class="label">Active now</span>
+      <span v-for="r in running" :key="r.p!.key" class="chip chip-active">{{ r.p!.emoji }} {{ r.p!.name }} · {{ leftLabel(r.left) }} left</span>
+    </section>
     <div class="flex gap-2 overflow-x-auto scrollbar-none pb-1">
       <button v-for="t in TABS" :key="t[0]" class="chip" :class="{ 'chip-active': tab === t[0] }" @click="tab = t[0]">{{ t[1] }}</button>
     </div>
@@ -113,7 +140,7 @@ async function claim() {
         </button>
       </div>
       <p v-if="!cardsEnabled" class="text-body-sm text-on-surface-variant text-center">Card payments aren’t switched on for this server yet. On iPhone and Android, buy Gems in the app.</p>
-      <p class="text-body-sm text-on-surface-variant text-center">Gems buy cosmetics only. They can’t be staked in the Arena, used for loot crates, or cashed out. Secure checkout by Stripe.</p>
+      <p class="text-body-sm text-on-surface-variant text-center">Gems buy cosmetics and power-ups. They can’t be used for loot crates or cashed out. Secure checkout by Stripe.</p>
       <section v-if="history.length" class="card p-5">
         <h3 class="text-headline-sm mb-3">Purchase history</h3>
         <div v-for="h in history" :key="h.id" class="flex items-center justify-between py-2 border-b border-sandstone last:border-0 text-body-md">
@@ -133,6 +160,15 @@ async function claim() {
           <p class="text-label-lg">{{ i.name }}</p>
           <p class="text-body-sm text-on-surface-variant flex-1">{{ i.description }}</p>
           <button v-if="i.owned && ['frame', 'flair', 'theme', 'banner'].includes(i.kind)" class="mt-3 h-9" :class="i.equipped ? 'btn-secondary' : 'btn-primary'" @click="equip(i)">{{ i.equipped ? 'Equipped ✓' : 'Equip' }}</button>
+          <template v-else-if="i.kind === 'power'">
+            <p v-if="i.qty" class="text-label-sm text-primary mt-2">You have {{ i.qty }}</p>
+            <button v-if="i.qty && !powerByKey(i.id)?.auto" class="btn-secondary h-9 mt-2" :disabled="using === i.id" @click="usePower(i)">Use now</button>
+            <p v-else-if="i.qty" class="text-body-sm text-on-surface-variant mt-1">Kicks in by itself when you need it.</p>
+            <div class="flex gap-1.5 mt-2">
+              <button class="btn-primary h-9 flex-1 px-2" :disabled="!s.user || buying === i.id || (s.user && s.user.sparks < i.price)" @click="buy(i)">✦ {{ i.price.toLocaleString() }}</button>
+              <button v-if="i.gemPrice !== null" class="btn-secondary h-9 px-3" :disabled="!s.user || buying === i.id || (s.user && s.user.gems < i.gemPrice)" :title="`${i.gemPrice} Gems`" @click="buy(i, 'gems')">💎 {{ i.gemPrice }}</button>
+            </div>
+          </template>
           <div v-else class="flex gap-1.5 mt-3">
             <button class="btn-primary h-9 flex-1 px-2" :disabled="!s.user || buying === i.id || (s.user && s.user.sparks < i.price)" @click="buy(i)">✦ {{ i.price.toLocaleString() }}</button>
             <button v-if="i.gemPrice !== null" class="btn-secondary h-9 px-3" :disabled="!s.user || buying === i.id || (s.user && s.user.gems < i.gemPrice)" :title="`${i.gemPrice} Gems`" @click="buy(i, 'gems')">💎 {{ i.gemPrice }}</button>

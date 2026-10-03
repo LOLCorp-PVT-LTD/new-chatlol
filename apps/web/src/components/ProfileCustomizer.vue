@@ -16,6 +16,8 @@ const s = useSession();
 const u = s.user!;
 const tab = ref<'look' | 'song' | 'about'>(props.initialTab ?? 'look');
 const busy = ref(false);
+/** Photo/colour backgrounds and the profile song are Premium perks. */
+const premium = computed(() => !!s.user?.premiumUntil);
 const look = ref({ background: { ...u.profile.background }, accent: u.profile.accent, coverUrl: u.profile.coverUrl, headline: u.profile.headline });
 const about = ref({ displayName: u.displayName, bio: u.bio, pronouns: u.pronouns, city: u.city, gender: u.gender as Gender | null, interests: [...u.interests] });
 const song = ref<ProfileSong | null>(u.profile.song);
@@ -101,9 +103,11 @@ async function save() {
         <div><p class="label mb-2">Background</p>
           <div class="grid grid-cols-4 sm:grid-cols-6 gap-2">
             <button v-for="b in PROFILE_BACKGROUNDS" :key="b.key" class="aspect-square rounded-md ring-offset-2 ring-offset-surface-container-lowest transition" :class="{ 'ring-2 ring-flame': look.background.kind === 'preset' && look.background.value === b.key }" :style="{ background: b.css }" :title="b.label" :aria-label="b.label" @click="look.background = { kind: 'preset', value: b.key }" />
-            <label class="aspect-square rounded-md border-2 border-dashed border-outline-variant flex flex-col items-center justify-center cursor-pointer text-label-sm" :class="{ 'ring-2 ring-flame': look.background.kind === 'image' }">
+            <RouterLink v-if="!premium" to="/premium" class="aspect-square rounded-md border-2 border-dashed border-outline-variant flex flex-col items-center justify-center text-label-sm text-center" title="Premium perk"><span>👑</span> Photo</RouterLink>
+            <RouterLink v-if="!premium" to="/premium" class="aspect-square rounded-md border border-sandstone flex flex-col items-center justify-center text-label-sm text-center" title="Premium perk"><span>👑</span> Color</RouterLink>
+            <label v-if="premium" class="aspect-square rounded-md border-2 border-dashed border-outline-variant flex flex-col items-center justify-center cursor-pointer text-label-sm" :class="{ 'ring-2 ring-flame': look.background.kind === 'image' }">
               <Icon name="add_photo_alternate" /> Photo<input type="file" accept="image/*" class="hidden" @change="upload($event, 'background')" /></label>
-            <label class="aspect-square rounded-md border border-sandstone flex flex-col items-center justify-center cursor-pointer text-label-sm" :class="{ 'ring-2 ring-flame': look.background.kind === 'color' }">
+            <label v-if="premium" class="aspect-square rounded-md border border-sandstone flex flex-col items-center justify-center cursor-pointer text-label-sm" :class="{ 'ring-2 ring-flame': look.background.kind === 'color' }">
               <Icon name="format_color_fill" /> Color<input type="color" class="sr-only" :value="look.background.kind === 'color' ? look.background.value : '#ff5e00'" @input="look.background = { kind: 'color', value: ($event.target as HTMLInputElement).value }" /></label>
           </div></div>
         <div><p class="label mb-2">Accent colour</p>
@@ -118,6 +122,12 @@ async function save() {
         <div><p class="label mb-2">Headline</p><input v-model="look.headline" class="input" maxlength="80" placeholder="📷 Aspiring photographer & lo-fi beatmaker" /></div>
       </template>
 
+      <div v-else-if="tab === 'song' && !premium" class="text-center py-8 space-y-3">
+        <p class="text-4xl">👑🎵</p>
+        <p class="text-headline-sm">Profile songs are a Premium perk</p>
+        <p class="text-body-md text-on-surface-variant">Premium members get a song that plays when people visit, plus photo and colour backgrounds, extra layouts and fonts.</p>
+        <RouterLink to="/premium" class="btn-primary inline-flex">Get Premium</RouterLink>
+      </div>
       <template v-else-if="tab === 'song'">
         <div v-if="song" class="flex items-center gap-3 rounded-md bg-surface-container-low p-3">
           <img v-if="song.artUrl" :src="song.artUrl" alt="" class="w-14 h-14 rounded-md object-cover" /><span v-else class="w-14 h-14 rounded-md bg-sunset text-white flex items-center justify-center"><Icon name="music_note" /></span>

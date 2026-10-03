@@ -59,6 +59,7 @@ export const COLLECTIONS = [
   'kv',
   'busEvents',
   'socketEvents',
+  'settings',
 ];
 
 const txStore = new AsyncLocalStorage();

@@ -1,4 +1,4 @@
-import { levelForXp, levelTitle, REWARDS, STREAK_MILESTONES } from '@chatlol/shared';
+import { hasPower, levelForXp, levelTitle, REWARDS, STREAK_MILESTONES } from '@chatlol/shared';
 import { db, newId, now, today } from '../db.js';
 import { io, room } from './io.js';
 import { sendPush } from './push.js';
@@ -16,16 +16,23 @@ export async function bumpCounter(userId, key, by = 1) {
   return r.n;
 }
 
-export async function grant(userId, sparks, xp, reason, emit = true) {
-  const before = await db.users.findOne({ _id: userId }, { projection: { xp: 1, sparks: 1, isAi: 1 } });
+/**
+ * Pays Sparks / XP. Rewards are doubled by a running Spark Surge / XP Surge; pass `{ boost: false }` for
+ * payouts that aren't rewards (winnings, refunds).
+ */
+export async function grant(userId, sparks, xp, reason, emit = true, { boost = true } = {}) {
+  const before = await db.users.findOne({ _id: userId }, { projection: { xp: 1, sparks: 1, isAi: 1, powers: 1 } });
   if (!before) return { sparks: 0, xp: 0, reason };
+  let boosted = false;
+  if (boost && sparks > 0 && hasPower(before, 'boost_2x')) (sparks *= 2), (boosted = true);
+  if (boost && xp > 0 && hasPower(before, 'xp_surge')) (xp *= 2), (boosted = true);
   // Sparks never go below zero.
   await db.users.updateOne({ _id: userId }, [
     { $set: { sparks: { $max: [0, { $add: ['$sparks', sparks] }] }, xp: { $add: ['$xp', xp] } } },
   ]);
   const from = levelForXp(before.xp);
   const to = levelForXp(before.xp + xp);
-  const ev = { sparks, xp, reason, levelUp: to > from ? { from, to } : null };
+  const ev = { sparks, xp, reason, boosted, levelUp: to > from ? { from, to } : null };
   if (to > from && !before.isAi) {
     await db.users.updateOne({ _id: userId }, { $inc: { sparks: to * 10 } });
     await notify(userId, {

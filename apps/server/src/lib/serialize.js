@@ -1,5 +1,16 @@
 import { friendshipStatus } from './friends.js';
-import { summarizeRatings, levelForXp, tierByScore, REWARDS, gemPriceFor, normalizeLayout, permissionsOf } from '@chatlol/shared';
+import {
+  summarizeRatings,
+  levelForXp,
+  tierByScore,
+  REWARDS,
+  gemPriceFor,
+  normalizeLayout,
+  permissionsOf,
+  activePowers,
+  stripPremiumLayout,
+  PREMIUM_PROFILE,
+} from '@chatlol/shared';
 import { db, now, today } from '../db.js';
 import { presence } from './presence.js';
 
@@ -139,9 +150,11 @@ export async function userPublic(u, viewerId) {
     pronouns: u.pronouns ?? '',
     city: settings.showCity ? (u.city ?? '') : '',
     gender: settings.showGender ? (u.gender ?? null) : null,
+    // Premium looks only show while Premium is active.
     profile: {
-      song: profile.song,
-      background: profile.background,
+      song: isPremium(u) ? profile.song : null,
+      background:
+        isPremium(u) || !PREMIUM_PROFILE.backgroundKinds.includes(profile.background?.kind) ? profile.background : DEFAULT_PROFILE.background,
       accent: profile.accent,
       headline: profile.headline,
       coverUrl: profile.coverUrl,
@@ -181,7 +194,8 @@ export function effectiveStreak(u) {
 
 /** Adds the profile page layout — only where a whole profile is shown, so feeds don't carry it on every author. */
 export function withLayout(pub, u) {
-  return { ...pub, profile: { ...pub.profile, layout: normalizeLayout(u.profile?.layout) } };
+  const layout = normalizeLayout(u.profile?.layout);
+  return { ...pub, profile: { ...pub.profile, layout: isPremium(u) ? layout : stripPremiumLayout(layout).layout } };
 }
 
 export async function userPrivate(u) {
@@ -201,6 +215,9 @@ export async function userPrivate(u) {
     role: u.role ?? 'user',
     perms: permissionsOf(u),
     premiumUntil: isPremium(u) ? u.premium.until : null,
+    powers: activePowers(u),
+    loginStreak: u.loginStreak ?? 0,
+    progressResetAt: u.progressResetAt ?? null,
     moderation: { status: 'active', until: null, reason: null, ...u.moderation },
   };
 }
@@ -380,7 +397,7 @@ export async function serializeNotification(n, author = authorCache(), viewerPre
   };
 }
 
-export function serializeStoreItem(i, owned, equipped) {
+export function serializeStoreItem(i, owned, equipped, qty) {
   return {
     // Store items are addressed by their key (frame_sunset…), which is also what cosmetics store.
     id: i.key,
@@ -395,5 +412,6 @@ export function serializeStoreItem(i, owned, equipped) {
     limited: !!i.limited,
     owned,
     equipped,
+    qty: qty ?? (owned ? 1 : 0),
   };
 }

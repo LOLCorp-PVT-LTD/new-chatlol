@@ -204,4 +204,7 @@ export const PREMIUM_PERKS = [
   { emoji: '📣', title: 'See who mentioned you in shouts' },
   { emoji: '👑', title: 'Premium crown on your profile and shouts' },
   { emoji: '🔎', title: 'Full insights: when and how often people check you out' },
+  { emoji: '🎵', title: 'A profile song that plays when people visit' },
+  { emoji: '🖼️', title: 'Photo and colour profile backgrounds' },
+  { emoji: '🧩', title: 'Extra page layouts, fonts, box styles and sections (video, currently)' },
 ];

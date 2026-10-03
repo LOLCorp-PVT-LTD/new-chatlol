@@ -9,6 +9,7 @@ import { grant, notify } from '../lib/rewards.js';
 import { assertClean } from '../lib/moderation.js';
 import { itemIdFor } from '../lib/ids.js';
 import { vapidKeys } from '../lib/push.js';
+import { dailyCheckIn } from '../lib/progression.js';
 import { consumeToken, sendPasswordReset, sendVerification, sendEmailChangedNotice } from '../lib/emailTokens.js';
 import { config } from '../config.js';
 import { closeAccount } from '../lib/accounts.js';
@@ -166,11 +167,8 @@ authRouter.post('/auth/password/change', requireAuth, async (req, res) => {
 // ——— Me ———
 authRouter.get('/me', requireAuth, async (req, res) => {
   const id = uid(req);
-  // Daily login bonus — first open of the day. The conditional UPDATE makes it race-safe across instances.
-  const claimed = await db.users.updateOne({ _id: id, lastDailyClaim: { $ne: today() } }, { $set: { lastDailyClaim: today() } });
-  const reward = claimed.modifiedCount
-    ? await grant(id, REWARDS.dailyLogin.sparks, REWARDS.dailyLogin.xp, 'Daily check-in bonus ☀️')
-    : null;
+  // Daily check-in — first open of the day; the bonus grows with the login streak.
+  const reward = await dailyCheckIn(id);
   res.json({ user: await me(id), reward });
 });
 

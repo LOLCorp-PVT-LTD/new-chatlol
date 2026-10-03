@@ -49,7 +49,7 @@ const { initShared, closeShared } = await import('./lib/shared.js');
 const { seed } = await import('./seed.js');
 const { attachRealtime } = await import('./realtime.js');
 const { startPersonaEngine } = await import('./ai/engine.js');
-const { createApi } = await import('@chatlol/shared');
+const { createApi, xpForLevel } = await import('@chatlol/shared');
 const { personaUserId } = await import('./lib/ids.js');
 const MIA = personaUserId('mia');
 
@@ -68,6 +68,8 @@ async function until(fn, ms = 8000) {
     await wait(100);
   }
 }
+const levelUp = (u, level = 10) => db.users.updateOne({ _id: u.id }, { $set: { xp: xpForLevel(level) } });
+const makePremium = (u) => db.users.updateOne({ _id: u.id }, { $set: { premium: { until: new Date(Date.now() + 86_400_000).toISOString() } } });
 let n = 0;
 async function signUp(who, extra = {}) {
   n++;
@@ -135,6 +137,8 @@ test('news feed is newest-first: a new post is always at the top after a refresh
 test('profile customisation: background, accent, headline, Spotify song, gallery-only photos', async () => {
   const u = await signUp('pat');
   const c = as('pat');
+  await assert.rejects(c.updateProfile({ song: 'https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT' }), (e) => e.code === 'premium_required');
+  await makePremium(u);
   const r = await c.updateProfile({
     background: { kind: 'preset', value: 'ocean' },
     accent: '#9333ea',
@@ -232,6 +236,7 @@ test('SafeShield: threats suspend immediately; repeated insults escalate to a mu
   assert.ok(await db.modFlags.findOne({ priority: 'high' }), 'flagged for a human to consider termination');
 
   const bully = await signUp('bully');
+  await levelUp(bully);
   const { conversation } = await as('bully').openConversation(victim.id);
   for (const body of ['you are so stupid', 'shut up', 'you are a loser']) await as('bully').sendMessage(conversation.id, { body });
   // Insulting the same person twice and three insults in an hour are two strikes: warned, then muted.
@@ -416,6 +421,7 @@ test('birthdays: one system post per year, a gift, follower alerts, wishes not r
 test('profile builder: layouts are cleaned, saved, moderated and shown to visitors', async () => {
   const u = await signUp('lay');
   const c = as('lay');
+  await makePremium(u);
   const fresh = await as('anon').user(u.handle);
   assert.equal(fresh.user.profile.layout.header, 'cover', 'new profiles start from the default layout');
   assert.ok(fresh.user.profile.layout.sections.some((s) => s.type === 'wall'));
@@ -504,7 +510,7 @@ test('profile showcase: friends, followers, following, shouts and top photos', a
 });
 
 test('song search is Spotify only: clear error without keys, Spotify results with keys, never Apple', async () => {
-  await signUp('song');
+  await makePremium(await signUp('song'));
   const c = as('song');
   const { config } = await import('./config.js');
   const keys = { ...config.spotify };
@@ -597,6 +603,7 @@ test('every _id and every reference is a real ObjectId in MongoDB', async () => 
   const { ObjectId } = await import('mongodb');
   const a = await signUp('oid');
   const b = await signUp('oidb');
+  await levelUp(a);
   await as('oid').follow(b.id);
   const { post } = await as('oid').createPost({ body: 'object ids!', mediaUrl: 'https://picsum.photos/seed/oid/600/800' });
   await as('oidb').comment(post.id, 'nice');
@@ -623,7 +630,7 @@ test('every _id and every reference is a real ObjectId in MongoDB', async () => 
   const counter = await raw('dailyCounters').findOne({ userId: new ObjectId(a.id), key: 'daily_chest' });
   assert.ok(isOid(counter._id));
   // Nothing anywhere still has a string _id (shared-state keys and locks are cache entries, not records).
-  for (const name of COLLECTIONS.filter((n) => !['kv', 'locks'].includes(n))) {
+  for (const name of COLLECTIONS.filter((n) => !['kv', 'locks', 'settings'].includes(n))) {
     const bad = await raw(name).countDocuments({ _id: { $type: 'string' } });
     assert.equal(bad, 0, `${name} has string _ids`);
   }
@@ -632,7 +639,7 @@ test('every _id and every reference is a real ObjectId in MongoDB', async () => 
 test('custom emoji and stickers: free starter packs, paid packs locked until bought with Sparks', async () => {
   const u = await signUp('stick');
   const c = as('stick');
-  await db.users.updateOne({ _id: u.id }, { $set: { sparks: 5000 } });
+  await db.users.updateOne({ _id: u.id }, { $set: { sparks: 5000, xp: xpForLevel(10) } });
   const cat = await c.stickers();
   assert.ok(cat.owned.includes('emoji_basics') && cat.owned.includes('stickers_feels'), 'starter packs are free');
   assert.ok(!cat.owned.includes('emoji_slang'));
@@ -735,4 +742,68 @@ test('friend requests: send, accept, decline, cancel, unfriend, privacy setting,
     8000,
   ).catch(() => false);
   assert.ok(mia, 'the persona responded to the request');
+});
+
+test('progression: power-ups, level gates, daily check-in streak and the 7-day inactivity reset', async () => {
+  const { runInactivity, setLevelGates } = await import('./lib/progression.js');
+  const { itemIdFor } = await import('./lib/ids.js');
+  const u = await signUp('pow');
+  const stranger = await signUp('powb');
+  const c = as('pow');
+  await db.users.updateOne({ _id: u.id }, { $set: { sparks: 5000 } });
+
+  // Level gate: a level-1 member can't open a DM with a stranger…
+  await assert.rejects(c.openConversation(stranger.id), (e) => e.status === 403 && e.code === 'level_required');
+  // …until an All-Access Pass is running.
+  await c.buy('gate_pass');
+  const used = await c.usePower('gate_pass');
+  assert.ok(used.powers.gate_pass > new Date().toISOString());
+  await c.openConversation(stranger.id);
+  await assert.rejects(c.usePower('gate_pass'), (e) => e.code === 'power_missing');
+  await assert.rejects(c.usePower('wipe_shield'), (e) => e.code === 'power_auto');
+
+  // XP Surge doubles reward XP.
+  await c.buy('xp_surge');
+  await c.usePower('xp_surge');
+  const xp0 = (await db.users.findOne({ _id: u.id })).xp;
+  await c.createPost({ body: 'surging', mediaUrl: 'https://picsum.photos/seed/surge/600/800' });
+  assert.ok((await db.users.findOne({ _id: u.id })).xp - xp0 >= 60, 'post XP (30) doubled');
+
+  // Spotlight boosts the profile.
+  await c.buy('spotlight');
+  await c.usePower('spotlight');
+  assert.equal((await as('anon').user(u.handle)).user.boosted, true);
+
+  // Admin-adjustable gates.
+  await setLevelGates({ dm: 1 });
+  await as('powb').openConversation((await signUp('powc')).id);
+  await setLevelGates({ dm: 3 });
+
+  // Check-in streak: yesterday's claim → day 2 pays more than day 1.
+  const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+  await db.users.updateOne({ _id: u.id }, { $set: { lastDailyClaim: yesterday, loginStreak: 1 } });
+  const me = await c.me();
+  assert.equal(me.reward.loginStreak, 2);
+  assert.equal(me.user.loginStreak, 2);
+
+  // Inactivity: warned at 5 days away; reset at 7 unless a Comeback Shield saves them.
+  await c.buy('wipe_shield');
+  await c.buy('arena_shield');
+  await db.inventory.updateOne({ userId: u.id, itemId: itemIdFor('frame_sunset') }, { $set: { qty: 1, via: 'gems' } }, { upsert: true });
+  await wait(300); // let the last request's lastSeenAt write land first
+  const away = (days) => db.users.updateOne({ _id: u.id }, { $set: { lastSeenAt: new Date(Date.now() - days * 86_400_000).toISOString() } });
+  await away(5.5);
+  assert.ok((await runInactivity({ force: true })).warned >= 1);
+  await away(8);
+  await db.users.updateOne({ _id: u.id }, { $set: { inactivityWarnedAt: new Date(Date.now() - 2 * 86_400_000).toISOString() } });
+  assert.ok((await runInactivity({ force: true })).shielded >= 1);
+  assert.ok((await db.users.findOne({ _id: u.id })).xp > 0, 'the shield kept everything');
+  const longAgo = new Date(Date.now() - 2 * 86_400_000).toISOString();
+  await db.users.updateOne({ _id: u.id }, { $set: { wipeGraceUntil: null, gems: 40, inactivityWarned: ['final'], inactivityWarnedAt: longAgo } });
+  assert.ok((await runInactivity({ force: true })).reset >= 1);
+  const after = await db.users.findOne({ _id: u.id });
+  assert.deepEqual([after.xp, after.sparks, after.gems], [0, 0, 40], 'level and Sparks reset, Gems kept');
+  assert.ok(await db.inventory.findOne({ userId: u.id, itemId: itemIdFor('frame_sunset') }), 'Gem-bought items kept');
+  assert.equal(await db.inventory.findOne({ userId: u.id, itemId: itemIdFor('arena_shield') }), null, 'Spark-bought items gone');
+  assert.equal((await runInactivity({ force: true })).reset, 0, 'only reset once per absence');
 });

@@ -7,6 +7,7 @@ import { HttpError, parse, rateLimit } from '../lib/http.js';
 import { serializeTake, authorCache } from '../lib/serialize.js';
 import { grant, notify, emitWallet } from '../lib/rewards.js';
 import { assertClean } from '../lib/moderation.js';
+import { consumeAutoPower } from '../lib/progression.js';
 
 export const arenaRouter = Router();
 
@@ -117,7 +118,11 @@ export async function resolveExpiredTakes() {
       for (const s of await db.stakes.find({ takeId: t._id }).toArray()) {
         const won = s.side === outcome;
         const payout = won && winPool ? Math.floor((s.amount / winPool) * total) : 0;
-        if (payout) await grant(s.userId, payout, 25, 'Hot Take win 🏆', false);
+        if (payout) await grant(s.userId, payout, 25, 'Hot Take win 🏆', false, { boost: false });
+        else if (!won && (await consumeAutoPower(s.userId, 'arena_shield'))) {
+          const back = Math.floor(s.amount / 2);
+          await grant(s.userId, back, 0, `Hot Take Insurance paid out: +${back} Sparks 🪂`, false, { boost: false });
+        }
         out.push({ userId: s.userId, won, payout });
       }
       return out;

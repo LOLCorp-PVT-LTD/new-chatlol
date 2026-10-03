@@ -155,6 +155,8 @@ export function createApi(opts) {
       items: () => req('GET', '/admin/items'),
       giveItem: (id, key, qty = 1) => req('POST', `/admin/users/${id}/items`, { key, qty }),
       boost: (id, hours) => req('POST', `/admin/users/${id}/boost`, { hours }),
+      levelGates: () => req('GET', '/admin/level-gates'),
+      setLevelGates: (values) => req('PUT', '/admin/level-gates', values),
       terminate: (id, reason) => req('POST', `/admin/users/${id}/terminate`, { reason }),
       payments: (p = {}) => req('GET', `/admin/payments${q(p)}`),
       refund: (id) => req('POST', `/admin/payments/${id}/refund`),
@@ -179,6 +181,7 @@ export function createApi(opts) {
     buy: (id, currency = 'sparks') => req('POST', `/store/${id}/buy`, { currency }),
     inventory: () => req('GET', '/store/inventory'),
     claimDaily: () => req('POST', '/store/daily'),
+    usePower: (key) => req('POST', `/store/${key}/use`),
 
     // live
     streams: () => req('GET', '/live'),

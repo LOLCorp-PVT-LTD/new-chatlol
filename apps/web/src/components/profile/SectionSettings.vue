@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import type { ProfileSection } from '@chatlol/shared';
-import { CURRENTLY_LABELS, SECTION_SIZES, SECTION_STYLES, parseYouTube, sectionDef } from '@chatlol/shared';
+import { CURRENTLY_LABELS, PREMIUM_PROFILE, SECTION_SIZES, SECTION_STYLES, parseYouTube, sectionDef } from '@chatlol/shared';
+import { useSession } from '../../stores/session';
 import Icon from '../Icon.vue';
 
 /** Settings for the selected section: title, width, box style and whatever its type needs. */
@@ -11,6 +12,13 @@ const def = computed(() => sectionDef(props.section.type)!);
 const spec = computed(() => def.value.config ?? {});
 const c = computed(() => props.section.config);
 const touch = () => emit('changed');
+const session = useSession();
+const styleLocked = (key: string) => !session.user?.premiumUntil && PREMIUM_PROFILE.sectionStyles.includes(key);
+function pickStyle(key: string) {
+  if (styleLocked(key)) return session.toast({ kind: 'info', title: 'That box style is a Premium perk 👑' });
+  props.section.style = key as typeof props.section.style;
+  touch();
+}
 
 const videoInput = ref('');
 watch(
@@ -55,7 +63,7 @@ function removeItem(i: number) {
 
     <div><p class="label mb-1.5">Box style</p>
       <div class="flex flex-wrap gap-1.5">
-        <button v-for="st in SECTION_STYLES" :key="st.key" class="chip h-9" :class="{ 'chip-active': section.style === st.key }" @click="section.style = st.key; touch()">{{ st.label }}</button>
+        <button v-for="st in SECTION_STYLES" :key="st.key" class="chip h-9" :class="{ 'chip-active': section.style === st.key }" @click="pickStyle(st.key)">{{ st.label }}<span v-if="styleLocked(st.key)">&nbsp;👑</span></button>
       </div></div>
 
     <!-- Type-specific settings -->

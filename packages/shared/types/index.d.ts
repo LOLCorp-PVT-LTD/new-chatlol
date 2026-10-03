@@ -10,3 +10,4 @@ export * from './profileLayout';
 export * from './stickers';
 export * from './permissions';
 export * from './themes';
+export * from './progression';

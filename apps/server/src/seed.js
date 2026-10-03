@@ -1,6 +1,6 @@
 import { db, newId, now, today, initDb } from './db.js';
 import { PERSONAS } from './ai/personas.js';
-import { PROFILE_ACCENTS, PROFILE_BACKGROUNDS, stickerStoreItems } from '@chatlol/shared';
+import { POWERS, PROFILE_ACCENTS, PROFILE_BACKGROUNDS, stickerStoreItems } from '@chatlol/shared';
 import { newUser, DEFAULT_SETTINGS, DEFAULT_PROFILE } from './lib/serialize.js';
 import { hashPassword } from './lib/auth.js';
 import { ensureDrop } from './lib/drops.js';
@@ -134,7 +134,7 @@ const STORE = [
     '🧊',
     'linear-gradient(135deg,#bae6fd,#38bdf8)',
   ],
-  ['boost_2x', 'boost', '2x Vibe Boost', 'Double roulette Sparks for 1 hour', 350, 'rare', '⚡', 'linear-gradient(135deg,#fde047,#ff9900)'],
+  ...POWERS.map((p) => [p.key, 'power', p.name, p.desc, p.price, p.rarity, p.emoji, 'linear-gradient(135deg,#fde047,#ff5e00)']),
 ];
 
 const TAKES = [
