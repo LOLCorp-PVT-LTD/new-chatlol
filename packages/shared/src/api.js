@@ -130,6 +130,7 @@ export function createApi(opts) {
     updateLayout: (layout) => req('PUT', '/me/profile/layout', layout),
     showcase: (userId, types, limit) => req('GET', `/users/${userId}/showcase${q({ types: types.join(','), limit })}`),
     spotifyResolve: (url) => req('GET', `/spotify/resolve${q({ url })}`),
+    youtubeResolve: (url) => req('GET', `/youtube/resolve${q({ url })}`),
 
     // premium
     premium: () => req('GET', '/premium'),

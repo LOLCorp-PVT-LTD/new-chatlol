@@ -5,6 +5,7 @@ import {
   PREMIUM_PLANS,
   PREMIUM_PROFILE,
   hasPower,
+  youtubeVideos,
   shopFontByKey,
   stripPremiumLayout,
   SHOWCASE_TYPES,
@@ -22,6 +23,7 @@ import { config } from '../config.js';
 import { optionalAuth, requireAuth, uid } from '../lib/auth.js';
 import { HttpError, parse, rateLimit } from '../lib/http.js';
 import { postLimit } from '../lib/limits.js';
+import { attachFullSong, youtubeInfo } from '../lib/songMatch.js';
 import { authorCache, invalidateStats, isPremium, serializePosts, teaserAvatar, userPrivate, DEFAULT_SETTINGS } from '../lib/serialize.js';
 import { serializeShout } from './shouts.js';
 import { friendsFilter, otherOf } from '../lib/friends.js';
@@ -142,6 +144,14 @@ async function songSearchRoute(req, res) {
 profileRouter.get('/songs/search', requireAuth, songSearchRoute);
 profileRouter.get('/spotify/search', requireAuth, songSearchRoute); // older app builds
 
+/** A pasted YouTube link → a profile song (full length for every visitor). */
+profileRouter.get('/youtube/resolve', requireAuth, async (req, res) => {
+  const v = youtubeVideos(String(req.query.url ?? ''), 1)[0];
+  const info = v ? await youtubeInfo(v.id) : null;
+  if (!v || !info) throw new HttpError(400, 'Paste a link to a YouTube video');
+  res.json({ song: { source: 'youtube', type: 'track', id: v.id, youtubeId: v.id, title: info.title, artist: info.author, artUrl: `https://i.ytimg.com/vi/${v.id}/hqdefault.jpg` } });
+});
+
 profileRouter.get('/spotify/resolve', requireAuth, async (req, res) => {
   const song = await resolveSpotify(String(req.query.url ?? ''));
   if (!song) throw new HttpError(400, 'Paste a Spotify link to a song, album or playlist');
@@ -175,7 +185,9 @@ profileRouter.patch('/me/profile', requireAuth, async (req, res) => {
         .union([
           z.string().max(300),
           z.object({
-            source: z.enum(['spotify', 'apple']).optional(),
+            source: z.enum(['spotify', 'apple', 'youtube']).optional(),
+            /** A full-length YouTube upload of the same song (pasted by the member, or matched automatically). */
+            youtubeId: z.string().regex(/^[A-Za-z0-9_-]{11}$/).nullable().optional(),
             type: z.string(),
             id: z.string().max(40),
             title: z.string().max(120).optional(),
@@ -203,7 +215,12 @@ profileRouter.patch('/me/profile', requireAuth, async (req, res) => {
   if (b.background) set['profile.background'] = b.background;
   if (b.song !== undefined) {
     if (b.song === null) set['profile.song'] = null;
-    else if (typeof b.song === 'object' && b.song.source === 'apple') {
+    else if (typeof b.song === 'object' && b.song.source === 'youtube') {
+      // A YouTube upload as the song itself: plays in full for every visitor.
+      const info = await youtubeInfo(b.song.id);
+      if (!info) throw new HttpError(400, 'That YouTube video can’t be played here');
+      set['profile.song'] = { source: 'youtube', type: 'track', id: b.song.id, youtubeId: b.song.id, title: b.song.title || info.title, artist: b.song.artist || info.author, artUrl: `https://i.ytimg.com/vi/${b.song.id}/hqdefault.jpg` };
+    } else if (typeof b.song === 'object' && b.song.source === 'apple') {
       if (!/^\d{1,20}$/.test(b.song.id) || !isApplePreviewUrl(b.song.previewUrl)) throw new HttpError(400, 'That song can’t be played');
       const link = b.song.linkUrl && /^https:\/\/music\.apple\.com\//.test(b.song.linkUrl) ? b.song.linkUrl : null;
       set['profile.song'] = {
@@ -214,6 +231,7 @@ profileRouter.patch('/me/profile', requireAuth, async (req, res) => {
         artist: b.song.artist ?? '',
         artUrl: b.song.artUrl ?? null,
         previewUrl: b.song.previewUrl,
+        youtubeId: b.song.youtubeId ?? null,
         linkUrl: link,
       };
     } else {
@@ -226,10 +244,12 @@ profileRouter.patch('/me/profile', requireAuth, async (req, res) => {
         title: ref.title ?? '',
         artist: ref.artist ?? '',
         artUrl: ref.artUrl ?? null,
+        youtubeId: typeof b.song === 'object' ? (b.song.youtubeId ?? null) : null,
       };
     }
   }
   if (Object.keys(set).length) await db.users.updateOne({ _id: id }, { $set: set });
+  attachFullSong(id, set['profile.song']);
   invalidateStats(id);
   res.json({ user: await userPrivate(await db.users.findOne({ _id: id })) });
 });

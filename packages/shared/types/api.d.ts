@@ -365,6 +365,7 @@ export declare function createApi(opts: ApiClientOptions): {
     songSearch: (q: string) => Promise<{ enabled: boolean; source: 'spotify' | 'apple'; tracks: ProfileSong[] }>;
     updateLayout: (layout: import('./profileLayout').ProfileLayout) => Promise<{ user: UserPrivate; layout: import('./profileLayout').ProfileLayout; premiumRemoved: string[] }>;
     showcase: (userId: ID, types: import('./profileLayout').SectionType[], limit?: number) => Promise<Showcase>;
+    youtubeResolve: (url: string) => Promise<{ song: ProfileSong }>;
     spotifyResolve: (url: string) => Promise<{ song: ProfileSong }>;
     premium: () => Promise<{ plans: import('./profile').PremiumPlan[]; premiumUntil: string | null; sparks: number; stripe: boolean; iap: boolean }>;
     buyPremium: (planId: string) => Promise<{ premiumUntil: string; user: UserPrivate }>;

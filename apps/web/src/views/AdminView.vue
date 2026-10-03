@@ -133,7 +133,7 @@ const product = (p: AdminPayment) => [p.gems ? `💎 ${p.gems.toLocaleString()} 
 const payStatusColor = (st: string) => ({ completed: 'bg-online/15 text-green-700 dark:text-green-300', refunded: 'bg-surface-container text-on-surface-variant', pending: 'bg-yellow-400/20 text-yellow-800 dark:text-yellow-200', failed: 'bg-error/15 text-error' })[st] ?? '';
 const statusColor = (st: string) => ({ active: 'bg-online/15 text-green-700 dark:text-green-300', muted: 'bg-yellow-400/20 text-yellow-800 dark:text-yellow-200', suspended: 'bg-orange-500/20 text-orange-800 dark:text-orange-200', banned: 'bg-error/15 text-error' })[st] ?? '';
 const roleLabel = (r: string) => ROLES.find((x) => x.key === r)?.label ?? r;
-const INTEGRATION_LABELS: Record<string, string> = { database: 'Database', redis: 'Redis (optional)', sharedState: 'Shared state', smtp: 'Email (SMTP)', smtpServer: 'SMTP server', mailFrom: 'From address', stripe: 'Stripe', revenueCat: 'RevenueCat (in-app purchases)', nvidiaNim: 'NVIDIA NIM (AI)', safetyModel: 'AI safety model', turn: 'TURN server', s3: 'Object storage', songSearch: 'Song search', pushIos: 'Push — iPhone', pushAndroid: 'Push — Android', pushWeb: 'Push — web browsers' };
+const INTEGRATION_LABELS: Record<string, string> = { database: 'Database', redis: 'Redis (optional)', sharedState: 'Shared state', smtp: 'Email (SMTP)', smtpServer: 'SMTP server', mailFrom: 'From address', stripe: 'Stripe', revenueCat: 'RevenueCat (in-app purchases)', nvidiaNim: 'NVIDIA NIM (AI)', safetyModel: 'AI safety model', turn: 'TURN server', s3: 'Object storage', songSearch: 'Song search', fullSongs: 'Full-length songs', pushIos: 'Push — iPhone', pushAndroid: 'Push — Android', pushWeb: 'Push — web browsers' };
 </script>
 
 <template>

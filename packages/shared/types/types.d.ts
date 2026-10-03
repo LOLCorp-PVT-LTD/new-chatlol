@@ -83,7 +83,9 @@ export interface UserPrivate extends UserPublic {
 }
 export interface ProfileSong {
     /** Where it plays from: a Spotify embed, or an Apple Music 30-second preview (used when Spotify search isn't set up). */
-    source?: 'spotify' | 'apple';
+    source?: 'spotify' | 'apple' | 'youtube';
+    /** Full-length YouTube upload of the song: plays in full for every visitor (Spotify only plays previews to people not signed in). */
+    youtubeId?: string | null;
     type: import('./profile').SpotifyKind;
     id: string;
     title: string;

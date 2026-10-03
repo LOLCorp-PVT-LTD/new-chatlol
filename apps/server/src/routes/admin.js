@@ -114,6 +114,7 @@ adminRouter.get('/admin/overview', requirePerm('overview'), async (req, res) => 
       turn: config.rtc.turnUrls.length > 0,
       s3: !!config.s3.bucket,
       songSearch: config.spotify.clientId && config.spotify.clientSecret ? 'Spotify' : 'not set: add SPOTIFY_CLIENT_ID + SPOTIFY_CLIENT_SECRET',
+      fullSongs: config.youtube.apiKey ? 'YouTube matching ✓' : 'not set: add YOUTUBE_API_KEY for full-length profile songs',
       pushIos: apnsConfigured() ? `APNs (${config.push.apns.env})` : 'not set — add APNS_* keys',
       pushAndroid: fcmConfigured() ? 'Firebase (FCM)' : 'not set — add FIREBASE_SERVICE_ACCOUNT',
       pushWeb: 'Web Push (VAPID) ✓',
