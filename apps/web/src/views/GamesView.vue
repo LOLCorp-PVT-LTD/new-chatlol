@@ -34,6 +34,11 @@ async function load() {
   arenas.value = a.arenas;
 }
 onMounted(load);
+// Arena leaderboard: most wins, overall or per game.
+const lbGame = ref<string>('');
+const leaders = ref<Awaited<ReturnType<typeof api.gamesLeaderboard>>['entries']>([]);
+const loadLeaders = async () => (leaders.value = (await api.gamesLeaderboard(lbGame.value || undefined)).entries);
+onMounted(loadLeaders);
 
 async function create() {
   busy.value = true;
@@ -81,6 +86,20 @@ const stakeLabel = (a: Arena) => (a.stake.amount ? `${a.stake.amount.toLocaleStr
         <div class="min-w-0 flex-1"><p class="text-label-lg truncate">{{ a.name }}</p><p class="text-body-sm text-on-surface-variant">{{ gameOf(a.game)?.name }} · {{ stakeLabel(a) }} · {{ a.status === 'lobby' ? `${a.players.length}/${gameOf(a.game)?.max} waiting` : 'in play' }}</p></div>
         <span v-if="s.user && a.invitedIds.includes(s.user.id) && !a.playerIds.includes(s.user.id)" class="chip chip-active">Invited</span>
       </RouterLink></div>
+    </section>
+
+    <section class="card p-4 space-y-3">
+      <div class="flex items-center gap-2 flex-wrap"><h2 class="text-headline-sm flex-1">🏆 Top players</h2>
+        <select v-model="lbGame" class="input h-9 w-auto" aria-label="Game" @change="loadLeaders"><option value="">All games</option><option v-for="g in games" :key="g.key" :value="g.key">{{ g.emoji }} {{ g.name }}</option></select>
+        <RouterLink to="/arcade" class="chip h-9">🕹️ Arcade high scores</RouterLink></div>
+      <ol class="grid sm:grid-cols-2 gap-x-6 gap-y-1">
+        <li v-for="e in leaders.slice(0, 10)" :key="e.user.id" class="flex items-center gap-2 py-1">
+          <span class="w-6 text-center font-semibold">{{ e.rank <= 3 ? ['🥇', '🥈', '🥉'][e.rank - 1] : e.rank }}</span>
+          <Avatar :user="e.user" :size="28" :show-online="false" /><span class="flex-1 truncate text-label-md">{{ e.user.displayName }}</span>
+          <span class="text-label-md tabular-nums">{{ e.wins }} wins <span class="text-on-surface-variant">/ {{ e.played }}</span></span>
+        </li>
+      </ol>
+      <p v-if="!leaders.length" class="text-body-sm text-on-surface-variant">No finished games yet.</p>
     </section>
 
     <section class="space-y-2">

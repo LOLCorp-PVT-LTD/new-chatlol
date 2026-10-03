@@ -7,7 +7,7 @@ import { bumpCounter } from './rewards.js';
  */
 export const FEATURES = [
   'post', 'shout', 'comment', 'dm', 'reaction', 'forum', 'live', 'checkin', 'power', 'ticket', 'exchange', 'theme_unlock',
-  'arena_create', 'arena_play', 'king', 'store_buy', 'username_change', 'referral',
+  'arena_create', 'arena_play', 'king', 'store_buy', 'username_change', 'referral', 'arcade',
 ];
 export function track(userId, feature, by = 1) {
   if (!userId) return;

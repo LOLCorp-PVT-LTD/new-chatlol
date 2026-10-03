@@ -926,3 +926,28 @@ test('profile cosmetics: covers and buttons equip, Vault fonts need the item, ra
   await c.buy('font_orbitron');
   assert.equal((await c.updateLayout({ font: 'font_orbitron', sections: [] })).layout.font, 'font_orbitron');
 });
+
+test('arcade: runs are replayed on the server; impossible-speed runs are rejected; leaderboard keeps each best', async () => {
+  const { ARCADE } = await import('@chatlol/shared');
+  await signUp('arc');
+  const c = as('arc');
+  const { runId, seed } = await c.arcadeStart('2048');
+  const g = ARCADE['2048'];
+  let s = g.init(seed);
+  const inputs = [];
+  for (let i = 0; i < 40; i++) {
+    const d = ['left', 'down', 'right', 'up'][i % 4];
+    inputs.push([i, d]);
+    s = g.step(s, d);
+  }
+  await wait(2100); // 40 moves at ≥50 ms each
+  const r = await c.arcadeFinish(runId, inputs);
+  assert.equal(r.score, s.score, 'server replay matches the client');
+  assert.equal(r.rejected, false);
+  await assert.rejects(c.arcadeFinish(runId, inputs), (e) => e.status === 409, 'scored once');
+  const snake = await c.arcadeStart('snake');
+  const fast = await c.arcadeFinish(snake.runId, [[3000, 'up']]);
+  assert.equal(fast.rejected, true, '3000 ticks can’t happen in a few milliseconds');
+  const lb = await c.arcadeLeaderboard('2048');
+  assert.equal(lb.entries[0].score, s.score);
+});

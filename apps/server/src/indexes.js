@@ -56,6 +56,8 @@ export async function ensureIndexes(db) {
     idx('arenas', { seats: 1, status: 1 }),
     idx('arenas', { code: 1 }, { unique: true }),
     idx('users', { refCode: 1 }, { unique: true, sparse: true }),
+    idx('arcadeRuns', { game: 1, status: 1, score: -1 }),
+    idx('arcadeRuns', { userId: 1, game: 1, score: -1 }),
     idx('users', { referredById: 1, createdAt: -1 }, { sparse: true }),
     idx('wallNotes', { profileId: 1, createdAt: -1 }),
     idx('modEvents', { userId: 1, createdAt: -1 }),

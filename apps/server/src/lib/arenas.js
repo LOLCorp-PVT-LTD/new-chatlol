@@ -235,8 +235,8 @@ async function settleIfOver(a) {
     for (const p of payouts) if (p.amount) await db.users.updateOne({ _id: p.userId }, { $inc: { [currency]: p.amount } });
   }
   const winners = (out.winners ?? []).filter(eligible).map((i) => a.playerIds[i]);
-  await db.users.updateMany({ _id: { $in: a.playerIds } }, { $inc: { 'gameStats.played': 1 } });
-  if (winners.length) await db.users.updateMany({ _id: { $in: winners } }, { $inc: { 'gameStats.wins': 1 } });
+  await db.users.updateMany({ _id: { $in: a.playerIds } }, { $inc: { 'gameStats.played': 1, [`gameStats.byGame.${a.game}.played`]: 1 } });
+  if (winners.length) await db.users.updateMany({ _id: { $in: winners } }, { $inc: { 'gameStats.wins': 1, [`gameStats.byGame.${a.game}.wins`]: 1 } });
   const done = await db.arenas.findOneAndUpdate({ _id: a._id }, { $set: { payouts } }, { returnDocument: 'after' });
   for (const p of a.playerIds) {
     void emitWallet(p);

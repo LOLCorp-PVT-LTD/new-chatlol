@@ -13,3 +13,4 @@ export * from './themes';
 export * from './progression';
 export * from './games';
 export * from './cosmetics';
+export * from './arcade';

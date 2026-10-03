@@ -267,6 +267,11 @@ export declare function createApi(opts: ApiClientOptions): {
     inviteByEmail: (emails: string[]) => Promise<{ sent: number }>;
     exchange: (to: 'gems' | 'gold', amount: number) => Promise<{ sparks: number; gems: number; gold: number }>;
     useTicket: (key: import('./progression').TicketKey, targetId: ID, loungeId?: ID) => Promise<{ used: string; free: boolean; target: { id: ID; handle: string } }>;
+    gamesLeaderboard: (game?: string) => Promise<{ game: string | null; entries: { rank: number; user: UserPublic; wins: number; played: number }[] }>;
+    arcade: () => Promise<{ games: { key: string; name: string; emoji: string; desc: string; myBest: number | null; top: { rank: number; user: UserPublic; score: number; at: string }[] }[]; sparksPerDay: number }>;
+    arcadeStart: (game: string) => Promise<{ runId: string; seed: number }>;
+    arcadeFinish: (runId: string, inputs: [number, string][]) => Promise<{ score: number; best: number; newBest: boolean; rank: number; rejected: boolean; reward: RewardEvent | null }>;
+    arcadeLeaderboard: (game: string, period?: 'day' | 'week' | 'all') => Promise<{ period: string; entries: { rank: number; user: UserPublic; score: number; at: string }[] }>;
     games: () => Promise<{ games: import('./games').GameInfo[]; currencies: import('./games').StakeCurrency[]; stakeLimits: Record<string, number>; rakePct: number }>;
     arenas: () => Promise<{ arenas: import('./games').Arena[] }>;
     arena: (id: ID, code?: string) => Promise<{ arena: import('./games').Arena }>;

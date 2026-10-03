@@ -13,6 +13,6 @@
   },
   "scripts": {
     "check": "node ../../scripts/check-syntax.mjs src",
-    "test": "node --test src/game.test.js src/games.test.js"
+    "test": "node --test src/game.test.js src/games.test.js src/arcade.test.js"
   }
 }
