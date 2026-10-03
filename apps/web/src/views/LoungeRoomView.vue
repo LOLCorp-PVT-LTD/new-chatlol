@@ -10,7 +10,7 @@ import { insertAtCaret } from '../lib/insertAtCaret';
 import { nextTick, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { confirmDialog } from '../lib/dialog';
-import type { ChatMessage, Lounge } from '@chatlol/shared';
+import type { ChatMessage, Lounge, UserPublic } from '@chatlol/shared';
 import { timeAgo } from '@chatlol/shared';
 import { api } from '../lib/api';
 import { useSession } from '../stores/session';
@@ -23,7 +23,12 @@ const router = useRouter();
 const s = useSession();
 const id = route.params.id as string;
 const lounge = ref<Lounge | null>(null);
-const messages = ref<ChatMessage[]>([]);
+/** Chat lines plus "X joined / left the chat" notes (local only, not stored). */
+type SystemRow = { id: string; system: 'join' | 'leave'; user: UserPublic; createdAt: string };
+const messages = ref<(ChatMessage | SystemRow)[]>([]);
+const isSys = (m: ChatMessage | SystemRow): m is SystemRow => 'system' in m;
+const members = ref<UserPublic[]>([]);
+const showMembers = ref(false);
 const online = ref(0);
 const draft = ref('');
 const list = ref<HTMLElement>();
@@ -31,7 +36,18 @@ const EMOJI = ['🔥', '😂', '🧡', '💀', '👑', '✨'];
 
 const scroll = async () => { await nextTick(); list.value?.scrollTo({ top: list.value.scrollHeight, behavior: 'smooth' }); };
 const onMsg = (m: ChatMessage) => { if (m.roomId === id) { messages.value.push(m); void scroll(); } };
-const onPresence = (p: { loungeId: string; onlineCount: number }) => { if (p.loungeId === id) online.value = Math.max(online.value, p.onlineCount); };
+const onPresence = (p: { loungeId: string; onlineCount: number; joined?: UserPublic; left?: UserPublic }) => {
+  if (p.loungeId !== id) return;
+  online.value = p.onlineCount;
+  const u = p.joined ?? p.left;
+  if (!u) return;
+  members.value = members.value.filter((x) => x.id !== u.id);
+  if (p.joined) members.value.unshift(p.joined);
+  if (u.id === s.user?.id) return;
+  messages.value.push({ id: `sys-${u.id}-${Date.now()}`, system: p.joined ? 'join' : 'leave', user: u, createdAt: new Date().toISOString() });
+  void scroll();
+};
+const onMembers = (p: { loungeId: string; members: UserPublic[] }) => { if (p.loungeId === id) members.value = p.members; };
 
 const onKicked = (k: { loungeId: string; by: string; minutes: number }) => {
   if (k.loungeId !== id) return;
@@ -39,11 +55,11 @@ const onKicked = (k: { loungeId: string; by: string; minutes: number }) => {
   void router.push('/lounges');
 };
 const onReactions = (p: { id: string; reactions: ChatMessage['reactions'] }) => {
-  const m = messages.value.find((x) => x.id === p.id);
+  const m = messages.value.find((x): x is ChatMessage => !isSys(x) && x.id === p.id);
   if (m) m.reactions = p.reactions;
 };
 /** Kick Ticket: tap someone's name in the room. */
-async function kick(m: ChatMessage) {
+async function kick(m: { author: UserPublic }) {
   if (!(await confirmDialog({ title: `🥾 Kick @${m.author.handle}?`, body: 'Uses one Kick Ticket: they’re out of this lounge for an hour.', danger: true }))) return;
   try {
     const r = await api.useTicket('kick_ticket', m.author.id, id);
@@ -65,12 +81,14 @@ onMounted(async () => {
   sock.on('message:reactions', onReactions);
   sock.on('lounge:message', onMsg);
   sock.on('lounge:presence', onPresence);
+  sock.on('lounge:members', onMembers);
 });
 onUnmounted(() => {
   const sock = s.socket();
   sock.emit('lounge:leave', id);
   sock.off('lounge:message', onMsg);
   sock.off('lounge:presence', onPresence);
+  sock.off('lounge:members', onMembers);
   sock.off('lounge:kicked', onKicked);
   sock.off('message:reactions', onReactions);
 });
@@ -90,9 +108,32 @@ function send(text = draft.value, sticker: StickerInput | null = null) {
       <span class="text-3xl">{{ lounge.emoji }}</span>
       <div class="min-w-0 flex-1"><h1 class="text-headline-sm truncate">{{ lounge.name }}</h1>
         <p class="text-body-sm text-on-surface-variant truncate flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-online" /> {{ online }} here • <Icon name="graphic_eq" :size="14" class="text-flame" /> {{ lounge.nowPlaying }}</p></div>
+      <button class="flex items-center -space-x-2 shrink-0 rounded-full pr-1 hover:opacity-90" :aria-expanded="showMembers" aria-label="Who’s here" @click="showMembers = !showMembers">
+        <Avatar v-for="u in members.slice(0, 4)" :key="u.id" :user="u" :size="30" class="ring-2 ring-sunlit rounded-full" />
+        <span class="w-[30px] h-[30px] rounded-full bg-surface-container-high ring-2 ring-sunlit flex items-center justify-center text-[11px] font-bold">{{ members.length > 4 ? `+${members.length - 4}` : members.length }}</span>
+      </button>
     </header>
+    <Transition name="fade">
+      <section v-if="showMembers" class="px-5 py-3 border-b border-sandstone/60 bg-surface-container-lowest/50 backdrop-blur-md">
+        <p class="label mb-2">In the room · {{ members.length }}</p>
+        <div class="flex gap-3 overflow-x-auto scrollbar-none pb-1">
+          <RouterLink v-for="u in members" :key="u.id" :to="`/u/${u.handle}`" class="flex flex-col items-center gap-1 w-14 shrink-0">
+            <span class="relative"><Avatar :user="u" :size="44" /><span class="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-online ring-2 ring-surface-container-lowest" /></span>
+            <span class="text-[11px] truncate w-full text-center">{{ u.displayName }}</span>
+          </RouterLink>
+          <p v-if="!members.length" class="text-body-sm text-on-surface-variant">Just you (and the lurkers 👀)</p>
+        </div>
+      </section>
+    </Transition>
     <div ref="list" class="flex-1 overflow-y-auto px-5 py-4 space-y-3">
-      <div v-for="m in messages" :key="m.id" class="flex gap-2.5" :class="{ 'flex-row-reverse': m.author.id === s.user?.id }">
+      <template v-for="m in messages" :key="m.id">
+      <p v-if="isSys(m)" class="flex items-center justify-center gap-2 text-label-sm text-on-surface-variant">
+        <span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 bg-surface-container-low/70 backdrop-blur-sm">
+          <Avatar :user="m.user" :size="18" /><b class="font-bold text-on-surface">{{ m.user.displayName }}</b>
+          {{ m.system === 'join' ? 'joined the chat 👋' : 'left the chat' }}
+        </span>
+      </p>
+      <div v-else class="flex gap-2.5" :class="{ 'flex-row-reverse': m.author.id === s.user?.id }">
         <RouterLink :to="`/u/${m.author.handle}`"><Avatar :user="m.author" :size="34" /></RouterLink>
         <div class="max-w-[75%]">
           <div class="flex items-center gap-1.5 text-label-sm text-on-surface-variant mb-0.5" :class="{ 'justify-end': m.author.id === s.user?.id }">
@@ -106,6 +147,7 @@ function send(text = draft.value, sticker: StickerInput | null = null) {
           <ReactionBar type="message" :id="m.id" :reactions="m.reactions ?? {}" :mine="m.myReaction" compact class="mt-1" :class="{ 'justify-end': m.author.id === s.user?.id }" @update="Object.assign(m, $event)" />
         </div>
       </div>
+      </template>
     </div>
     <form v-if="s.user" class="border-t border-sandstone p-3 space-y-2" @submit.prevent="send()">
       <div class="flex gap-1.5"><button v-for="e in EMOJI" :key="e" type="button" class="w-9 h-9 rounded-full bg-surface-container-low hover:scale-110 transition" @click="send(e)">{{ e }}</button></div>

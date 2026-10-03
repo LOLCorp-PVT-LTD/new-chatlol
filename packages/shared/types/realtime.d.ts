@@ -6,7 +6,12 @@ export interface ServerEvents {
         loungeId: ID;
         onlineCount: number;
         joined?: UserPublic;
-        left?: ID;
+        left?: UserPublic;
+    }) => void;
+    /** Sent to a member as they enter: who's in the room now. */
+    'lounge:members': (p: {
+        loungeId: ID;
+        members: UserPublic[];
     }) => void;
     'dm:message': (m: ChatMessage) => void;
     'dm:typing': (p: {

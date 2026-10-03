@@ -102,9 +102,16 @@ export async function attachRealtime(server) {
         // Ghost mode (Settings → Privacy): read the room without showing up in its presence list.
         const ghost = userId && (await db.users.findOne({ _id: userId }, { projection: { 'settings.ghostMode': 1 } }))?.settings?.ghostMode;
         if (userId && !ghost) {
+          // Another tab of the same member is already here: no second "joined" line.
+          const wasHere = (await shared().smembers(loungeKey(loungeId))).includes(userId);
           await shared().sadd(loungeKey(loungeId), userId);
-          io.to(room.lounge(loungeId)).emit('lounge:presence', { loungeId, onlineCount: await shared().scard(loungeKey(loungeId)) });
+          const joined = wasHere ? undefined : await authorCache(userId)(userId);
+          io.to(room.lounge(loungeId)).emit('lounge:presence', { loungeId, onlineCount: await shared().scard(loungeKey(loungeId)), joined });
         }
+        // Who's in the room right now (ghosts excluded).
+        const ids = (await shared().smembers(loungeKey(loungeId))).slice(0, 100);
+        const author = authorCache(userId);
+        socket.emit('lounge:members', { loungeId, members: await Promise.all(ids.map((id) => author(id))) });
         const rows = (await recentMessages('lounge', loungeId, 60)).reverse();
         ack?.(await Promise.all(rows.map((m) => serializeMessage(m, authorCache(userId)))));
       }),
@@ -113,12 +120,19 @@ export async function attachRealtime(server) {
     const leaveLounge = async (loungeId) => {
       socket.leave(room.lounge(loungeId));
       joinedLounges.delete(loungeId);
-      if (userId) {
+      if (userId && (await shared().smembers(loungeKey(loungeId))).includes(userId)) {
+        // Still here in another tab: stay listed and say nothing.
+        const others = await io
+          .in(room.lounge(loungeId))
+          .fetchSockets()
+          .then((list) => list.some((x) => x.id !== socket.id && x.data.userId === userId))
+          .catch(() => false);
+        if (others) return;
         await shared().srem(loungeKey(loungeId), userId);
         io.to(room.lounge(loungeId)).emit('lounge:presence', {
           loungeId,
           onlineCount: await shared().scard(loungeKey(loungeId)),
-          left: userId,
+          left: await authorCache(userId)(userId),
         });
       }
     };
