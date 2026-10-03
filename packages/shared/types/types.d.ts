@@ -13,6 +13,8 @@ export interface Cosmetics {
     button?: string | null;
 }
 export interface UserPublic {
+    /** Clan tag shown next to their name (clans level 2+). */
+    clan?: { id: string; tag: string; name: string; color: string | null; legend: boolean } | null;
     id: ID;
     handle: string;
     displayName: string;
