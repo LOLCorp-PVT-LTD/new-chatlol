@@ -24,6 +24,7 @@ import { optionalAuth, requireAuth, uid } from '../lib/auth.js';
 import { HttpError, parse, rateLimit } from '../lib/http.js';
 import { postLimit } from '../lib/limits.js';
 import { attachFullSong, youtubeInfo } from '../lib/songMatch.js';
+import { searchYouTube, youtubeEnabled } from '../lib/youtubeApi.js';
 import { authorCache, invalidateStats, isPremium, serializePosts, teaserAvatar, userPrivate, DEFAULT_SETTINGS } from '../lib/serialize.js';
 import { serializeShout } from './shouts.js';
 import { friendsFilter, otherOf } from '../lib/friends.js';
@@ -138,6 +139,8 @@ async function songSearchRoute(req, res) {
   const q = String(req.query.q ?? '')
     .trim()
     .slice(0, 100);
+  // YouTube first (full songs for everyone), then Spotify / Apple Music when no YouTube key is set.
+  if (youtubeEnabled()) return res.json({ enabled: true, source: 'youtube', tracks: q ? ((await searchYouTube(q)) ?? []) : [] });
   if (!q) return res.json({ enabled: !!(config.spotify.clientId && config.spotify.clientSecret), source: 'spotify', tracks: [] });
   res.json({ enabled: true, ...(await searchSongs(q)) });
 }

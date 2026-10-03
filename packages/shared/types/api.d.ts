@@ -365,7 +365,7 @@ export declare function createApi(opts: ApiClientOptions): {
     insights: () => Promise<Insights>;
     spotifySearch: (q: string) => Promise<{ enabled: boolean; source?: 'spotify' | 'apple'; tracks: ProfileSong[] }>;
     /** Spotify when the server has Spotify keys, otherwise Apple Music previews (no keys needed). */
-    songSearch: (q: string) => Promise<{ enabled: boolean; source: 'spotify' | 'apple'; tracks: ProfileSong[] }>;
+    songSearch: (q: string) => Promise<{ enabled: boolean; source: 'spotify' | 'apple' | 'youtube'; tracks: ProfileSong[] }>;
     updateLayout: (layout: import('./profileLayout').ProfileLayout) => Promise<{ user: UserPrivate; layout: import('./profileLayout').ProfileLayout; premiumRemoved: string[] }>;
     showcase: (userId: ID, types: import('./profileLayout').SectionType[], limit?: number) => Promise<Showcase>;
     festival: () => Promise<{ festival: import('./festivals').FestivalSummary | null; loungeId?: ID | null; quiz?: { questions: { q: string; choices: string[] }[]; done: boolean; score: number | null; perRight: number; perfectBonus: number } }>;

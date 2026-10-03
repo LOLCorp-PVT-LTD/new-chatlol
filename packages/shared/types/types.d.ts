@@ -86,6 +86,8 @@ export interface ProfileSong {
     source?: 'spotify' | 'apple' | 'youtube';
     /** Full-length YouTube upload of the song: plays in full for every visitor (Spotify only plays previews to people not signed in). */
     youtubeId?: string | null;
+    /** Length in seconds (YouTube tracks, when known). */
+    duration?: number;
     type: import('./profile').SpotifyKind;
     id: string;
     title: string;

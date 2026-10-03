@@ -23,7 +23,7 @@ export default function Customize() {
   const [song, setSong] = useState<ProfileSong | null>(u?.profile.song ?? null);
   const [songInput, setSongInput] = useState('');
   const [results, setResults] = useState<ProfileSong[]>([]);
-  const [source, setSource] = useState<'spotify' | 'apple'>('spotify');
+  const [source, setSource] = useState<'spotify' | 'apple' | 'youtube'>('spotify');
   const [about, setAbout] = useState({ displayName: u?.displayName ?? '', bio: u?.bio ?? '', city: u?.city ?? '' });
   const [gender, setGender] = useState<Gender | null>(u?.gender ?? null);
   const [interests, setInterests] = useState<string[]>(u?.interests ?? []);

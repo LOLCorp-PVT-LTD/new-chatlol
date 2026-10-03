@@ -23,7 +23,7 @@ const about = ref({ displayName: u.displayName, bio: u.bio, city: u.city, gender
 const song = ref<ProfileSong | null>(u.profile.song);
 const songInput = ref('');
 const results = ref<ProfileSong[]>([]);
-const searchSource = ref<'spotify' | 'apple'>('spotify');
+const searchSource = ref<'spotify' | 'apple' | 'youtube'>('spotify');
 const searching = ref(false);
 /** Hear a search result before picking it (Apple previews). */
 const previewing = ref<string | null>(null);
@@ -163,7 +163,8 @@ async function save() {
             <input v-model="songInput" class="input pl-11" placeholder="Song or artist — e.g. Blinding Lights" autocomplete="off" />
             <button v-if="isLink(songInput)" class="btn-primary absolute right-1.5 top-1/2 -translate-y-1/2 h-10" @click="useLink">Use link</button></div>
           <p class="text-body-sm text-on-surface-variant mt-2">
-            <template v-if="searchSource === 'spotify'">Searching Spotify. Visitors signed in to Spotify hear the full song; everyone else hears a 30-second preview.</template>
+            <template v-if="searchSource === 'youtube'">Searching YouTube — your song plays in full for everyone.</template>
+            <template v-else-if="searchSource === 'spotify'">Searching Spotify. Visitors signed in to Spotify hear the full song; everyone else hears a 30-second preview.</template>
             <template v-else>Searching Apple Music — a 30-second preview loops on your profile.</template>
             You can also paste a Spotify link — or a <b>YouTube link</b>, which plays the full song for everyone.
           </p>
