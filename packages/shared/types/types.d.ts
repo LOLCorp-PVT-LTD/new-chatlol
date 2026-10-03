@@ -56,6 +56,8 @@ export interface UserPrivate extends UserPublic {
     gems: number;
     /** Top currency, exchanged from Gems: buys tickets and the King's crown. */
     gold: number;
+    /** Paid themes unlocked with Gold (kept even without Premium). */
+    unlockedThemes: string[];
     dailyGoal: {
         done: number;
         target: number;

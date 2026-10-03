@@ -1,11 +1,11 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { ageFrom, APP_THEMES, MAX_INTERESTS, MIN_AGE, REWARDS } from '@chatlol/shared';
+import { ageFrom, APP_THEMES, MAX_INTERESTS, MIN_AGE, THEME_UNLOCK_GOLD, appThemeByKey, themeAllowed } from '@chatlol/shared';
 import { db, newId, now, today, isDuplicateKey } from '../db.js';
 import { hashPassword, verifyPassword, signToken, requireAuth, uid, passwordVersion } from '../lib/auth.js';
 import { HttpError, parse, rateLimit } from '../lib/http.js';
-import { userPrivate, invalidateStats, newUser } from '../lib/serialize.js';
-import { grant, notify } from '../lib/rewards.js';
+import { userPrivate, invalidateStats, newUser, isPremium } from '../lib/serialize.js';
+import { grant, notify, emitWallet } from '../lib/rewards.js';
 import { assertClean } from '../lib/moderation.js';
 import { itemIdFor } from '../lib/ids.js';
 import { vapidKeys } from '../lib/push.js';
@@ -205,16 +205,8 @@ authRouter.patch('/me/settings', requireAuth, async (req, res) => {
         hapticsEnabled: z.boolean(),
         soundEnabled: z.boolean(),
         darkMode: z.enum(['system', 'light', 'dark']),
-        appTheme: z
-          .object({
-            preset: z.enum([...APP_THEMES.map((t) => t.key), 'custom']),
-            custom: z
-              .string()
-              .regex(/^#[0-9a-fA-F]{6}$/)
-              .nullable()
-              .default(null),
-          })
-          .refine((t) => t.preset !== 'custom' || !!t.custom, 'Pick a colour for your custom theme'),
+        // Fixed themes only (no custom colours).
+        appTheme: z.object({ preset: z.enum(APP_THEMES.map((t) => t.key)), custom: z.null().default(null) }),
         breakReminderMins: z.number().int().min(0).max(240),
         showAIPersonas: z.boolean(),
         whoCanComment: z.enum(['everyone', 'following']),
@@ -239,8 +231,31 @@ authRouter.patch('/me/settings', requireAuth, async (req, res) => {
       .partial(),
     req.body,
   );
+  if (b.appTheme) {
+    const u = await db.users.findOne({ _id: id }, { projection: { premium: 1, unlockedThemes: 1 } });
+    if (!themeAllowed(b.appTheme.preset, { premium: isPremium(u), unlocked: u.unlockedThemes ?? [] }))
+      throw new HttpError(402, `Unlock ${appThemeByKey(b.appTheme.preset).label} with Premium or 🪙 ${THEME_UNLOCK_GOLD} Gold`, 'theme_locked');
+  }
   const set = Object.fromEntries(Object.entries(b).map(([k, v]) => [`settings.${k}`, v]));
   if (Object.keys(set).length) await db.users.updateOne({ _id: id }, { $set: set });
+  res.json({ user: await me(id) });
+});
+
+/** Unlocks one app colour theme for good, for Gold. */
+authRouter.post('/me/themes/:key/unlock', requireAuth, async (req, res) => {
+  const id = uid(req);
+  const t = appThemeByKey(String(req.params.key));
+  if (!t) throw new HttpError(404, 'Theme not found');
+  if (t.free) throw new HttpError(400, 'That theme is free');
+  const paid = await db.users.updateOne(
+    { _id: id, gold: { $gte: THEME_UNLOCK_GOLD }, unlockedThemes: { $ne: t.key } },
+    { $inc: { gold: -THEME_UNLOCK_GOLD }, $addToSet: { unlockedThemes: t.key } },
+  );
+  if (!paid.modifiedCount) {
+    const u = await db.users.findOne({ _id: id }, { projection: { unlockedThemes: 1 } });
+    if (!(u.unlockedThemes ?? []).includes(t.key)) throw new HttpError(402, `You need 🪙 ${THEME_UNLOCK_GOLD} Gold`, 'insufficient_gold');
+  }
+  await emitWallet(id);
   res.json({ user: await me(id) });
 });
 

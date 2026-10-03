@@ -8,20 +8,47 @@ import { colors, darkColors } from './tokens.js';
 
 const SUNSET_HUE = 22; // the hue of Sunset's flame orange (#ff5e00)
 
-/** `sat` scales saturation (1 = Sunset's). Swatches are the theme's gradient, worked out from the same maths. */
+/**
+ * 30 fixed themes. `sat` scales saturation (1 = Sunset's). Swatches are the theme's gradient, worked out from the
+ * same maths. `free` themes are open to everyone; the rest need Premium or a one-off unlock for THEME_UNLOCK_GOLD.
+ */
 export const APP_THEMES = [
-  { key: 'sunset', label: 'Sunset', hue: 22, sat: 1 },
+  { key: 'sunset', label: 'Sunset', hue: 22, sat: 1, free: true },
+  { key: 'ocean', label: 'Ocean', hue: 212, sat: 0.62, free: true },
+  { key: 'berry', label: 'Berry', hue: 326, sat: 0.58, free: true },
   { key: 'ember', label: 'Ember', hue: 8, sat: 0.88 },
   { key: 'honey', label: 'Honey', hue: 33, sat: 0.78 },
   { key: 'rose', label: 'Rose', hue: 350, sat: 0.6 },
-  { key: 'berry', label: 'Berry', hue: 326, sat: 0.58 },
   { key: 'lavender', label: 'Lavender', hue: 268, sat: 0.5 },
-  { key: 'ocean', label: 'Ocean', hue: 212, sat: 0.62 },
   { key: 'lagoon', label: 'Lagoon', hue: 178, sat: 0.5 },
   { key: 'sage', label: 'Sage', hue: 138, sat: 0.42 },
   { key: 'mocha', label: 'Mocha', hue: 24, sat: 0.42 },
   { key: 'slate', label: 'Slate', hue: 214, sat: 0.24 },
+  { key: 'crimson', label: 'Crimson', hue: 356, sat: 0.85 },
+  { key: 'tangerine', label: 'Tangerine', hue: 28, sat: 0.95 },
+  { key: 'gold', label: 'Royal Gold', hue: 42, sat: 0.82 },
+  { key: 'lime', label: 'Lime', hue: 82, sat: 0.55 },
+  { key: 'emerald', label: 'Emerald', hue: 152, sat: 0.6 },
+  { key: 'mint', label: 'Mint', hue: 160, sat: 0.4 },
+  { key: 'teal', label: 'Teal', hue: 186, sat: 0.62 },
+  { key: 'sky', label: 'Sky', hue: 198, sat: 0.7 },
+  { key: 'cobalt', label: 'Cobalt', hue: 222, sat: 0.78 },
+  { key: 'indigo', label: 'Indigo', hue: 238, sat: 0.6 },
+  { key: 'violet', label: 'Violet', hue: 256, sat: 0.66 },
+  { key: 'grape', label: 'Grape', hue: 280, sat: 0.6 },
+  { key: 'orchid', label: 'Orchid', hue: 298, sat: 0.5 },
+  { key: 'magenta', label: 'Magenta', hue: 314, sat: 0.75 },
+  { key: 'bubblegum', label: 'Bubblegum', hue: 336, sat: 0.7 },
+  { key: 'coral', label: 'Coral', hue: 12, sat: 0.7 },
+  { key: 'rust', label: 'Rust', hue: 18, sat: 0.6 },
+  { key: 'olive', label: 'Olive', hue: 62, sat: 0.4 },
+  { key: 'storm', label: 'Storm', hue: 230, sat: 0.18 },
 ];
+export const THEME_UNLOCK_GOLD = 1;
+export const appThemeByKey = (key) => APP_THEMES.find((t) => t.key === key);
+/** Can this member use the theme? Free ones always; others with Premium or once unlocked with Gold. */
+export const themeAllowed = (key, { premium = false, unlocked = [] } = {}) =>
+  !!appThemeByKey(key) && (appThemeByKey(key).free || premium || unlocked.includes(key));
 export const DEFAULT_APP_THEME = { preset: 'sunset', custom: null };
 
 /** Colours that mean something (errors, the online dot) never change with the theme. */
@@ -71,6 +98,12 @@ function shift(hex, dHue, satScale) {
   const [h, s, l] = hexToHsl(hex);
   if (s === 0) return hex;
   return hslToHex(h + dHue, Math.min(1, s * satScale), l);
+}
+
+/** One brand colour (e.g. from the logo artwork) recoloured for a theme, the same way the app palette is. */
+export function themeColor(hex, setting) {
+  const { hue, sat } = themeParams(setting);
+  return hue === SUNSET_HUE && sat === 1 ? hex : shift(hex, hue - SUNSET_HUE, sat);
 }
 
 /** Selected / active things (picked reaction, active chip): solid accent in light mode, deep tint with an edge in dark. */

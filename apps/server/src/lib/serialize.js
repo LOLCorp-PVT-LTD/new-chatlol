@@ -11,6 +11,8 @@ import {
   activePowers,
   stripPremiumLayout,
   PREMIUM_PROFILE,
+  themeAllowed,
+  DEFAULT_APP_THEME,
 } from '@chatlol/shared';
 import { db, now, today } from '../db.js';
 import { presence } from './presence.js';
@@ -212,7 +214,8 @@ export async function userPrivate(u) {
     gold: u.gold ?? 0,
     dailyGoal: { done: Math.min(done, REWARDS.questDailyOracle.target), target: REWARDS.questDailyOracle.target },
     comboCount: u.comboCount ?? 0,
-    settings: { ...DEFAULT_SETTINGS, ...u.settings },
+    settings: { ...DEFAULT_SETTINGS, ...u.settings, appTheme: effectiveTheme(u) },
+    unlockedThemes: u.unlockedThemes ?? [],
     gender: u.gender ?? null,
     city: u.city ?? '',
     role: u.role ?? 'user',
@@ -223,6 +226,12 @@ export async function userPrivate(u) {
     progressResetAt: u.progressResetAt ?? null,
     moderation: { status: 'active', until: null, reason: null, ...u.moderation },
   };
+}
+
+/** The theme a member actually gets: custom colours are gone, and a locked theme (Premium ran out) falls back to Sunset. */
+function effectiveTheme(u) {
+  const t = u.settings?.appTheme;
+  return t && themeAllowed(t.preset, { premium: isPremium(u), unlocked: u.unlockedThemes ?? [] }) ? { preset: t.preset, custom: null } : DEFAULT_APP_THEME;
 }
 
 export const userById = (id) => db.users.findOne({ _id: id });

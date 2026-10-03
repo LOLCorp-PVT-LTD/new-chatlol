@@ -574,15 +574,23 @@ test('song search is Spotify only: clear error without keys, Spotify results wit
   }
 });
 
-test('app colour theme: presets, a custom colour, saved on the account', async () => {
-  await signUp('themer');
+test('app colour theme: 30 fixed themes, 3 free, the rest Premium or 1 Gold each; no custom colours', async () => {
+  const u = await signUp('themer');
   const c = as('themer');
+  const { APP_THEMES } = await import('@chatlol/shared');
+  assert.equal(APP_THEMES.length, 30);
+  assert.equal(APP_THEMES.filter((t) => t.free).length, 3);
+  await assert.rejects(c.updateSettings({ appTheme: { preset: 'lavender', custom: null } }), (e) => e.code === 'theme_locked');
+  await assert.rejects(c.unlockTheme('lavender'), (e) => e.code === 'insufficient_gold');
+  await db.users.updateOne({ _id: u.id }, { $set: { gold: 1 } });
+  assert.deepEqual((await c.unlockTheme('lavender')).user.unlockedThemes, ['lavender']);
+  assert.equal((await c.updateSettings({ appTheme: { preset: 'lavender', custom: null } })).user.settings.appTheme.preset, 'lavender');
   assert.deepEqual((await c.me()).user.settings.appTheme, { preset: 'sunset', custom: null });
   assert.deepEqual((await c.updateSettings({ appTheme: { preset: 'ocean', custom: null } })).user.settings.appTheme, {
     preset: 'ocean',
     custom: null,
   });
-  assert.equal((await c.updateSettings({ appTheme: { preset: 'custom', custom: '#7c5cff' } })).user.settings.appTheme.custom, '#7c5cff');
+  await assert.rejects(c.updateSettings({ appTheme: { preset: 'custom', custom: '#7c5cff' } }), (e) => e.status === 400);
   await assert.rejects(c.updateSettings({ appTheme: { preset: 'custom', custom: null } }), (e) => e.status === 400);
   await assert.rejects(c.updateSettings({ appTheme: { preset: 'neon', custom: null } }), (e) => e.status === 400);
   await assert.rejects(c.updateSettings({ appTheme: { preset: 'custom', custom: 'red; background:url(x)' } }), (e) => e.status === 400);

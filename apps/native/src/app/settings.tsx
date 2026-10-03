@@ -1,3 +1,4 @@
+import { themeAllowed } from '@chatlol/shared';
 import React, { useEffect, useState } from 'react';
 import { Platform, ScrollView, Switch, View } from 'react-native';
 import { formDialog } from '../lib/dialog';
@@ -147,7 +148,7 @@ export default function Settings() {
           <View style={{ gap: 8 }}><Label>Light or dark</Label>
             <Row gap={8}>{(['light', 'dark', 'system'] as const).map((o) => <Chip key={o} label={o === 'dark' ? '🌙 Dark' : o === 'light' ? '☀️ Light' : '⚙️ System'} active={user.settings.darkMode === o} onPress={() => set('darkMode', o)} />)}</Row></View>
           <View style={{ gap: 8 }}><Label>Colours</Label>
-            <AppThemePicker value={user.settings.appTheme ?? { preset: 'sunset', custom: null }} onChange={(t) => set('appTheme', t)} /></View>
+            <AppThemePicker value={user.settings.appTheme ?? { preset: 'sunset', custom: null }} onChange={(t) => set('appTheme', t)} isAllowed={(k) => themeAllowed(k, { premium: !!user.premiumUntil, unlocked: user.unlockedThemes ?? [] })} /></View>
           <View style={{ gap: 8 }}><Label>Take-a-break reminder</Label>
             <Row gap={8}>{[0, 30, 60, 90].map((m) => <Chip key={m} label={m ? `${m} min` : 'Off'} active={user.settings.breakReminderMins === m} onPress={() => set('breakReminderMins', m)} />)}</Row></View>
         </Card>

@@ -259,6 +259,7 @@ export declare function createApi(opts: ApiClientOptions): {
         used: { key: string; until: string };
         powers: Partial<Record<import('./progression').PowerKey, string>>;
     }>;
+    unlockTheme: (key: import('./themes').AppThemeKey) => Promise<{ user: UserPrivate }>;
     exchange: (to: 'gems' | 'gold', amount: number) => Promise<{ sparks: number; gems: number; gold: number }>;
     useTicket: (key: import('./progression').TicketKey, targetId: ID, loungeId?: ID) => Promise<{ used: string; free: boolean; target: { id: ID; handle: string } }>;
     king: () => Promise<{ king: { user: UserPublic; since: string; until: string } | null }>;
