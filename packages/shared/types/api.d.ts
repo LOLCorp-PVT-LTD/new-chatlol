@@ -211,6 +211,9 @@ export declare function createApi(opts: ApiClientOptions): {
     lounges: () => Promise<{
         lounges: Lounge[];
     }>;
+    createLounge: (b: LoungeInput & { official?: boolean }) => Promise<{ lounge: Lounge }>;
+    updateLounge: (id: ID, b: Partial<LoungeInput>) => Promise<{ lounge: Lounge }>;
+    deleteLounge: (id: ID, reason?: string) => Promise<{ ok: true }>;
     lounge: (id: ID) => Promise<{
         lounge: Lounge;
         messages: ChatMessage[];
@@ -442,3 +445,5 @@ export declare function createApi(opts: ApiClientOptions): {
     };
 };
 export type Api = ReturnType<typeof createApi>;
+
+export interface LoungeInput { name: string; emoji: string; topic?: string; nowPlaying?: string; coverUrl?: string | null }

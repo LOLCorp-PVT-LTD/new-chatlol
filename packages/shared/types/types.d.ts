@@ -254,6 +254,13 @@ export interface Lounge {
     onlineCount: number;
     memberPreview: UserPublic[];
     isLive: boolean;
+    /** Who made it (null = an official ChatLOL lounge). */
+    owner?: UserPublic | null;
+    /** Seasonal lounge for a festival (key), open until `expiresAt`. */
+    festival?: string | null;
+    expiresAt?: string | null;
+    /** The viewer may edit / delete it (owner or staff with the Lounges permission). */
+    canManage?: boolean;
 }
 export interface ChatMessage {
     /** Removed by staff: shown as a “removed by Admin for <reason>” card. */

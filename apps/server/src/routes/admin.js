@@ -43,7 +43,7 @@ async function findTarget(req) {
   return u;
 }
 /** Staff actions that aren't moderation (grants, boosts, roles) go in the same log, so everything is accountable. */
-const audit = async (userId, kind, reason, by, { review, ...extra } = {}) => {
+export const audit = async (userId, kind, reason, by, { review, ...extra } = {}) => {
   await db.modEvents.insertOne({ _id: newId(), userId, kind, reason, byUserId: by, createdAt: now(), ...extra });
   // LOLShield oversight: non-admin staff actions are checked for missing reasons, missing evidence and self-dealing.
   void reviewStaffAction({ staffId: by, kind, targetId: userId, reason: review?.reason ?? reason, meta: review ?? {} });

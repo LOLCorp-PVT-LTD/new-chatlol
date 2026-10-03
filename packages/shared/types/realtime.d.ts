@@ -8,6 +8,10 @@ export interface ServerEvents {
         joined?: UserPublic;
         left?: UserPublic;
     }) => void;
+    /** The lounge was deleted by its owner or staff. */
+    'lounge:deleted': (p: { loungeId: ID }) => void;
+    /** The lounge's name, topic, cover etc. changed. */
+    'lounge:updated': (l: import('./types').Lounge) => void;
     /** Sent to a member as they enter: who's in the room now. */
     'lounge:members': (p: {
         loungeId: ID;

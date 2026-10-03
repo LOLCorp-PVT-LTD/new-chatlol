@@ -185,6 +185,9 @@ export function createApi(opts) {
     // lounges
     lounges: () => req('GET', '/lounges'),
     lounge: (id) => req('GET', `/lounges/${id}`),
+    createLounge: (b) => req('POST', '/lounges', b),
+    updateLounge: (id, b) => req('PATCH', `/lounges/${id}`, b),
+    deleteLounge: (id, reason) => req('DELETE', `/lounges/${id}`, { reason }),
 
     // messages
     conversations: () => req('GET', '/conversations'),
