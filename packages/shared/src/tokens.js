@@ -107,4 +107,4 @@ export const shadows = {
   glow: '0 0 16px rgba(255, 94, 0, 0.45)',
 };
 
-export const fontFamily = 'Plus Jakarta Sans';
+export const fontFamily = 'Manrope';

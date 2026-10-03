@@ -13,7 +13,7 @@ export type DialogField =
 export interface DialogOptions {
   title: string;
   body?: string;
-  /** Material Symbols icon name shown at the top. */
+  /** Icon name shown at the top (see lib/iconMap). */
   icon?: string;
   /** Red confirm button for destructive actions. */
   danger?: boolean;

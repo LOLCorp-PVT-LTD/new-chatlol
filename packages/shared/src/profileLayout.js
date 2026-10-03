@@ -49,7 +49,7 @@ export const CORNER_STYLES = [
 ];
 /** Font stacks need no downloads — they use what every device already has. */
 export const PROFILE_FONTS = [
-  { key: 'default', label: 'Default', css: "'Plus Jakarta Sans', system-ui, sans-serif", native: undefined },
+  { key: 'default', label: 'Default', css: "Manrope, system-ui, sans-serif", native: undefined },
   { key: 'serif', label: 'Classic serif', css: "Georgia, 'Times New Roman', serif", native: 'serif' },
   { key: 'mono', label: 'Typewriter', css: "'Courier New', ui-monospace, monospace", native: 'monospace' },
   { key: 'rounded', label: 'Rounded', css: "ui-rounded, 'SF Pro Rounded', 'Nunito', system-ui, sans-serif", native: undefined },

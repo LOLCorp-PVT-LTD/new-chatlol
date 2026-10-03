@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Icon from './Icon.vue';
 import { onMounted, onUnmounted } from 'vue';
 const props = defineProps<{ title?: string; wide?: boolean }>();
 const emit = defineEmits<{ (e: 'close'): void }>();
@@ -15,7 +16,7 @@ void props;
         :class="wide ? 'sm:max-w-2xl' : 'sm:max-w-md'">
         <div v-if="title" class="sticky top-0 z-10 flex items-center justify-between px-6 pt-5 pb-3 bg-surface-container-lowest">
           <h2 class="text-headline-md">{{ title }}</h2>
-          <button class="btn-icon -mr-2" aria-label="Close" @click="emit('close')"><span class="icon">close</span></button>
+          <button class="btn-icon -mr-2" aria-label="Close" @click="emit('close')"><Icon name="close" /></button>
         </div>
         <slot />
       </div>

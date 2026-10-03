@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import DialogHost from './components/DialogHost.vue';
+import Icon from './components/Icon.vue';
 import { computed, ref, watch, onUnmounted } from 'vue';
 import { useRoute } from 'vue-router';
 
@@ -75,7 +76,7 @@ function onPosted(p: Post) { posted.value = p; }
     </footer>
     <TabBar @compose="composing = true" />
     <button v-if="s.user && route.path === '/feed'" class="lg:hidden fixed right-5 bottom-28 z-30 w-14 h-14 rounded-full bg-sunset text-white shadow-float flex items-center justify-center active:scale-95" aria-label="New post" @click="composing = true">
-      <span class="icon">add</span>
+      <Icon name="add" />
     </button>
     <Composer v-if="composing" @close="composing = false" @posted="onPosted" />
     <Notifications v-if="showNotifs" @close="showNotifs = false" />
