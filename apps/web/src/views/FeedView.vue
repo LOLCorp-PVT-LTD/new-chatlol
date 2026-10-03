@@ -44,7 +44,12 @@ function showFresh() {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-const onRemoved = (r: { type: string; id: string }) => { if (r.type === 'post') posts.value = posts.value.filter((p) => p.id !== r.id); };
+// Staff removals (with a reason) turn into a "removed by Admin" card; other removals just disappear.
+const onRemoved = (r: { type: string; id: string; reason?: string }) => {
+  if (r.type !== 'post') return;
+  if (r.reason) posts.value = posts.value.map((p) => (p.id === r.id ? { ...p, body: '', mediaUrl: null, removed: { by: 'admin', reason: r.reason!, at: new Date().toISOString() } } : p));
+  else posts.value = posts.value.filter((p) => p.id !== r.id);
+};
 const onNew = (p: Post) => { if (p.author.id !== s.user?.id && !posts.value.some((x) => x.id === p.id)) fresh.value = [p, ...fresh.value].slice(0, 20); };
 
 onMounted(async () => {

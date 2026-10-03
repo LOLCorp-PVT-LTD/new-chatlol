@@ -145,6 +145,8 @@ export interface BattleOption {
 }
 export type PostKind = 'photo' | 'text' | 'battle' | 'drop' | 'roulette' | 'birthday';
 export interface Post {
+    /** Removed by staff: shown as a “removed by Admin for <reason>” card. */
+    removed?: { by: string; reason: string; at: string } | null;
     id: ID;
     author: UserPublic;
     kind: PostKind;
@@ -167,6 +169,8 @@ export interface Post {
     createdAt: ISODate;
 }
 export interface Comment {
+    /** Removed by staff: shown as a “removed by Admin for <reason>” card. */
+    removed?: { by: string; reason: string; at: string } | null;
     id: ID;
     postId: ID;
     author: UserPublic;
@@ -206,6 +210,8 @@ export interface HotTake {
     author: UserPublic | null;
 }
 export interface ShoutThread {
+    /** Removed by staff: shown as a “removed by Admin for <reason>” card. */
+    removed?: { by: string; reason: string; at: string } | null;
     id: ID;
     board: string;
     title: string;
@@ -219,6 +225,8 @@ export interface ShoutThread {
     createdAt: ISODate;
 }
 export interface ShoutReply {
+    /** Removed by staff: shown as a “removed by Admin for <reason>” card. */
+    removed?: { by: string; reason: string; at: string } | null;
     id: ID;
     threadId: ID;
     author: UserPublic;
@@ -241,6 +249,8 @@ export interface Lounge {
     isLive: boolean;
 }
 export interface ChatMessage {
+    /** Removed by staff: shown as a “removed by Admin for <reason>” card. */
+    removed?: { by: string; reason: string; at: string } | null;
     id: ID;
     roomId: ID;
     author: UserPublic;
@@ -391,6 +401,8 @@ export interface RtcSignal {
 }
 
 export interface Shout {
+    /** Removed by staff: shown as a “removed by Admin for <reason>” card. */
+    removed?: { by: string; reason: string; at: string } | null;
     id: ID;
     author: UserPublic;
     body: string;
@@ -404,6 +416,8 @@ export interface Shout {
     createdAt: ISODate;
 }
 export interface WallNote {
+    /** Removed by staff: shown as a “removed by Admin for <reason>” card. */
+    removed?: { by: string; reason: string; at: string } | null;
     id: ID;
     profileId: ID;
     author: UserPublic;

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import RemovedNote from '../components/RemovedNote.vue';
 import ReactionBar from '../components/ReactionBar.vue';
 import { emojiOnly } from '../lib/richText';
 import type { StickerInput } from '@chatlol/shared';
@@ -97,6 +98,7 @@ function send(text = draft.value, sticker: StickerInput | null = null) {
           <div class="flex items-center gap-1.5 text-label-sm text-on-surface-variant mb-0.5" :class="{ 'justify-end': m.author.id === s.user?.id }">
             <UserName :user="m.author" :link="false" /><span>{{ timeAgo(m.createdAt) }}</span>
             <button v-if="s.user && m.author.id !== s.user.id && !m.author.isAI" class="opacity-50 hover:opacity-100" title="Kick (uses a Kick Ticket)" :aria-label="`Kick @${m.author.handle}`" @click="kick(m)">🥾</button></div>
+          <RemovedNote v-if="m.removed" what="message" :removed="m.removed" />
           <StickerView v-if="m.sticker" :sticker="m.sticker" :size="128" class="block" :class="{ 'ml-auto': m.author.id === s.user?.id }" />
           <p v-if="m.body && emojiOnly(m.body)" :class="{ 'text-right': m.author.id === s.user?.id }"><RichText :text="m.body" /></p>
           <p v-else-if="m.body" class="px-4 py-2 rounded-[20px] text-body-md break-words"

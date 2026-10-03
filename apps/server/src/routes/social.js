@@ -25,6 +25,7 @@ import { bus } from '../lib/events.js';
 import { io, room } from '../lib/io.js';
 import { presence } from '../lib/presence.js';
 import { shared } from '../lib/shared.js';
+import { track } from '../lib/activity.js';
 
 export const socialRouter = Router();
 
@@ -142,6 +143,7 @@ socialRouter.post('/forums', requireAuth, async (req, res) => {
   const row = await insertThread(me, b.board, b.title, b.body);
   screen({ userId: me, text: `${b.title}\n${b.body}`, ref: { type: 'thread', id: row._id } });
   const reward = await grant(me, REWARDS.post.sparks, REWARDS.post.xp, 'Started a forum thread 📣');
+  track(me, 'forum');
   res.status(201).json({ thread: await serializeThread(row, me), reward });
 });
 
@@ -156,6 +158,7 @@ socialRouter.post('/forums/:id/replies', requireAuth, async (req, res) => {
   const row = await insertReply(String(req.params.id), me, body);
   screen({ userId: me, text: body, ref: { type: 'reply', id: row._id } });
   await grant(me, REWARDS.comment.sparks, REWARDS.comment.xp, 'Replied in the forums');
+  track(me, 'forum');
   res.status(201).json({ reply: await serializeReply(row) });
 });
 
@@ -427,6 +430,7 @@ socialRouter.post('/conversations/:id/messages', requireAuth, async (req, res) =
   }
   const message = await insertDm(convId, me, b.body, b.mediaUrl ? (b.kind === 'text' ? 'image' : b.kind) : 'text', b.mediaUrl ?? null, sticker);
   screen({ userId: me, text: b.body, ref: { type: 'message', id: message.id }, targetId: otherId });
+  track(me, 'dm');
   res.status(201).json({ message });
 });
 

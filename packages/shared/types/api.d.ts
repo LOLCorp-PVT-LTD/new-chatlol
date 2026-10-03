@@ -260,6 +260,7 @@ export declare function createApi(opts: ApiClientOptions): {
         powers: Partial<Record<import('./progression').PowerKey, string>>;
     }>;
     unlockTheme: (key: import('./themes').AppThemeKey) => Promise<{ user: UserPrivate }>;
+    changeHandle: (handle: string) => Promise<{ user: UserPrivate }>;
     exchange: (to: 'gems' | 'gold', amount: number) => Promise<{ sparks: number; gems: number; gold: number }>;
     useTicket: (key: import('./progression').TicketKey, targetId: ID, loungeId?: ID) => Promise<{ used: string; free: boolean; target: { id: ID; handle: string } }>;
     games: () => Promise<{ games: import('./games').GameInfo[]; currencies: import('./games').StakeCurrency[]; stakeLimits: Record<string, number>; rakePct: number }>;
@@ -376,14 +377,27 @@ export declare function createApi(opts: ApiClientOptions): {
             items: { id: ID; user: UserPublic; reason: string; category: string | null; priority: string; status: string; excerpt: string | null; ref: { type: string; id: ID } | null; createdAt: string }[];
         }>;
         resolveFlag: (id: ID, status: 'resolved' | 'dismissed') => Promise<{ ok: true }>;
-        removeContent: (type: string, id: ID) => Promise<{ ok: true }>;
+        removeContent: (type: string, id: ID, reason?: string) => Promise<{ ok: true }>;
+        editProfile: (id: ID, b: { displayName?: string; handle?: string; bio?: string; pronouns?: string; city?: string; headline?: string; removeAvatar?: boolean; removeCover?: boolean; removeBackground?: boolean; removeSong?: boolean; reason?: string }) => Promise<{ user: AdminUser }>;
+        userContent: (id: ID, kind: 'posts' | 'photos' | 'shouts' | 'comments' | 'threads' | 'replies' | 'wall' | 'messages', before?: string) => Promise<{
+            items: { type: string; id: ID; text: string; title: string | null; mediaUrl: string | null; where: string | null; hidden: boolean; removed: { by: string; reason: string } | null; reactions: Record<string, number> | null; createdAt: string }[];
+            nextBefore: string | null;
+        }>;
+        userActivity: (id: ID) => Promise<{
+            features: { feature: string; total: number; days: number; last: string }[];
+            progression: { level: number; xp: number; loginStreak: number; lastDailyClaim: string | null; lastSeenAt: string; progressResetAt: string | null; powers: Record<string, string>; unlockedThemes: string[]; handleHistory: { from: string; at: string }[]; gameStats: { played: number; wins: number } };
+            inventory: { key?: string; name?: string; emoji?: string; kind?: string; qty: number; via: string | null; acquiredAt: string }[];
+            arenas: { id: ID; name: string; game: string; status: string; stake: { currency: string; amount: number }; payout: number; createdAt: string }[];
+            tickets: { against: { kind: string; reason: string; at: string }[]; used: { kind: string; targetId: ID; at: string }[] };
+        }>;
+        features: () => Promise<{ week: { feature: string; uses: number; users: number; today: number }[]; month: { feature: string; uses: number; users: number; today: number }[] }>;
         modlog: () => Promise<{ items: { id: ID; user: UserPublic; kind: string; reason: string; until: string | null; by: string; createdAt: string }[] }>;
         personas: () => Promise<{ items: { id: ID; handle: string; displayName: string; avatarUrl: string; dmFrom: 'everyone' | 'following' | 'nobody'; active: boolean; generated: boolean }[] }>;
         updatePersona: (id: ID, b: { dmFrom?: 'everyone' | 'following' | 'nobody'; active?: boolean }) => Promise<{ ok: true }>;
         generatePersonas: (b: { count: number; hint?: string }) => Promise<{ started: true }>;
         setPerms: (id: ID, perms: import('./permissions').Permission[]) => Promise<{ user: AdminUser }>;
         wallet: (id: ID, b: { sparks?: number; gems?: number; gold?: number; reason?: string }) => Promise<{ user: AdminUser }>;
-        items: () => Promise<{ items: { key: string; name: string; kind: string; emoji: string | null; rarity: string | null; price: number }[] }>;
+        items: () => Promise<{ items: { key: string; name: string; kind: string; emoji: string | null; rarity: string | null; price: number; goldPrice: number | null; preview: string | null; description: string }[] }>;
         giveItem: (id: ID, key: string, qty?: number) => Promise<{ ok: true }>;
         boost: (id: ID, hours: number) => Promise<{ user: AdminUser }>;
         arenas: () => Promise<{ gemsGold: boolean; items: { id: string; name: string; game: string; status: string; hostId: string; playerIds: string[]; stake: { currency: string; amount: number }; payouts: { userId: string; amount: number }[]; outcome: unknown; createdAt: string; endedAt: string | null }[] }>;

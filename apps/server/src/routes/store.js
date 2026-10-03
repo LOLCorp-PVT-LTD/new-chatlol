@@ -14,6 +14,7 @@ import { putImage } from '../lib/storage.js';
 import { rollRarity, EMOJI_PACKS, GIPHY_UNLOCK, STICKER_PACKS } from '@chatlol/shared';
 import { config } from '../config.js';
 import { giphySearch, ownedPackKeys } from '../lib/stickers.js';
+import { track } from '../lib/activity.js';
 
 export const storeRouter = Router();
 
@@ -91,6 +92,7 @@ storeRouter.post('/store/:id/buy', requireAuth, async (req, res) => {
     );
     return null;
   });
+  track(me, item.kind === 'king' ? 'king' : 'store_buy');
   if (item.kind === 'king') await takeThrone(me);
   if (won && (won.rarity === 'legendary' || won.rarity === 'epic')) {
     const h = await db.users.findOne({ _id: me }, { projection: { handle: 1 } });
@@ -131,6 +133,7 @@ storeRouter.post('/wallet/exchange', requireAuth, async (req, res) => {
   await rateLimit(`exchange:${me}`, 20);
   const b = parse(z.object({ to: z.enum(['gems', 'gold']), amount: z.number().int().min(1).max(100_000) }), req.body);
   const w = await exchange(me, b.to, b.amount);
+  track(me, 'exchange');
   res.json({ sparks: w.sparks, gems: w.gems ?? 0, gold: w.gold ?? 0 });
 });
 
@@ -139,7 +142,9 @@ storeRouter.post('/tickets/:key/use', requireAuth, async (req, res) => {
   const me = uid(req);
   await rateLimit(`ticket:${me}`, 10);
   const b = parse(z.object({ targetId: z.string(), loungeId: z.string().optional() }), req.body);
-  res.json(await useTicket(me, String(req.params.key), b));
+  const r = await useTicket(me, String(req.params.key), b);
+  track(me, 'ticket');
+  res.json(r);
 });
 
 /** Activates a power-up from the locker (XP Surge, Spark Surge, Spotlight, All-Access Pass, Ghost Mode). */
@@ -147,6 +152,7 @@ storeRouter.post('/store/:id/use', requireAuth, async (req, res) => {
   const me = uid(req);
   await rateLimit(`use:${me}`, 20);
   const used = await usePower(me, String(req.params.id));
+  track(me, 'power');
   const u = await db.users.findOne({ _id: me }, { projection: { powers: 1 } });
   res.json({ used, powers: activePowers(u) });
 });

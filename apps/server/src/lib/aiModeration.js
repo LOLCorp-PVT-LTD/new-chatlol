@@ -213,3 +213,26 @@ export async function reviewReport(report) {
     console.warn('[safeshield] report review failed', e.message);
   }
 }
+
+const STAFF_COLLECTION = { post: 'posts', comment: 'comments', shout: 'shouts', thread: 'threads', reply: 'replies', wall: 'wallNotes', message: 'messages' };
+/**
+ * Staff removal: the item stays where it was as a "removed by Admin for <reason>" card. Its text and media are
+ * blanked for everyone; the original is kept on the record (`removedOriginal`) for the audit trail.
+ */
+export async function removeByStaff(ref, reason, staffId) {
+  const col = STAFF_COLLECTION[ref.type];
+  if (!col) return null;
+  const doc = await db[col].findOne({ _id: ref.id });
+  if (!doc) return null;
+  const set = {
+    removed: { by: 'admin', reason, at: now() },
+    removedOriginal: { body: doc.body ?? null, title: doc.title ?? null, mediaUrl: doc.mediaUrl ?? null, sticker: doc.sticker ?? null },
+    removedByUserId: staffId,
+    body: '',
+    mediaUrl: null,
+    sticker: null,
+  };
+  if (ref.type === 'thread') set.title = 'Removed thread';
+  await db[col].updateOne({ _id: ref.id }, { $set: set });
+  return { ...doc, authorId: doc.authorId };
+}

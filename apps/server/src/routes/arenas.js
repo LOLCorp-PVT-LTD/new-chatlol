@@ -19,6 +19,7 @@ import {
   playMove,
   startArena,
 } from '../lib/arenas.js';
+import { track } from '../lib/activity.js';
 
 export const arenasRouter = Router();
 
@@ -78,6 +79,7 @@ arenasRouter.post('/arenas', requireAuth, async (req, res) => {
   );
   assertClean(b.name);
   const a = await createArena(me, b);
+  track(me, 'arena_create');
   res.status(201).json({ arena: await withPlayers(a, me) });
 });
 
@@ -115,7 +117,9 @@ arenasRouter.post('/arenas/:id/invite', requireAuth, async (req, res) => {
 
 arenasRouter.post('/arenas/:id/start', requireAuth, async (req, res) => {
   const me = uid(req);
-  res.json({ arena: await withPlayers(await startArena(await load(req), me), me) });
+  const started = await startArena(await load(req), me);
+  for (const p of started.playerIds) track(p, 'arena_play');
+  res.json({ arena: await withPlayers(started, me) });
 });
 
 arenasRouter.post('/arenas/:id/move', requireAuth, async (req, res) => {

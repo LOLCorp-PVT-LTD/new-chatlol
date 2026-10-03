@@ -11,6 +11,7 @@ export const PERMISSIONS = [
   { key: 'terminate', label: 'Terminate accounts', desc: 'Permanently close an account and scrub its personal data', group: 'Moderation' },
   { key: 'wallet', label: 'Sparks & Gems', desc: 'Add or remove Sparks and Gems', group: 'Economy' },
   { key: 'premium', label: 'Premium', desc: 'Give or remove Premium days', group: 'Economy' },
+  { key: 'profiles', label: 'Edit profiles', desc: 'Change names, handles, bios; remove pictures and covers', group: 'Moderation' },
   { key: 'items', label: 'Store items', desc: 'Give stickers, frames, themes and other items', group: 'Economy' },
   { key: 'boost', label: 'Boost profiles', desc: 'Feature someone at the top of Browse Members and Rate & Meet', group: 'Economy' },
   { key: 'payments', label: 'Payments', desc: 'See who paid what and the status of every payment; refund', group: 'Economy' },

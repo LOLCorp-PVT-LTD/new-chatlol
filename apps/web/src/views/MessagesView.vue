@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import RemovedNote from '../components/RemovedNote.vue';
 import ReactionBar from '../components/ReactionBar.vue';
 import { emojiOnly } from '../lib/richText';
 import type { StickerInput } from '@chatlol/shared';
@@ -177,6 +178,7 @@ const seen = computed(() => !!readAt.value || (!!lastMine.value && messages.valu
           <div v-for="(m, i) in messages" :key="m.id" class="flex" :class="m.author.id === s.user?.id ? 'justify-end' : 'justify-start'">
             <div class="max-w-[75%]" :class="{ 'mt-3': i > 0 && messages[i - 1].author.id !== m.author.id }">
               <img v-if="m.mediaUrl" :src="m.mediaUrl" class="rounded-md max-h-72 mb-1" alt="Photo" />
+              <RemovedNote v-if="m.removed" what="message" :removed="m.removed" />
               <StickerView v-if="m.sticker" :sticker="m.sticker" :size="140" class="block" :class="{ 'ml-auto': m.author.id === s.user?.id }" />
               <p v-if="m.body && emojiOnly(m.body)" :class="{ 'text-right': m.author.id === s.user?.id }"><RichText :text="m.body" /></p>
               <p v-else-if="m.body" class="px-4 py-2.5 rounded-[22px] text-body-md break-words"

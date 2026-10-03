@@ -30,6 +30,7 @@ import { REACTION_KEYS } from '@chatlol/shared';
 import { assertCanPost } from '../lib/enforcement.js';
 import { screen } from '../lib/aiModeration.js';
 import { assertEmojiOwned, resolveSticker, stickerInput } from '../lib/stickers.js';
+import { track } from '../lib/activity.js';
 
 export const profileRouter = Router();
 
@@ -423,12 +424,14 @@ profileRouter.post('/react/:type/:id', requireAuth, async (req, res) => {
   const me = uid(req);
   await rateLimit(`react:${me}`, 60);
   const { kind } = parse(z.object({ kind: z.enum(REACTION_KEYS).nullable() }), req.body);
+  track(me, 'reaction');
   res.json(await react(String(req.params.type), String(req.params.id), me, kind));
 });
 
 // ——— Wall (guest notes) ———
 const serializeNote = async (n, author) => ({
   id: n._id,
+  removed: n.removed ?? null,
   profileId: n.profileId,
   author: await author(n.authorId),
   body: n.body,

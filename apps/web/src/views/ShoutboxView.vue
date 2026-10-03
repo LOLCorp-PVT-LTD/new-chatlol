@@ -45,7 +45,12 @@ const onReact = (p: { id: string; reactions: Shout['reactions'] }) => {
   const x = items.value.find((y) => y.id === p.id);
   if (x) x.reactions = p.reactions;
 };
-const onRemoved = (r: { type: string; id: string }) => { if (r.type === 'shout') items.value = items.value.filter((x) => x.id !== r.id); };
+// Staff removals (with a reason) turn into a "removed by Admin" card; other removals just disappear.
+const onRemoved = (r: { type: string; id: string; reason?: string }) => {
+  if (r.type !== 'shout') return;
+  if (r.reason) items.value = items.value.map((x) => (x.id === r.id ? { ...x, body: '', sticker: null, removed: { by: 'admin', reason: r.reason!, at: new Date().toISOString() } } : x));
+  else items.value = items.value.filter((x) => x.id !== r.id);
+};
 
 function posted(sh: Shout, nextAt: string) {
   upsert(sh);

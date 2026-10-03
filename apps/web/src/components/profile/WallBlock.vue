@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import RemovedNote from '../RemovedNote.vue';
 import ReactionBar from '../ReactionBar.vue';
 import type { StickerInput } from '@chatlol/shared';
 import EmojiButton from '../EmojiButton.vue';
@@ -45,7 +46,8 @@ async function send(sticker: StickerInput | null = null) {
       <div class="min-w-0 flex-1">
         <p class="text-body-sm"><RouterLink :to="`/u/${n.author.handle}`" class="font-bold hover:underline">{{ n.author.displayName }}</RouterLink>
           <span v-if="n.mood" class="ml-1">{{ WALL_MOODS.find((m) => m.key === n.mood)?.emoji }}</span> <span class="muted">· {{ timeAgo(n.createdAt) }}</span></p>
-        <p v-if="n.body" class="text-body-md mt-0.5 break-words"><RichText :text="n.body" /></p>
+        <RemovedNote v-if="n.removed" what="comment" :removed="n.removed" class="mt-1" />
+        <p v-else-if="n.body" class="text-body-md mt-0.5 break-words"><RichText :text="n.body" /></p>
         <StickerView v-if="n.sticker" :sticker="n.sticker" :size="96" />
         <ReactionBar type="wall" :id="n.id" :reactions="n.reactions ?? {}" :mine="n.myReaction" compact class="mt-1" @update="Object.assign(n, $event)" />
       </div>

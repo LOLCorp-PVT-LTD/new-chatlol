@@ -35,7 +35,7 @@ export interface ServerEvents {
     'lounge:kicked': (p: { loungeId: ID; by: string; minutes: number }) => void;
     'shout:new': (s: import('./types').Shout) => void;
     'shout:reactions': (p: { id: ID; reactions: Record<import('./types').ReactionKind, number> }) => void;
-    'content:removed': (p: { type: string; id: ID }) => void;
+    'content:removed': (p: { type: string; id: ID; reason?: string }) => void;
     moderation: (p: { action: string; until: string | null; reason: string | null }) => void;
     /** A message for the sender only (e.g. a locked sticker). */
     toast: (t: { kind: 'error' | 'info'; title: string }) => void;

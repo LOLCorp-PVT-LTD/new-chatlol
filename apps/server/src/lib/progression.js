@@ -18,6 +18,7 @@ import { HttpError } from './http.js';
 import { itemIdFor } from './ids.js';
 import { shared } from './shared.js';
 import { grant, notify, emitWallet } from './rewards.js';
+import { track } from './activity.js';
 
 const DAY = 86_400_000;
 
@@ -100,6 +101,7 @@ export async function dailyCheckIn(userId) {
   const r = { sparks: Math.round(base.sparks * rank.checkInBoost), xp: Math.round(base.xp * rank.checkInBoost) };
   const reward = await grant(userId, r.sparks, r.xp, `Day ${streak} check-in ☀️${rank.checkInBoost > 1 ? ` (${rank.emoji} ${rank.label} ×${rank.checkInBoost})` : ''}`);
   reward.loginStreak = streak;
+  track(userId, 'checkin');
   if (LOGIN_STREAK_MILESTONES.includes(streak)) {
     await db.users.updateOne({ _id: userId }, { $addToSet: { badges: `login_${streak}` } });
     await grant(userId, streak * 10, streak * 5, `${streak}-day check-in streak! 🔥`);

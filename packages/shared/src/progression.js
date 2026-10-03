@@ -134,6 +134,10 @@ export function stripPremiumLayout(layout) {
   return { layout: out, removed: [...removed] };
 }
 
+// ——— Username changes ———
+/** Members can change their @handle for Gold (staff can change it for free from the admin panel). */
+export const HANDLE_CHANGE_GOLD = 1;
+
 // ——— Messaging cost ———
 /** Each DM to a real person costs Sparks (AI personas are free). Premium members message for free. */
 export const DM_SPARK_COST = 5;

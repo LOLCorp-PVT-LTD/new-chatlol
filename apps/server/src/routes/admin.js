@@ -2,14 +2,16 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { db, escapeRegex, newId, now, today } from '../db.js';
 import { config } from '../config.js';
-import { LEVEL_GATES, PERMISSION_KEYS, permissionsOf } from '@chatlol/shared';
+import { LEVEL_GATES, PERMISSION_KEYS, activePowers, levelForXp, permissionsOf } from '@chatlol/shared';
+import { featureTotals, userFeatureUse } from '../lib/activity.js';
 import { getLevelGates, setLevelGates } from '../lib/progression.js';
 import { gemGoldWagers, setGemGoldWagers } from '../lib/arenas.js';
 import { requireAuth, requirePerm, uid } from '../lib/auth.js';
 import { HttpError, parse } from '../lib/http.js';
 import { authorCache, userPublic, isPremium } from '../lib/serialize.js';
 import { applyAction, standing } from '../lib/enforcement.js';
-import { removeContent } from '../lib/aiModeration.js';
+import { removeByStaff } from '../lib/aiModeration.js';
+import { io, room } from '../lib/io.js';
 import { presence } from '../lib/presence.js';
 import { redisClient, shared, sharedBackend } from '../lib/shared.js';
 import { apnsConfigured, fcmConfigured } from '../lib/push.js';
@@ -42,6 +44,16 @@ async function findTarget(req) {
 /** Staff actions that aren't moderation (grants, boosts, roles) go in the same log, so everything is accountable. */
 const audit = (userId, kind, reason, by, extra = {}) =>
   db.modEvents.insertOne({ _id: newId(), userId, kind, reason, byUserId: by, createdAt: now(), ...extra });
+/** Staff removal: leaves a "removed by Admin" card, logs it on the author's record and tells them. */
+async function staffRemove(ref, reason, staffId) {
+  const doc = await removeByStaff(ref, reason, staffId);
+  if (!doc) throw new HttpError(404, 'Content not found');
+  if (doc.authorId) {
+    await audit(doc.authorId, 'content_removed', `${ref.type} removed: ${reason}`, staffId, { ref });
+    await notify(doc.authorId, { kind: 'system', title: `🛡️ Your ${ref.type} was removed by an Admin`, body: `Reason: ${reason}`, link: '/settings' });
+  }
+  io()?.to(room.global).emit('content:removed', { type: ref.type, id: ref.id, reason });
+}
 const boostUntil = (u) => (u.boost?.until && u.boost.until > now() ? u.boost.until : null);
 
 const since = (days) => new Date(Date.now() - days * 86_400_000).toISOString();
@@ -165,7 +177,7 @@ adminRouter.get('/admin/users/:id', async (req, res) => {
   const [events, reports, posts, shouts, messages] = await Promise.all([
     db.modEvents.find({ userId: u._id }).sort({ createdAt: -1 }).limit(50).toArray(),
     db.reports
-      .find({ $or: [{ targetType: 'user', targetId: u._id }, { reporterId: u._id }] })
+      .find({ $or: [{ targetType: 'user', targetId: u._id }, { targetUserId: u._id }, { reporterId: u._id }] })
       .sort({ createdAt: -1 })
       .limit(30)
       .toArray(),
@@ -196,7 +208,7 @@ adminRouter.get('/admin/users/:id', async (req, res) => {
       targetId: r.targetId,
       reason: r.reason,
       status: r.status,
-      against: r.targetId === u._id,
+      against: r.targetId === u._id || r.targetUserId === u._id,
       createdAt: r.createdAt,
     })),
     recent: [
@@ -324,7 +336,7 @@ adminRouter.post('/admin/users/:id/wallet', requirePerm('wallet'), async (req, r
 adminRouter.get('/admin/items', requirePerm('items'), async (_req, res) => {
   const rows = await db.storeItems.find({}).sort({ kind: 1, price: 1 }).toArray();
   res.json({
-    items: rows.map((i) => ({ key: i.key, name: i.name, kind: i.kind, emoji: i.emoji ?? null, rarity: i.rarity ?? null, price: i.price })),
+    items: rows.map((i) => ({ key: i.key, name: i.name, kind: i.kind, emoji: i.emoji ?? null, rarity: i.rarity ?? null, price: i.price, goldPrice: i.goldPrice ?? null, preview: i.preview ?? null, description: i.description ?? '' })),
   });
 });
 
@@ -350,6 +362,121 @@ adminRouter.post('/admin/users/:id/items', requirePerm('items'), async (req, res
     link: '/locker',
   });
   res.json({ ok: true });
+});
+
+/** Edit someone's profile, or remove their picture / cover / background. Every change is logged. */
+adminRouter.patch('/admin/users/:id/profile', requirePerm('profiles'), async (req, res) => {
+  const b = parse(
+    z.object({
+      displayName: z.string().trim().min(1).max(40).optional(),
+      handle: z.string().regex(/^[a-zA-Z0-9_.]{3,20}$/, '3–20 letters, numbers, _ or .').optional(),
+      bio: z.string().max(280).optional(),
+      pronouns: z.string().max(24).optional(),
+      city: z.string().max(60).optional(),
+      headline: z.string().max(80).optional(),
+      removeAvatar: z.boolean().optional(),
+      removeCover: z.boolean().optional(),
+      removeBackground: z.boolean().optional(),
+      removeSong: z.boolean().optional(),
+      reason: z.string().trim().max(200).default(''),
+    }),
+    req.body,
+  );
+  const target = await findTarget(req);
+  assertOutranks(req, target);
+  const set = {};
+  const changed = [];
+  for (const k of ['displayName', 'bio', 'pronouns', 'city']) if (b[k] !== undefined && b[k] !== target[k]) (set[k] = b[k]), changed.push(k);
+  if (b.headline !== undefined) (set['profile.headline'] = b.headline), changed.push('headline');
+  if (b.handle && b.handle !== target.handle) {
+    if (await db.users.findOne({ handleLower: b.handle.toLowerCase(), _id: { $ne: target._id } })) throw new HttpError(409, 'That handle is taken');
+    Object.assign(set, { handle: b.handle, handleLower: b.handle.toLowerCase() });
+    changed.push(`handle @${target.handle} → @${b.handle}`);
+  }
+  if (b.removeAvatar) (set.avatarUrl = null), changed.push('picture removed');
+  if (b.removeCover) (set['profile.coverUrl'] = null), changed.push('cover removed');
+  if (b.removeBackground) (set['profile.background'] = { kind: 'preset', value: 'sunset' }), changed.push('background reset');
+  if (b.removeSong) (set['profile.song'] = null), changed.push('song removed');
+  if (!changed.length) throw new HttpError(400, 'Nothing changed');
+  await db.users.updateOne({ _id: target._id }, { $set: set });
+  await audit(target._id, 'profile_edit', `${changed.join(', ')}${b.reason ? ` — ${b.reason}` : ''}`, uid(req));
+  if (b.removeAvatar || b.removeCover || b.handle)
+    await notify(target._id, { kind: 'system', title: '🛡️ An Admin updated your profile', body: `${changed.join(', ')}${b.reason ? ` — ${b.reason}` : ''}`, link: '/settings' });
+  res.json({ user: await adminUser(await db.users.findOne({ _id: target._id })) });
+});
+
+/** Everything someone has posted, removed and hidden items included (with the original text), newest first. */
+const CONTENT = {
+  posts: ['posts', {}],
+  photos: ['posts', { mediaUrl: { $ne: null } }],
+  shouts: ['shouts', {}],
+  comments: ['comments', {}],
+  threads: ['threads', {}],
+  replies: ['replies', {}],
+  wall: ['wallNotes', {}],
+  messages: ['messages', {}],
+};
+adminRouter.get('/admin/users/:id/content', requirePerm('reports'), async (req, res) => {
+  const kind = String(req.query.kind ?? 'posts');
+  if (!CONTENT[kind]) throw new HttpError(400, 'Unknown content type');
+  const [col, extra] = CONTENT[kind];
+  const before = req.query.before ? { createdAt: { $lt: String(req.query.before) } } : {};
+  const rows = await db[col].find({ authorId: String(req.params.id), ...extra, ...before }).sort({ createdAt: -1 }).limit(40).toArray();
+  const type = { posts: 'post', photos: 'post', shouts: 'shout', comments: 'comment', threads: 'thread', replies: 'reply', wall: 'wall', messages: 'message' }[kind];
+  res.json({
+    items: rows.map((r) => ({
+      type,
+      id: r._id,
+      text: r.removedOriginal?.body ?? r.body ?? '',
+      title: r.removedOriginal?.title ?? r.title ?? null,
+      mediaUrl: r.removedOriginal?.mediaUrl ?? r.mediaUrl ?? null,
+      where: r.roomId ?? r.postId ?? r.threadId ?? r.profileId ?? null,
+      hidden: !!r.hidden,
+      removed: r.removed ?? (r.kind === 'removed' ? { by: 'SafeShield', reason: r.removedReason ?? '' } : null),
+      reactions: r.reactions ?? null,
+      createdAt: r.createdAt,
+    })),
+    nextBefore: rows.length === 40 ? rows.at(-1).createdAt : null,
+  });
+});
+
+/** Feature usage, wallet, progression and game history for one person. */
+adminRouter.get('/admin/users/:id/activity', async (req, res) => {
+  const u = await findTarget(req);
+  const [features, inventory, arenas, ticketsOn, ticketsBy] = await Promise.all([
+    userFeatureUse(u._id),
+    db.inventory.find({ userId: u._id, qty: { $gt: 0 } }).toArray(),
+    db.arenas.find({ playerIds: u._id }).sort({ createdAt: -1 }).limit(20).toArray(),
+    db.modEvents.find({ userId: u._id, category: { $regex: '^ticket_' } }).sort({ createdAt: -1 }).limit(20).toArray(),
+    db.modEvents.find({ byUserId: u._id, category: { $regex: '^ticket_' } }).sort({ createdAt: -1 }).limit(20).toArray(),
+  ]);
+  const items = new Map((await db.storeItems.find({ _id: { $in: inventory.map((i) => i.itemId) } }).toArray()).map((i) => [i._id, i]));
+  res.json({
+    features,
+    progression: {
+      level: levelForXp(u.xp ?? 0),
+      xp: u.xp ?? 0,
+      loginStreak: u.loginStreak ?? 0,
+      lastDailyClaim: u.lastDailyClaim ?? null,
+      lastSeenAt: u.lastSeenAt,
+      progressResetAt: u.progressResetAt ?? null,
+      powers: activePowers(u),
+      unlockedThemes: u.unlockedThemes ?? [],
+      handleHistory: u.handleHistory ?? [],
+      gameStats: u.gameStats ?? { played: 0, wins: 0 },
+    },
+    inventory: inventory.map((i) => ({ key: items.get(i.itemId)?.key, name: items.get(i.itemId)?.name, emoji: items.get(i.itemId)?.emoji, kind: items.get(i.itemId)?.kind, qty: i.qty, via: i.via ?? null, acquiredAt: i.acquiredAt })),
+    arenas: arenas.map((a) => ({ id: a._id, name: a.name, game: a.game, status: a.status, stake: a.stake, payout: a.payouts?.find((p) => p.userId === u._id)?.amount ?? 0, createdAt: a.createdAt })),
+    tickets: {
+      against: ticketsOn.map((e) => ({ kind: e.category.slice(7), reason: e.reason, at: e.createdAt })),
+      used: ticketsBy.map((e) => ({ kind: e.category.slice(7), targetId: e.userId, at: e.createdAt })),
+    },
+  });
+});
+
+/** Network-wide feature adoption (last 7 and 30 days). */
+adminRouter.get('/admin/features', requirePerm('overview'), async (_req, res) => {
+  res.json({ week: await featureTotals(7), month: await featureTotals(30) });
 });
 
 /** Level gates: the level members need before they can DM non-friends, post in forums, go live, make arenas. */
@@ -553,7 +680,7 @@ adminRouter.post('/admin/reports/:id', requirePerm('reports'), async (req, res) 
   const b = parse(z.object({ status: z.enum(['actioned', 'dismissed']), removeContent: z.boolean().optional() }), req.body);
   const r = await db.reports.findOne({ _id: String(req.params.id) });
   if (!r) throw new HttpError(404, 'Report not found');
-  if (b.removeContent && r.targetType !== 'user') await removeContent({ type: r.targetType, id: r.targetId }, 'Removed by a moderator');
+  if (b.removeContent && r.targetType !== 'user') await staffRemove({ type: r.targetType, id: r.targetId }, r.reason || 'breaking the Community Guidelines', uid(req));
   await db.reports.updateOne({ _id: r._id }, { $set: { status: b.status, resolvedBy: uid(req), resolvedAt: now() } });
   res.json({ ok: true });
 });
@@ -590,10 +717,14 @@ adminRouter.post('/admin/flags/:id', requirePerm('reports'), async (req, res) =>
 
 adminRouter.post('/admin/content/remove', requirePerm('reports'), async (req, res) => {
   const b = parse(
-    z.object({ type: z.enum(['post', 'comment', 'shout', 'thread', 'reply', 'wall', 'message']), id: z.string().max(60) }),
+    z.object({
+      type: z.enum(['post', 'comment', 'shout', 'thread', 'reply', 'wall', 'message']),
+      id: z.string().max(60),
+      reason: z.string().trim().min(3).max(200).default('breaking the Community Guidelines'),
+    }),
     req.body,
   );
-  await removeContent(b, 'Removed by a moderator');
+  await staffRemove(b, b.reason, uid(req));
   res.json({ ok: true });
 });
 

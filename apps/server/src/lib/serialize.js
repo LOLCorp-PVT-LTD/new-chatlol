@@ -297,6 +297,8 @@ export async function serializePost(p, viewerId, author = authorCache(viewerId))
   const battle = p.battle?.map((o) => ({ id: o.id, label: o.label, mediaUrl: o.mediaUrl ?? undefined, votes: o.votes })) ?? null;
   return {
     id: p._id,
+    /** Set when staff removed it: shown as a 'removed by Admin for …' card. */
+    removed: p.removed ?? null,
     author: await author(p.authorId),
     kind: p.kind,
     body: p.body,
@@ -327,6 +329,8 @@ export async function serializeComment(c, author = authorCache()) {
   const rating = (await db.ratings.findOne({ postId: c.postId, userId: c.authorId }))?.score ?? null;
   return {
     id: c._id,
+    /** Set when staff removed it: shown as a 'removed by Admin for …' card. */
+    removed: c.removed ?? null,
     postId: c.postId,
     author: await author(c.authorId),
     body: c.body,
@@ -341,6 +345,8 @@ export async function serializeComment(c, author = authorCache()) {
 export async function serializeMessage(m, author = authorCache()) {
   return {
     id: m._id,
+    /** Set when staff removed it: shown as a 'removed by Admin for …' card. */
+    removed: m.removed ?? null,
     roomId: m.roomId,
     author: await author(m.authorId),
     body: m.body,
@@ -377,6 +383,8 @@ export async function serializeThread(t, viewerId, author = authorCache(viewerId
   const v = viewerId ? ((await db.threadVotes.findOne({ threadId: t._id, userId: viewerId }))?.v ?? 0) : 0;
   return {
     id: t._id,
+    /** Set when staff removed it: shown as a 'removed by Admin for …' card. */
+    removed: t.removed ?? null,
     board: t.boardId,
     title: t.title,
     body: t.body,
@@ -393,6 +401,8 @@ export async function serializeThread(t, viewerId, author = authorCache(viewerId
 export async function serializeReply(r, author = authorCache()) {
   return {
     id: r._id,
+    /** Set when staff removed it: shown as a 'removed by Admin for …' card. */
+    removed: r.removed ?? null,
     threadId: r.threadId,
     author: await author(r.authorId),
     body: r.body,

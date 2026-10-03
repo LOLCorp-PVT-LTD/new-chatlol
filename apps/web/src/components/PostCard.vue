@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import RemovedNote from './RemovedNote.vue';
 import ReactionBar from './ReactionBar.vue';
 import type { StickerInput } from '@chatlol/shared';
 import EmojiButton from './EmojiButton.vue';
@@ -141,6 +142,7 @@ async function remove() {
       <p class="text-body-md opacity-95 relative">Leave a wish below — it means a lot 🧡</p>
       <button v-if="!mine" class="btn bg-white text-flame h-10 mt-4 relative" @click="!showComments && toggleComments()">🎉 Send a birthday wish</button>
     </div>
+    <RemovedNote v-else-if="post.removed" what="post" :removed="post.removed" class="mx-5 mb-3" />
     <p v-else-if="post.body" class="px-5 pb-3 text-body-lg whitespace-pre-line break-words">
 <RichText :text="post.body" tags />
     </p>
@@ -212,7 +214,8 @@ async function remove() {
             <span v-if="c.rating" class="text-label-sm text-primary">{{ TIERS[c.rating - 1].emoji }} {{ TIERS[c.rating - 1].label }}</span>
             <span class="text-on-surface-variant">{{ timeAgo(c.createdAt) }}</span>
           </div>
-          <p v-if="c.body" class="text-body-md break-words"><RichText :text="c.body" /></p>
+          <RemovedNote v-if="c.removed" what="comment" :removed="c.removed" />
+          <p v-else-if="c.body" class="text-body-md break-words"><RichText :text="c.body" /></p>
           <StickerView v-if="c.sticker" :sticker="c.sticker" :size="96" />
           <ReactionBar type="comment" :id="c.id" :reactions="c.reactions ?? {}" :mine="c.myReaction" compact class="mt-1" @update="Object.assign(c, $event)" />
         </div>

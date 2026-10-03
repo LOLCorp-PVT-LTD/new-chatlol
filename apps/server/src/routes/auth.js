@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { ageFrom, APP_THEMES, MAX_INTERESTS, MIN_AGE, THEME_UNLOCK_GOLD, appThemeByKey, themeAllowed } from '@chatlol/shared';
+import { ageFrom, APP_THEMES, HANDLE_CHANGE_GOLD, MAX_INTERESTS, MIN_AGE, THEME_UNLOCK_GOLD, appThemeByKey, themeAllowed } from '@chatlol/shared';
 import { db, newId, now, today, isDuplicateKey } from '../db.js';
 import { hashPassword, verifyPassword, signToken, requireAuth, uid, passwordVersion } from '../lib/auth.js';
 import { HttpError, parse, rateLimit } from '../lib/http.js';
@@ -14,6 +14,7 @@ import { consumeToken, sendPasswordReset, sendVerification, sendEmailChangedNoti
 import { config } from '../config.js';
 import { closeAccount } from '../lib/accounts.js';
 import { assertNotBanned } from '../lib/enforcement.js';
+import { track } from '../lib/activity.js';
 
 export const authRouter = Router();
 
@@ -241,6 +242,25 @@ authRouter.patch('/me/settings', requireAuth, async (req, res) => {
   res.json({ user: await me(id) });
 });
 
+/** Change your @handle: costs Gold (HANDLE_CHANGE_GOLD). */
+authRouter.post('/me/handle', requireAuth, async (req, res) => {
+  const id = uid(req);
+  await rateLimit(`handle:${id}`, 5);
+  const { handle } = parse(z.object({ handle: z.string().regex(handleRe, '3–20 letters, numbers, _ or .') }), req.body);
+  assertClean(handle);
+  const u = await db.users.findOne({ _id: id }, { projection: { handle: 1 } });
+  if (u.handle === handle) return res.json({ user: await me(id) });
+  if (await db.users.findOne({ handleLower: handle.toLowerCase(), _id: { $ne: id } })) throw new HttpError(409, 'That handle is taken', 'handle_taken');
+  const paid = await db.users.updateOne(
+    { _id: id, gold: { $gte: HANDLE_CHANGE_GOLD } },
+    { $inc: { gold: -HANDLE_CHANGE_GOLD }, $set: { handle, handleLower: handle.toLowerCase() }, $push: { handleHistory: { from: u.handle, at: now() } } },
+  );
+  if (!paid.modifiedCount) throw new HttpError(402, `Changing your username costs 🪙 ${HANDLE_CHANGE_GOLD} Gold`, 'insufficient_gold');
+  track(id, 'username_change');
+  await emitWallet(id);
+  res.json({ user: await me(id) });
+});
+
 /** Unlocks one app colour theme for good, for Gold. */
 authRouter.post('/me/themes/:key/unlock', requireAuth, async (req, res) => {
   const id = uid(req);
@@ -256,6 +276,7 @@ authRouter.post('/me/themes/:key/unlock', requireAuth, async (req, res) => {
     if (!(u.unlockedThemes ?? []).includes(t.key)) throw new HttpError(402, `You need 🪙 ${THEME_UNLOCK_GOLD} Gold`, 'insufficient_gold');
   }
   await emitWallet(id);
+  track(id, 'theme_unlock');
   res.json({ user: await me(id) });
 });
 
