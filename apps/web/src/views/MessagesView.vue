@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import VideoEmbeds from '../components/VideoEmbeds.vue';
+import { withoutVideos } from '@chatlol/shared';
 import RemovedNote from '../components/RemovedNote.vue';
 import ReactionBar from '../components/ReactionBar.vue';
 import { emojiOnly } from '../lib/richText';
@@ -196,8 +198,9 @@ const seen = computed(() => !!readAt.value || (!!lastMine.value && messages.valu
               <RemovedNote v-if="m.removed" what="message" :removed="m.removed" />
               <StickerView v-if="m.sticker" :sticker="m.sticker" :size="140" class="block" :class="{ 'ml-auto': m.author.id === s.user?.id }" />
               <p v-if="m.body && emojiOnly(m.body)" :class="{ 'text-right': m.author.id === s.user?.id }"><RichText :text="m.body" /></p>
-              <p v-else-if="m.body" class="px-4 py-2.5 rounded-[22px] text-body-md break-words"
-                :class="m.author.id === s.user?.id ? 'bg-sunset text-white rounded-br-md' : 'bg-surface-container-low rounded-bl-md'"><RichText :text="m.body" /></p>
+              <p v-else-if="withoutVideos(m.body)" class="px-4 py-2.5 rounded-[22px] text-body-md break-words"
+                :class="m.author.id === s.user?.id ? 'bg-sunset text-white rounded-br-md' : 'bg-surface-container-low rounded-bl-md'"><RichText :text="m.body" videos /></p>
+              <VideoEmbeds v-if="!m.removed" :text="m.body" :max="1" compact class="mt-1.5" :class="{ 'ml-auto': m.author.id === s.user?.id }" />
               <ReactionBar type="message" :id="m.id" :reactions="m.reactions ?? {}" :mine="m.myReaction" compact class="mt-1" :class="{ 'justify-end': m.author.id === s.user?.id }" @update="Object.assign(m, $event)" />
               <p v-if="m.id === lastMine?.id" class="text-[11px] text-on-surface-variant text-right mt-0.5">{{ seen ? 'Seen' : 'Sent' }}</p>
             </div>

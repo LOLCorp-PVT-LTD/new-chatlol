@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import VideoEmbeds from './VideoEmbeds.vue';
+import { withoutVideos } from '@chatlol/shared';
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 import type { ChatMessage, Conversation } from '@chatlol/shared';
 import { DM_SPARK_COST } from '@chatlol/shared';
@@ -121,8 +123,11 @@ const preview = (c: Conversation) => c.lastMessage?.body || (c.lastMessage?.stic
           <div v-for="m in messages" :key="m.id" class="flex" :class="m.author.id === s.user?.id ? 'justify-end' : 'justify-start'">
             <StickerView v-if="m.sticker" :sticker="m.sticker" :size="88" />
             <img v-else-if="m.mediaUrl" :src="m.mediaUrl" alt="" class="max-w-[70%] rounded-md" loading="lazy" />
-            <p v-else class="max-w-[80%] px-3 py-1.5 rounded-[18px] text-body-sm break-words"
-              :class="m.author.id === s.user?.id ? 'bg-sunset text-white rounded-br-md' : 'bg-surface-container-low/80 rounded-bl-md'"><RichText :text="m.body" /></p>
+            <div v-else class="max-w-[85%] flex flex-col gap-1" :class="m.author.id === s.user?.id ? 'items-end' : 'items-start'">
+              <p v-if="withoutVideos(m.body)" class="px-3 py-1.5 rounded-[18px] text-body-sm break-words"
+                :class="m.author.id === s.user?.id ? 'bg-sunset text-white rounded-br-md' : 'bg-surface-container-low/80 rounded-bl-md'"><RichText :text="m.body" videos /></p>
+              <VideoEmbeds :text="m.body" :max="1" compact class="w-[240px]" />
+            </div>
           </div>
           <p v-if="!messages.length" class="text-center text-body-sm text-on-surface-variant pt-10">Say hi 👋</p>
         </div>

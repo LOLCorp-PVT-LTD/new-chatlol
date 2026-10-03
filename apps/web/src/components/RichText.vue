@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { customEmojiUri, isJumbo, parseRich } from '@chatlol/shared';
+import { customEmojiUri, isJumbo, parseRich, withoutVideos } from '@chatlol/shared';
 
 /**
  * User text with ChatLOL custom emoji (:code:) drawn as rounded tiles, @mentions linked to profiles and,
  * optionally, #tags highlighted, and web links made clickable. Text that's only 1–3 custom emoji is shown big.
  */
-const props = withDefaults(defineProps<{ text: string | null | undefined; tags?: boolean; jumbo?: boolean }>(), { jumbo: true });
-const parts = computed(() => parseRich(props.text));
+/** `videos`: YouTube links are left out of the text because a player (VideoEmbeds) shows them underneath. */
+const props = withDefaults(defineProps<{ text: string | null | undefined; tags?: boolean; jumbo?: boolean; videos?: boolean }>(), { jumbo: true });
+const parts = computed(() => parseRich(props.videos ? withoutVideos(props.text) : props.text));
 const big = computed(() => props.jumbo && isJumbo(parts.value));
 const split = (v: string) => (props.tags ? v.split(/(#[\p{L}\p{N}_]+)/u).filter(Boolean) : [v]);
 
@@ -15,20 +16,20 @@ const split = (v: string) => (props.tags ? v.split(/(#[\p{L}\p{N}_]+)/u).filter(
  * Links: http(s):// and www. addresses become clickable. Links to ChatLOL itself open in-app; everything else opens
  * in a new tab, marked nofollow/ugc. Trailing punctuation ("see this.") isn't part of the link.
  */
-const URL_RE = /((?:https?:\/\/|www\.)[^\s<>"]+)/gi;
+const URL_RE = /((?:https?:\/\/|www\.|(?:m\.)?youtu(?:\.be|be\.com)\/)[^\s<>"]+)/gi;
 type Seg = { link: true; href: string; label: string; internal: string | null } | { link: false; v: string };
 function links(v: string): Seg[] {
   const out: Seg[] = [];
   for (const piece of v.split(URL_RE)) {
     if (!piece) continue;
-    if (!/^(?:https?:\/\/|www\.)/i.test(piece)) {
+    if (!/^(?:https?:\/\/|www\.|(?:m\.)?youtu(?:\.be|be\.com)\/)/i.test(piece)) {
       out.push({ link: false, v: piece });
       continue;
     }
     const m = piece.match(/^(.*?)([.,!?;:'")\]]*)$/)!;
     const raw = m[1];
     let url: URL | null = null;
-    try { url = new URL(/^www\./i.test(raw) ? `https://${raw}` : raw); } catch { /* not a real link */ }
+    try { url = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`); } catch { /* not a real link */ }
     if (!url || !/^https?:$/.test(url.protocol) || (!url.hostname.includes('.') && url.host !== location.host)) {
       out.push({ link: false, v: piece });
       continue;
