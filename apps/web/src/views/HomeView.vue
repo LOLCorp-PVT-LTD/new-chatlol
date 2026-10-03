@@ -14,7 +14,7 @@ import UserName from '../components/UserName.vue';
 import TierPad from '../components/TierPad.vue';
 import TierBars from '../components/TierBars.vue';
 import Icon from '../components/Icon.vue';
-import Countdown from '../components/Countdown.vue';
+import DropWidget from '../components/DropWidget.vue';
 import TournamentCard from '../components/TournamentCard.vue';
 
 /** Home: a slice of every part of ChatLOL, each with an arrow to its full page. */
@@ -60,6 +60,7 @@ async function nextRate() {
 
 <template>
   <div v-if="h" class="space-y-6 w-full">
+    <DropWidget :drop="h.drop" />
     <!-- The reigning King of ChatLOL -->
     <RouterLink v-if="king" :to="`/u/${king.user.handle}`" class="block rounded-lg p-5 pt-8 shadow-float relative overflow-hidden text-[#3b2a00] bg-[linear-gradient(135deg,#fff3b0,#fcd34d_45%,#d4a017)] hover:brightness-105 transition">
       <div class="absolute -right-6 -bottom-10 text-[140px] opacity-20 rotate-12 select-none">👑</div>
@@ -165,16 +166,6 @@ async function nextRate() {
         </RouterLink>
       </section>
 
-
-      <!-- Today's drop -->
-      <section class="card p-5">
-        <SectionHead title="Today’s Sunset Drop" icon="wb_twilight" to="/drops" />
-        <p class="text-headline-sm">{{ h.drop.emoji }} “{{ h.drop.prompt }}”</p>
-        <p class="text-body-sm text-on-surface-variant mb-3"><Countdown :to="h.drop.endsAt" /> left</p>
-        <div class="grid grid-cols-3 gap-1.5">
-          <RouterLink v-for="p in h.drop.entries" :key="p.id" :to="`/p/${p.id}`" class="aspect-square rounded-md overflow-hidden"><img :src="p.mediaUrl!" alt="" class="w-full h-full object-cover" loading="lazy" /></RouterLink>
-        </div>
-      </section>
 
       <!-- Arena -->
       <section class="card p-5">
