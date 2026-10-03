@@ -87,6 +87,7 @@ export const CLAN_ACHIEVEMENTS = [
   { key: 'full_house', name: 'Full House', emoji: '🏠', desc: 'Have 20 members', stat: 'members', goal: 20, reputation: 30 },
   { key: 'first_blood', name: 'First Blood', emoji: '⚔️', desc: 'Win a Clan War', stat: 'wins', goal: 1, reputation: 25 },
   { key: 'warlords', name: 'Warlords', emoji: '🐉', desc: 'Win 10 Clan Wars', stat: 'wins', goal: 10, reputation: 100, rare: true },
+  { key: 'unstoppable', name: 'Unstoppable', emoji: '🔥', desc: 'Win 10 Clan Wars in a row', stat: 'bestStreak', goal: 10, reputation: 250, rare: true },
   { key: 'landlords', name: 'Landlords', emoji: '🚩', desc: 'Capture a territory', stat: 'captured', goal: 1, reputation: 50 },
   { key: 'empire', name: 'Empire', emoji: '🗺️', desc: 'Hold 3 territories at once', stat: 'held', goal: 3, reputation: 150, rare: true },
   { key: 'taskmasters', name: 'Taskmasters', emoji: '✅', desc: 'Complete 10 quests', stat: 'objectives', goal: 10, reputation: 60 },

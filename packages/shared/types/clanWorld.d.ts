@@ -15,7 +15,7 @@ export interface ClanObjective { key: ObjectiveKey; name: string; emoji: string;
 export declare const OBJECTIVE_POOL: Omit<ClanObjective, 'target' | 'reward'>[];
 export declare function objectiveTier(rep: number): number;
 export declare function clanObjectives(week: number, tier: number): ClanObjective[];
-export interface ClanAchievement { key: string; name: string; emoji: string; desc: string; stat: 'level' | 'members' | 'wins' | 'captured' | 'held' | 'objectives' | 'hqMax' | 'trophies' | 'treasury' | 'reputation' | 'ageDays'; goal: number; reputation: number; rare?: boolean }
+export interface ClanAchievement { key: string; name: string; emoji: string; desc: string; stat: 'level' | 'members' | 'wins' | 'captured' | 'held' | 'objectives' | 'hqMax' | 'trophies' | 'treasury' | 'reputation' | 'ageDays' | 'bestStreak'; goal: number; reputation: number; rare?: boolean }
 export declare const CLAN_ACHIEVEMENTS: ClanAchievement[];
 
 /** API shapes. */

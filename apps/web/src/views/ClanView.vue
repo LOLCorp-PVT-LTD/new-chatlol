@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { CLAN_ACHIEVEMENTS, CLAN_CUSTOM_ROLES, CLAN_JOIN_POLICIES, CLAN_LEVELS, CLAN_PERMS, CLAN_RANKS, CLAN_WAR, clanRank, type ClanPerm, type ClanPolicy, type ClanRank, HQ_BUILDINGS, HQ_LEVELS, TERRITORIES, clanEventFor, hqLevel, siegeFor, clanSeasonFor, type HqKey } from '@chatlol/shared';
+import { CLAN_ACHIEVEMENTS, CLAN_CUSTOM_ROLES, CLAN_JOIN_POLICIES, CLAN_LEVELS, CLAN_PERMS, CLAN_RANKS, CLAN_WAR, clanRank, type ClanPerm, type ClanPolicy, type ClanRank, HQ_BUILDINGS, HQ_LEVELS, TERRITORIES, clanEventFor, hqLevel, siegeFor, clanSeasonFor, CLAN_WAR_MODES, WAR_HOURS, type HqKey, type WarModeKey } from '@chatlol/shared';
 import { api } from '../lib/api';
 import { useSession } from '../stores/session';
 import { confirmDialog, promptDialog } from '../lib/dialog';
@@ -11,6 +11,7 @@ import Icon from '../components/Icon.vue';
 import Modal from '../components/Modal.vue';
 import Countdown from '../components/Countdown.vue';
 import ScrollRow from '../components/ScrollRow.vue';
+import ClanWarCard from '../components/ClanWarCard.vue';
 
 /** One clan: level and perks, members and roles, join requests, treasury, wars, and settings for its leader. */
 const route = useRoute();
@@ -143,13 +144,18 @@ async function build(k: HqKey, name: string) {
 // War
 const warring = ref(false);
 const opponents = ref<Awaited<ReturnType<typeof api.clans>>['clans']>([]);
-const war = ref({ opponentId: '', stake: 0 });
+const war = ref({ opponentId: '', stake: 0, mode: 'total' as WarModeKey, hours: 48 });
 async function openWar() {
   opponents.value = (await api.clans()).clans.filter((x) => x.id !== c.value!.id && x.level >= CLAN_WAR.minLevel);
   warring.value = true;
 }
+const myClanId = computed(() => s.user?.clan?.id ?? null);
+async function nameRival() {
+  if (!myClanId.value || !c.value) return;
+  if (await confirmDialog({ title: `Name ${c.value.name} your rival?`, body: 'Your head-to-head record shows on both clan pages.' })) await run(api.setClanRival(myClanId.value, c.value.id), `😤 ${c.value.name} is now your rival`);
+}
 async function declare() {
-  await run(api.declareWar(c.value!.id, war.value.opponentId, war.value.stake), '⚔️ War declared — waiting for them to accept');
+  await run(api.declareWar(c.value!.id, war.value.opponentId, war.value.stake, war.value.mode, war.value.hours), '⚔️ War declared — waiting for them to accept');
   warring.value = false;
 }
 </script>
@@ -267,20 +273,9 @@ async function declare() {
         <!-- Wars -->
         <section v-if="d.wars.length" class="card p-5 space-y-2">
           <p class="text-headline-sm">⚔️ Wars</p>
-          <div v-for="w in d.wars" :key="w.id" class="rounded-md bg-surface-container-low px-3 py-2">
-            <div class="flex items-center gap-3">
-              <span class="flex-1 text-right truncate text-label-lg">{{ w.a.emoji }} {{ w.a.name }}</span>
-              <span class="tabular-nums font-bold">{{ w.a.score.toLocaleString() }} – {{ w.b.score.toLocaleString() }}</span>
-              <span class="flex-1 truncate text-label-lg">{{ w.b.emoji }} {{ w.b.name }}</span>
-            </div>
-            <p class="text-body-sm text-on-surface-variant text-center mt-0.5">
-              <template v-if="w.status === 'active'">Live · ends in <Countdown :to="w.endsAt!" /></template>
-              <template v-else-if="w.status === 'pending'">{{ w.incoming ? 'They challenged you' : 'Waiting for them to accept' }}</template>
-              <template v-else-if="w.status === 'finished'">{{ w.winnerId ? (w.winnerId === c.id ? '🏆 Victory' : 'Defeat') : 'Draw' }}</template>
-              <template v-else>{{ w.status }}</template>
-              <template v-if="w.stake"> · stake ✦ {{ w.stake.toLocaleString() }} each</template>
-            </p>
-            <div v-if="w.incoming && can('wars')" class="flex justify-center gap-2 mt-2">
+          <div v-for="w in d.wars" :key="w.id" class="space-y-2">
+            <ClanWarCard :war="w" :me="c.id" />
+            <div v-if="w.incoming && can('wars')" class="flex justify-center gap-2">
               <button class="btn-primary h-9" @click="run(api.answerWar(w.id, 'accept'), '⚔️ War on!')">Accept</button>
               <button class="btn-ghost h-9" @click="run(api.answerWar(w.id, 'decline'))">Decline</button>
             </div>
@@ -335,6 +330,18 @@ async function declare() {
             <p v-if="r.message" class="text-body-sm italic">“{{ r.message }}”</p>
           </div>
         </section>
+        <section v-if="d.rivalry.rival || d.rivalry.foes.length || (myClanId && myClanId !== c.id)" class="card p-5 space-y-2">
+          <p class="text-headline-sm">😤 Rivalry</p>
+          <div v-if="d.rivalry.rival" class="rounded-md p-3 text-center text-white bg-[linear-gradient(135deg,#991b1b,#1b1036)]">
+            <p class="text-label-lg">{{ c.emoji }} {{ c.tag }} <span class="opacity-70">vs</span> <RouterLink :to="`/clans/${d.rivalry.rival.clan.id}`">{{ d.rivalry.rival.clan.emoji }} {{ d.rivalry.rival.clan.tag }}</RouterLink></p>
+            <p class="text-headline-sm tabular-nums">{{ d.rivalry.rival.wins }} – {{ d.rivalry.rival.losses }}<span v-if="d.rivalry.rival.draws" class="text-body-sm"> ({{ d.rivalry.rival.draws }} draws)</span></p>
+            <p class="text-label-sm opacity-80">Lifetime rivalry</p>
+          </div>
+          <p v-if="d.rivalry.foes.length" class="label">Frequent foes</p>
+          <RouterLink v-for="f in d.rivalry.foes" :key="f.clan.id" :to="`/clans/${f.clan.id}`" class="flex text-body-md"><span class="flex-1 truncate">{{ f.clan.emoji }} {{ f.clan.name }}</span><span class="tabular-nums">{{ f.wins }}W {{ f.losses }}L</span></RouterLink>
+          <button v-if="myClanId && myClanId !== c.id" class="btn-secondary w-full h-9" @click="nameRival">😤 Name as our rival</button>
+          <button v-if="d.rivalry.rival && can('wars')" class="btn-ghost w-full h-9" @click="run(api.setClanRival(c.id, null), 'Rivalry ended')">End rivalry</button>
+        </section>
         <section class="card p-5 space-y-1.5">
           <p class="text-headline-sm mb-1">Perks</p>
           <p v-for="l in CLAN_LEVELS" :key="l.level" class="text-body-sm flex gap-2" :class="c.level >= l.level ? '' : 'opacity-50'">
@@ -385,7 +392,13 @@ async function declare() {
 
     <Modal v-if="warring" title="⚔️ Declare war" @close="warring = false">
       <form class="px-6 pb-6 space-y-3" @submit.prevent="declare">
-        <p class="text-body-sm text-on-surface-variant">{{ CLAN_WAR.hours }} hours. Whichever clan’s members earn more Clan XP wins the pot (both stakes) and {{ CLAN_WAR.winRep }} bonus Clan XP. Both clans need level {{ CLAN_WAR.minLevel }}+.</p>
+        <p class="text-body-sm text-on-surface-variant">The clan with more War Points wins the pot (both stakes), {{ CLAN_WAR.winRep }} bonus Clan XP and Reputation. Both clans need level {{ CLAN_WAR.minLevel }}+.</p>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <label v-for="m in CLAN_WAR_MODES" :key="m.key" class="rounded-md p-2 cursor-pointer border text-body-sm" :class="war.mode === m.key ? 'border-primary bg-primary/10' : 'border-sandstone'">
+            <input v-model="war.mode" type="radio" :value="m.key" class="sr-only" /><b>{{ m.emoji }} {{ m.name }}</b><br /><span class="text-on-surface-variant">{{ m.desc }}</span>
+          </label>
+        </div>
+        <div class="flex gap-2"><button v-for="h in WAR_HOURS" :key="h" type="button" class="chip h-9 flex-1 justify-center" :class="{ 'chip-active': war.hours === h }" @click="war.hours = h">{{ h }}h</button></div>
         <select v-model="war.opponentId" class="input" required>
           <option value="" disabled>Pick a rival clan</option>
           <option v-for="o in opponents" :key="o.id" :value="o.id">{{ o.emoji }} {{ o.name }} [{{ o.tag }}] · Lv {{ o.level }}</option>

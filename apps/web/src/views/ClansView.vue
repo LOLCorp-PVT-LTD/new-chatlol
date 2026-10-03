@@ -7,6 +7,7 @@ import { useSession } from '../stores/session';
 import Modal from '../components/Modal.vue';
 import Icon from '../components/Icon.vue';
 import Countdown from '../components/Countdown.vue';
+import ClanWarCard from '../components/ClanWarCard.vue';
 
 /** Clans: this week's event, wars going on right now, the clan leaderboard, and founding your own. */
 const s = useSession();
@@ -68,12 +69,7 @@ async function found() {
     <!-- Wars on now -->
     <section v-if="wars.length" class="card p-5 space-y-2">
       <p class="text-headline-sm">⚔️ Clan Wars on now</p>
-      <div v-for="w in wars" :key="w.id" class="flex items-center gap-3 rounded-md bg-surface-container-low px-3 py-2">
-        <RouterLink :to="`/clans/${w.a.id}`" class="flex-1 text-right truncate text-label-lg">{{ w.a.emoji }} {{ w.a.name }}</RouterLink>
-        <span class="tabular-nums font-bold">{{ w.a.score.toLocaleString() }} – {{ w.b.score.toLocaleString() }}</span>
-        <RouterLink :to="`/clans/${w.b.id}`" class="flex-1 truncate text-label-lg">{{ w.b.emoji }} {{ w.b.name }}</RouterLink>
-        <span class="text-body-sm text-on-surface-variant"><Countdown :to="w.endsAt!" /></span>
-      </div>
+      <ClanWarCard v-for="w in wars" :key="w.id" :war="w" />
     </section>
 
     <!-- Leaderboard -->

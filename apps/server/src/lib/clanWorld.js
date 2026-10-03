@@ -111,6 +111,7 @@ export async function checkAchievements(clanId) {
     trophies: (c.trophies ?? []).length,
     treasury: c.treasury ?? 0,
     reputation: c.reputation ?? 0,
+    bestStreak: c.bestStreak ?? 0,
     ageDays: (Date.now() - Date.parse(c.createdAt)) / 86_400_000,
   };
   const { notify } = await import('./rewards.js');

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { CLAN_CUSTOM_ROLES, CLAN_FOUND, CONTRIBUTION, clanSeasonFor, CLAN_JOIN_POLICIES, CLAN_PERMS, CLAN_RANKS, clanCan, clanRank, normalizePolicy, CLAN_TAG_RE, CLAN_WAR, HQ_BUILDINGS, HQ_LEVELS, SIEGE, TERRITORIES, clanEventFor, clanHas, clanLevelFor, clanMaxMembers, hqLevel, levelForXp, nextClanLevel, objectiveTier, siegeFor } from '@chatlol/shared';
+import { CLAN_CUSTOM_ROLES, CLAN_FOUND, CLAN_WAR_MODES, CONTRIBUTION, WAR_HOURS, clanSeasonFor, warMissions, warModeFor, warRaces, warScore, CLAN_JOIN_POLICIES, CLAN_PERMS, CLAN_RANKS, clanCan, clanRank, normalizePolicy, CLAN_TAG_RE, CLAN_WAR, HQ_BUILDINGS, HQ_LEVELS, SIEGE, TERRITORIES, clanEventFor, clanHas, clanLevelFor, clanMaxMembers, hqLevel, levelForXp, nextClanLevel, objectiveTier, siegeFor } from '@chatlol/shared';
 import { db, newId, now } from '../db.js';
 import { optionalAuth, requireAuth, uid } from '../lib/auth.js';
 import { HttpError, parse, rateLimit } from '../lib/http.js';
@@ -16,6 +16,25 @@ import { checkAchievements, contribute, forgetBonuses, objectivesFor, siegeTarge
  * Clan Wars and the weekly events. Rep and level-ups are handled in lib/clans.js.
  */
 export const clansRouter = Router();
+
+/** A war as the client sees it: War Points, fronts, missions, races. */
+function warPublic(w, names, viewClanId = null) {
+  const pts = warScore(w);
+  const elapsed = w.startsAt ? Date.now() - Date.parse(w.startsAt) : 0;
+  const races = w.races ?? [];
+  const side = (id, key) => ({ ...names.get(id), id, score: Math.floor(pts[key] ?? 0), xp: Math.floor(w[key]?.xp ?? w[`${key}Score`] ?? 0), active: w[key]?.active ?? 0, done: w[key]?.done ?? [] });
+  return {
+    id: w._id, status: w.status, stake: w.stake, startsAt: w.startsAt ?? null, endsAt: w.endsAt ?? null, winnerId: w.winnerId ?? null,
+    mode: w.mode ?? 'rep', hours: w.hours ?? CLAN_WAR.hours,
+    a: side(w.aId, 'a'), b: side(w.bId, 'b'),
+    fronts: pts.fronts.map((f) => ({ ...f, a: Math.round(f.a * 100) / 100, b: Math.round(f.b * 100) / 100 })),
+    missions: warMissions(w.hours ?? CLAN_WAR.hours),
+    races: races.filter((r) => w.status !== 'active' || r.at <= elapsed).map((r) => ({ id: r.id, kind: r.kind, label: r.label, target: r.target, points: r.points, claimedBy: r.claimedBy ?? null, a: r.a ?? 0, b: r.b ?? 0 })),
+    nextDropAt: w.status === 'active' ? (races.filter((r) => r.at > elapsed).map((r) => new Date(Date.parse(w.startsAt) + r.at).toISOString())[0] ?? null) : null,
+    kothLead: w.koth?.lead ?? null,
+    incoming: viewClanId ? w.status === 'pending' && w.bId === viewClanId : undefined,
+  };
+}
 
 function clanPublic(c, memberCount) {
   const lvl = clanLevelFor(c.rep);
@@ -113,11 +132,8 @@ clansRouter.get('/clans/:id', optionalAuth, async (req, res) => {
     requests: officer
       ? await Promise.all((await db.clanRequests.find({ clanId: c._id, invited: { $ne: true } }).toArray()).map(async (r) => ({ user: await author(r.userId), at: r.createdAt, message: r.message ?? '' })))
       : [],
-    wars: wars.map((w) => ({
-      id: w._id, status: w.status, stake: w.stake, startsAt: w.startsAt ?? null, endsAt: w.endsAt ?? null, winnerId: w.winnerId ?? null,
-      a: { ...others.get(w.aId), id: w.aId, score: Math.floor(w.aScore ?? 0) }, b: { ...others.get(w.bId), id: w.bId, score: Math.floor(w.bScore ?? 0) },
-      incoming: w.status === 'pending' && w.bId === c._id,
-    })),
+    wars: wars.map((w) => warPublic(w, others, c._id)),
+    rivalry: await rivalryOf(c),
     world: {
       reputation: Math.floor(c.reputation ?? 0), hq: c.hq ?? {}, tier: objectiveTier(c.rep), objectives: me ? await objectivesFor(c) : [],
       achievements: c.achievements ?? [], territories: (await db.territories.find({ clanId: c._id }, { projection: { _id: 1 } }).toArray()).map((t) => t._id),
@@ -378,7 +394,13 @@ clansRouter.post('/clans/:id/wars', requireAuth, async (req, res) => {
   const me = uid(req);
   const c = await clanOr404(req.params.id);
   await roleIn(c, me, 'wars');
-  const { opponentId, stake } = parse(z.object({ opponentId: z.string().max(40), stake: z.number().int().min(0).max(CLAN_WAR.maxStake).default(0) }), req.body);
+  const { opponentId, stake, mode, hours } = parse(
+    z.object({
+      opponentId: z.string().max(40), stake: z.number().int().min(0).max(CLAN_WAR.maxStake).default(0),
+      mode: z.enum(CLAN_WAR_MODES.map((m) => m.key)).default('total'), hours: z.number().int().refine((h) => WAR_HOURS.includes(h)).default(CLAN_WAR.hours),
+    }),
+    req.body,
+  );
   const o = await clanOr404(opponentId);
   if (o._id === c._id) throw new HttpError(400, 'Pick another clan');
   if (!clanHas(c.rep, 'wars') || !clanHas(o.rep, 'wars')) throw new HttpError(403, `Both clans need to be level ${CLAN_WAR.minLevel}+ for Clan Wars`);
@@ -390,10 +412,11 @@ clansRouter.post('/clans/:id/wars', requireAuth, async (req, res) => {
     if (!r.modifiedCount) throw new HttpError(402, 'Not enough Sparks in your clan treasury');
     await logTreasury(c._id, me, -stake, `War stake vs ${o.name}`);
   }
-  const w = { _id: newId(), aId: c._id, bId: o._id, stake, status: 'pending', aScore: 0, bScore: 0, createdAt: now(), by: me };
+  const races = warModeFor(mode).race ? warRaces(mode, hours, Math.floor(Math.random() * 1e9)).map((r) => ({ ...r, claimedBy: null, a: 0, b: 0 })) : [];
+  const w = { _id: newId(), aId: c._id, bId: o._id, stake, mode, hours, races, status: 'pending', aScore: 0, bScore: 0, createdAt: now(), by: me };
   await db.clanWars.insertOne(w);
   for (const m of await membersWith(o, 'wars'))
-    await notify(m.userId, { kind: 'system', title: `⚔️ ${c.emoji} ${c.name} declared war on ${o.name}!`, body: stake ? `Stake: ${stake.toLocaleString()} ✦ from each treasury` : 'For glory (no stake)', link: `/clans/${o._id}`, action: { type: 'clan_war', id: w._id } });
+    await notify(m.userId, { kind: 'system', title: `⚔️ ${c.emoji} ${c.name} declared a ${warModeFor(mode).name} on ${o.name}!`, body: `${hours} hours · ${stake ? `Stake: ${stake.toLocaleString()} ✦ from each treasury` : 'For glory (no stake)'}`, link: `/clans/${o._id}`, action: { type: 'clan_war', id: w._id } });
   res.status(201).json({ ok: true });
 });
 
@@ -415,8 +438,10 @@ clansRouter.post('/clan-wars/:id/:verdict', requireAuth, async (req, res) => {
     await logTreasury(w.bId, me, -w.stake, 'War stake');
   }
   const startsAt = now();
-  const endsAt = new Date(Date.now() + CLAN_WAR.hours * 3_600_000).toISOString();
-  const r = await db.clanWars.updateOne({ _id: w._id, status: 'pending' }, { $set: { status: 'active', startsAt, endsAt } });
+  const hours = w.hours ?? CLAN_WAR.hours;
+  const endsAt = new Date(Date.now() + hours * 3_600_000).toISOString();
+  const [na, nb] = await Promise.all([countMembers(w.aId), countMembers(w.bId)]);
+  const r = await db.clanWars.updateOne({ _id: w._id, status: 'pending' }, { $set: { status: 'active', startsAt, endsAt, 'a.members': na, 'b.members': nb } });
   if (!r.modifiedCount) {
     if (w.stake) await db.clans.updateOne({ _id: w.bId }, { $inc: { treasury: w.stake } });
     throw new HttpError(409, 'That challenge changed — reload');
@@ -424,7 +449,7 @@ clansRouter.post('/clan-wars/:id/:verdict', requireAuth, async (req, res) => {
   const [a, b] = await Promise.all([db.clans.findOne({ _id: w.aId }), db.clans.findOne({ _id: w.bId })]);
   for (const id of [w.aId, w.bId])
     for (const m of await db.clanMembers.find({ clanId: id }, { projection: { userId: 1 } }).toArray())
-      await notify(m.userId, { kind: 'system', title: `⚔️ Clan War: ${a.name} vs ${b.name} has begun!`, body: `${CLAN_WAR.hours} hours — every Spark your clan earns scores. Go!`, link: `/clans/${id}` });
+      await notify(m.userId, { kind: 'system', title: `${warModeFor(w.mode).emoji} ${warModeFor(w.mode).name}: ${a.name} vs ${b.name} has begun!`, body: `${hours} hours — ${warModeFor(w.mode).desc}`, link: `/clans/${id}` });
   res.json({ ok: true });
 });
 
@@ -433,7 +458,7 @@ clansRouter.get('/clan-wars', optionalAuth, async (_req, res) => {
   const wars = await db.clanWars.find({ status: 'active' }).sort({ endsAt: 1 }).limit(20).toArray();
   const names = new Map((await db.clans.find({ _id: { $in: wars.flatMap((w) => [w.aId, w.bId]) } }, { projection: { name: 1, tag: 1, emoji: 1 } }).toArray()).map((x) => [x._id, x]));
   res.json({
-    wars: wars.map((w) => ({ id: w._id, stake: w.stake, endsAt: w.endsAt, a: { ...names.get(w.aId), id: w.aId, score: Math.floor(w.aScore) }, b: { ...names.get(w.bId), id: w.bId, score: Math.floor(w.bScore) } })),
+    wars: wars.map((w) => warPublic(w, names)),
   });
 });
 
@@ -497,4 +522,37 @@ clansRouter.post('/clans/:id/siege', requireAuth, async (req, res) => {
   if (row?.score > 0 && row.territory !== territory) throw new HttpError(409, 'Your clan is already fighting for another territory this Siege');
   await db.clanSieges.updateOne({ week: s.week, clanId: c._id }, { $set: { territory }, $setOnInsert: { score: 0, at: new Date().toISOString() } }, { upsert: true });
   res.json({ ok: true, territory });
+});
+
+// ——— Rivalries ———
+/** The clan's chosen rival with the lifetime head-to-head, plus the clans it fights most (automatic rivalries). */
+async function rivalryOf(c) {
+  const finished = await db.clanWars.find({ status: 'finished', $or: [{ aId: c._id }, { bId: c._id }] }, { projection: { aId: 1, bId: 1, winnerId: 1 } }).toArray();
+  const rec = new Map();
+  for (const w of finished) {
+    const other = w.aId === c._id ? w.bId : w.aId;
+    const r = rec.get(other) ?? { wins: 0, losses: 0, draws: 0 };
+    if (!w.winnerId) r.draws += 1;
+    else if (w.winnerId === c._id) r.wins += 1;
+    else r.losses += 1;
+    rec.set(other, r);
+  }
+  const foesIds = [...rec.entries()].map(([id, r]) => [id, r.wins + r.losses + r.draws]).filter(([, n]) => n >= 3).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([id]) => id);
+  const ids = [...new Set([...(c.rivalId ? [c.rivalId] : []), ...foesIds])];
+  const names = new Map((await db.clans.find({ _id: { $in: ids } }, { projection: { name: 1, tag: 1, emoji: 1 } }).toArray()).map((x) => [x._id, { id: x._id, name: x.name, tag: x.tag, emoji: x.emoji }]));
+  const row = (id) => (names.get(id) ? { clan: names.get(id), ...(rec.get(id) ?? { wins: 0, losses: 0, draws: 0 }) } : null);
+  return { rival: c.rivalId ? row(c.rivalId) : null, foes: foesIds.map(row).filter(Boolean) };
+}
+
+clansRouter.post('/clans/:id/rival', requireAuth, async (req, res) => {
+  const c = await clanOr404(req.params.id);
+  await roleIn(c, uid(req), 'wars');
+  const { clanId } = parse(z.object({ clanId: z.string().max(40).nullable() }), req.body);
+  if (clanId) {
+    const o = await clanOr404(clanId);
+    if (o._id === c._id) throw new HttpError(400, 'Pick another clan');
+    await db.clans.updateOne({ _id: c._id }, { $set: { rivalId: o._id } });
+    for (const m of await membersWith(o, 'wars')) await notify(m.userId, { kind: 'system', title: `😤 ${c.emoji} ${c.name} named your clan their rival!`, body: 'Settle it with a Clan War.', link: `/clans/${c._id}` });
+  } else await db.clans.updateOne({ _id: c._id }, { $unset: { rivalId: '' } });
+  res.json({ ok: true });
 });

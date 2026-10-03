@@ -29,5 +29,14 @@ export interface ClanSummary {
   policy: ClanPolicy; requirements: { minLevel: number; minAgeDays: number; minVibe: number }; customRoles: ClanRank[]; rep: number; level: number; nextLevel: ClanLevel | null; memberCount: number; maxMembers: number; reputation: number; prestige: number; minLevel: number;
   wins: number; losses: number; treasury: number; trophies: { week: number; place: number; at: string }[]; loungeId: string | null; createdAt: string;
 }
-export interface ClanWarSide { id: string; name?: string; tag?: string; emoji?: string; score: number }
-export interface ClanWar { id: string; status: 'pending' | 'active' | 'finished' | 'declined' | 'expired'; stake: number; startsAt: string | null; endsAt: string | null; winnerId: string | null; a: ClanWarSide; b: ClanWarSide; incoming?: boolean }
+/** `score` is War Points; `xp` the Clan XP earned; `done` the war missions completed. */
+export interface ClanWarSide { id: string; name?: string; tag?: string; emoji?: string; score: number; xp: number; active: number; done: string[] }
+export interface ClanWar {
+  id: string; status: 'pending' | 'active' | 'finished' | 'declined' | 'expired'; stake: number; startsAt: string | null; endsAt: string | null; winnerId: string | null;
+  mode: import('./clanWars').WarModeKey; hours: number; a: ClanWarSide; b: ClanWarSide; incoming?: boolean;
+  fronts: { key: string; label: string; weight: number; a: number; b: number; winner?: 'a' | 'b' | null }[];
+  missions: import('./clanWars').WarMission[];
+  races: { id: number; kind: string; label: string; target: number; points: number; claimedBy: 'a' | 'b' | null; a: number; b: number }[];
+  nextDropAt: string | null; kothLead: 'a' | 'b' | null;
+}
+export interface ClanRecord { clan: { id: string; name: string; tag: string; emoji: string }; wins: number; losses: number; draws: number }

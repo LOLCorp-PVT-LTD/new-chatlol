@@ -1,7 +1,8 @@
 import { CLAN_EVENT_PRIZES, CLAN_WAR, RECRUIT_DAYS, REP_PER_SPARKS, clanEventFor, clanLevelFor } from '@chatlol/shared';
 import { db, newId, now } from '../db.js';
-import { addReputation, awardMvps, checkAchievements, clanBonuses, clanBoost, contribute, scoreSiege, trackReward } from './clanWorld.js';
-import { CONTRIBUTION } from '@chatlol/shared';
+import { addReputation, awardMvps, checkAchievements, clanBonuses, clanBoost, contribute, isArenaWin, isSocial, scoreSiege, trackReward } from './clanWorld.js';
+import { warTrack } from './clanWars.js';
+import { CONTRIBUTION, warModeFor, warScore } from '@chatlol/shared';
 
 /**
  * Clans on the server: membership lookups (cached briefly), Rep from members' activity, level-ups, the Clan Wars
@@ -49,6 +50,7 @@ export async function addRepFromSparks(userId, sparks, reason) {
   await addClanRep(m.clanId, rep, userId);
   await contribute(m.clanId, userId, { points: rep, xp: rep });
   await scoreSiege(m.clanId, rep);
+  await warTrack(m.clanId, userId, { xp: rep * (1 + b.war / 100), social: isSocial(reason) ? 1 : 0, wins: isArenaWin(reason) ? 1 : 0 });
   await trackReward(m.clanId, userId, sparks, reason);
 }
 
@@ -59,10 +61,6 @@ export async function addClanRep(clanId, rep, userId = null) {
   if (userId) await db.clanMembers.updateOne({ clanId, userId }, { $inc: { rep } });
   const week = clanEventFor().week;
   await db.clanWeeks.updateOne({ week, clanId }, { $inc: { rep }, $setOnInsert: { at: now() } }, { upsert: true });
-  // Active war: the score goes to whichever side this clan is on.
-  const war = rep * (1 + (await clanBonuses(clanId)).war / 100);
-  await db.clanWars.updateOne({ status: 'active', aId: clanId }, { $inc: { aScore: war } });
-  await db.clanWars.updateOne({ status: 'active', bId: clanId }, { $inc: { bScore: war } });
   const from = clanLevelFor(before.rep);
   const to = clanLevelFor(before.rep + rep);
   if (to.level > from.level) await onLevelUp(clanId, before.name, to);
@@ -96,18 +94,20 @@ export async function resolveClanWars() {
   for (const w of await db.clanWars.find({ status: 'active', endsAt: { $lte: now() } }).toArray()) {
     const r = await db.clanWars.updateOne({ _id: w._id, status: 'active' }, { $set: { status: 'finished', finishedAt: now() } });
     if (!r.modifiedCount) continue;
-    const winner = w.aScore === w.bScore ? null : w.aScore > w.bScore ? w.aId : w.bId;
-    await db.clanWars.updateOne({ _id: w._id }, { $set: { winnerId: winner } });
+    const pts = warScore(w, Date.parse(w.endsAt));
+    const winner = pts.a === pts.b ? null : pts.a > pts.b ? w.aId : w.bId;
+    await db.clanWars.updateOne({ _id: w._id }, { $set: { winnerId: winner, points: { a: pts.a, b: pts.b } } });
     if (!winner) {
       if (w.stake) for (const id of [w.aId, w.bId]) await db.clans.updateOne({ _id: id }, { $inc: { treasury: w.stake } });
     } else {
-      await db.clans.updateOne({ _id: winner }, { $inc: { treasury: w.stake * 2, wins: 1 } });
-      await db.clans.updateOne({ _id: winner === w.aId ? w.bId : w.aId }, { $inc: { losses: 1 } });
+      const loser = winner === w.aId ? w.bId : w.aId;
+      await db.clans.updateOne({ _id: winner }, { $inc: { treasury: w.stake * 2, wins: 1, streak: 1 } });
+      await db.clans.updateOne({ _id: winner }, [{ $set: { bestStreak: { $max: ['$bestStreak', '$streak'] } } }]);
+      await db.clans.updateOne({ _id: loser }, { $inc: { losses: 1, reputation: 5 }, $set: { streak: 0 } });
       await addClanRep(winner, CLAN_WAR.winRep);
       await addReputation(winner, 20);
       // Everyone who pitched in during the war gets the victory on their record.
-      const weeks = [clanEventFor(Date.parse(w.startsAt ?? w.createdAt)).week, clanEventFor().week];
-      for (const userId of await db.clanContrib.distinct('userId', { clanId: winner, week: { $in: weeks }, points: { $gt: 0 } }))
+      for (const userId of w[winner === w.aId ? 'a' : 'b']?.users ?? [])
         await contribute(winner, userId, { points: CONTRIBUTION.war, wars: 1 });
       await checkAchievements(winner);
     }
@@ -115,7 +115,7 @@ export async function resolveClanWars() {
     const title = winner ? `⚔️ ${(winner === w.aId ? a : b)?.name} won the war!` : '⚔️ The war ended in a draw';
     for (const id of [w.aId, w.bId])
       for (const m of await db.clanMembers.find({ clanId: id }, { projection: { userId: 1 } }).toArray())
-        await notify(m.userId, { kind: 'system', title, body: `${a?.name} ${Math.floor(w.aScore)} – ${Math.floor(w.bScore)} ${b?.name}`, link: `/clans/${id}` });
+        await notify(m.userId, { kind: 'system', title, body: `${warModeFor(w.mode).name}: ${a?.name} ${Math.floor(pts.a)} – ${Math.floor(pts.b)} ${b?.name} War Points`, link: `/clans/${id}` });
   }
 }
 
