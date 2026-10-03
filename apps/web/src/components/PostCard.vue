@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import MusicCard from './MusicCard.vue';
 import VideoEmbeds from './VideoEmbeds.vue';
 import { withoutVideos } from '@chatlol/shared';
 import RemovedNote from './RemovedNote.vue';
@@ -149,6 +150,7 @@ async function remove() {
 <RichText :text="post.body" tags videos />
     </p>
     <VideoEmbeds v-if="!post.removed" :text="post.body" class="px-5 pb-3" />
+    <MusicCard v-if="post.music && !post.removed" :track="post.music" :autoplay="expanded" class="mx-5 mb-3" />
 
     <!-- Media -->
     <div v-if="post.mediaUrl" class="relative mx-3 rounded-md overflow-hidden bg-surface-container group" @dblclick="rate(5, $event)">

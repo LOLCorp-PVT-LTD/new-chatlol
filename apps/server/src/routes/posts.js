@@ -7,6 +7,7 @@ import { assertEmojiOwned, resolveSticker, stickerInput, stickerPreview } from '
 import { optionalAuth, requireAuth, uid } from '../lib/auth.js';
 import { HttpError, parse, rateLimit } from '../lib/http.js';
 import { postLimit } from '../lib/limits.js';
+import { resolveTrack } from '../lib/youtubeApi.js';
 import { serializePost, serializePosts, serializeComment, authorCache, invalidateStats, userPublic } from '../lib/serialize.js';
 import { grant, notify, progressRatingQuest, recordDropStreak, ticker } from '../lib/rewards.js';
 import { assertClean } from '../lib/moderation.js';
@@ -143,6 +144,8 @@ const createSchema = z.object({
   album: z.string().trim().max(30).nullable().optional(),
   /** false = add to the profile gallery without posting to the news feed. */
   inFeed: z.boolean().optional(),
+  /** A song from YouTube that plays with the post. */
+  music: z.object({ youtubeId: z.string().regex(/^[A-Za-z0-9_-]{11}$/) }).nullable().optional(),
 });
 
 export async function insertPost(authorId, b) {
@@ -161,6 +164,7 @@ export async function insertPost(authorId, b) {
     album: b.mediaUrl ? (b.album ?? null) : null,
     inFeed: b.mediaUrl ? b.inFeed !== false : true,
     battle: b.battle ? b.battle.map((o) => ({ id: newId(), label: o.label, mediaUrl: o.mediaUrl ?? null, votes: 0 })) : null,
+    music: b.musicTrack ?? null,
     r1: 0,
     r2: 0,
     r3: 0,
@@ -183,7 +187,11 @@ postsRouter.post('/posts', requireAuth, async (req, res) => {
   const me = uid(req);
   await postLimit(me, 'post', 6);
   const b = parse(createSchema, req.body);
-  if (!b.body.trim() && !b.mediaUrl && !b.battle) throw new HttpError(400, 'Say something or add a photo');
+  if (!b.body.trim() && !b.mediaUrl && !b.battle && !b.music) throw new HttpError(400, 'Say something or add a photo');
+  if (b.music) {
+    b.musicTrack = await resolveTrack(b.music.youtubeId);
+    if (!b.musicTrack) throw new HttpError(400, 'That song can’t be played here');
+  }
   await assertCanPost(me);
   const text = b.body + ' ' + (b.battle?.map((o) => o.label).join(' ') ?? '');
   assertClean(text);

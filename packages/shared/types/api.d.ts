@@ -125,6 +125,7 @@ export declare function createApi(opts: ApiClientOptions): {
         soundtrack?: string | null;
         album?: string | null;
         inFeed?: boolean;
+        music?: { youtubeId: string } | null;
     }) => Promise<WithReward<{
         post: Post;
     }>>;
@@ -342,7 +343,7 @@ export declare function createApi(opts: ApiClientOptions): {
         entries: LeaderboardEntry[];
     }>;
     shouts: (p?: { before?: string; mood?: string; replyTo?: ID }) => Promise<{ items: Shout[]; nextCursor: string | null; nextShoutAt: string | null }>;
-    shout: (b: { body: string; mood?: string | null; replyToId?: ID | null; sticker?: import('./stickers').StickerInput | null }) => Promise<WithReward<{ shout: Shout; nextShoutAt: string }>>;
+    shout: (b: { body: string; mood?: string | null; replyToId?: ID | null; sticker?: import('./stickers').StickerInput | null; music?: { youtubeId: string } | null }) => Promise<WithReward<{ shout: Shout; nextShoutAt: string }>>;
     reactTo: (type: 'comment' | 'reply' | 'wall' | 'message', id: ID, kind: ReactionKind | null) => Promise<{ reactions: Partial<Record<ReactionKind, number>>; myReaction: ReactionKind | null }>;
     reactShout: (id: ID, kind: ReactionKind | null) => Promise<{ shout: Shout }>;
     deleteShout: (id: ID) => Promise<{ ok: true }>;

@@ -153,9 +153,13 @@ export interface BattleOption {
     votes: number;
 }
 export type PostKind = 'photo' | 'text' | 'battle' | 'drop' | 'roulette' | 'birthday';
+/** A song from YouTube attached to a post or shout (same shape as a profile song). */
+export type MusicTrack = ProfileSong;
 export interface Post {
     /** Removed by staff: shown as a “removed by Admin for <reason>” card. */
     removed?: { by: string; reason: string; at: string } | null;
+    /** A song that plays with the post. */
+    music?: MusicTrack | null;
     id: ID;
     author: UserPublic;
     kind: PostKind;
@@ -421,6 +425,8 @@ export interface RtcSignal {
 export interface Shout {
     /** Removed by staff: shown as a “removed by Admin for <reason>” card. */
     removed?: { by: string; reason: string; at: string } | null;
+    /** A song that plays with the shout. */
+    music?: MusicTrack | null;
     id: ID;
     author: UserPublic;
     body: string;

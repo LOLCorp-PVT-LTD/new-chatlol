@@ -6,6 +6,7 @@ import { assertEmojiOwned, resolveSticker, stickerInput } from '../lib/stickers.
 import { optionalAuth, requireAuth, uid } from '../lib/auth.js';
 import { HttpError, parse } from '../lib/http.js';
 import { shoutGap } from '../lib/limits.js';
+import { resolveTrack } from '../lib/youtubeApi.js';
 import { authorCache } from '../lib/serialize.js';
 import { grant, notify } from '../lib/rewards.js';
 import { assertClean } from '../lib/moderation.js';
@@ -37,6 +38,7 @@ export async function serializeShout(s, viewerId, author = authorCache(viewerId)
     author: await author(s.authorId),
     body: s.body,
     sticker: s.sticker ?? null,
+    music: s.music ?? null,
     mood: s.mood ?? null,
     mentions: s.mentionHandles ?? [],
     replyTo: replyTo
@@ -90,7 +92,7 @@ async function resolveMentions(body, authorId) {
   );
 }
 
-export async function insertShout(authorId, { body, mood = null, replyToId = null, sticker = null }) {
+export async function insertShout(authorId, { body, mood = null, replyToId = null, sticker = null, music = null }) {
   const replyTo = replyToId ? await db.shouts.findOne({ _id: replyToId, hidden: { $ne: true } }) : null;
   if (replyToId && !replyTo) throw new HttpError(404, 'That shout is gone');
   const mentioned = await resolveMentions(body, authorId);
@@ -99,6 +101,7 @@ export async function insertShout(authorId, { body, mood = null, replyToId = nul
     authorId,
     body,
     sticker,
+    music,
     mood,
     replyToId: replyTo?._id ?? null,
     mentions: mentioned.map((u) => u._id),
@@ -148,10 +151,13 @@ shoutsRouter.post('/shouts', requireAuth, async (req, res) => {
         .nullable()
         .optional(),
       replyToId: z.string().max(40).nullable().optional(),
+      music: z.object({ youtubeId: z.string().regex(/^[A-Za-z0-9_-]{11}$/) }).nullable().optional(),
     }),
     req.body,
   );
-  if (!b.body && !b.sticker) throw new HttpError(400, 'Write something or pick a sticker');
+  if (!b.body && !b.sticker && !b.music) throw new HttpError(400, 'Write something or pick a sticker');
+  const music = b.music ? await resolveTrack(b.music.youtubeId) : null;
+  if (b.music && !music) throw new HttpError(400, 'That song can’t be played here');
   await assertCanPost(me);
   assertClean(b.body);
   await assertEmojiOwned(me, b.body);
@@ -162,7 +168,7 @@ shoutsRouter.post('/shouts', requireAuth, async (req, res) => {
     const wait = Math.max(1, await shoutCooldown(me));
     throw new HttpError(429, `Next shout in ${wait}s ⏳`, 'shout_cooldown');
   }
-  const shout = await insertShout(me, { body: b.body, mood: b.mood ?? null, replyToId: b.replyToId ?? null, sticker });
+  const shout = await insertShout(me, { body: b.body, mood: b.mood ?? null, replyToId: b.replyToId ?? null, sticker, music });
   if (b.body) screen({ userId: me, text: b.body, ref: { type: 'shout', id: shout._id }, targetId: shout.mentions[0] ?? null });
   const reward = await grant(me, 2, 5, 'Shouted 📣');
   track(me, 'shout');
