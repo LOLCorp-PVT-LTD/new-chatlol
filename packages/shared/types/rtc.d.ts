@@ -8,6 +8,7 @@ import type { IceConfig, RtcSignal } from './types';
  */
 /** Minimal surface of RTCPeerConnection used here (satisfied by the browser and react-native-webrtc). */
 export interface PeerLike {
+    readonly remoteDescription: unknown;
     addTrack(track: unknown, stream: unknown): unknown;
     createOffer(opts?: object): Promise<{
         type: string;
@@ -65,6 +66,7 @@ export declare class MeshHost {
     private makePeer;
     private media;
     private peers;
+    private early;
     private handlers;
     onViewersChange?: (n: number) => void;
     constructor(streamId: string, socket: SignalSocket, ice: IceConfig, makePeer: PeerFactory, media: MediaStreamLike);

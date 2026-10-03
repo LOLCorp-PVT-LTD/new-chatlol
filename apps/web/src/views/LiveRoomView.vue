@@ -72,7 +72,13 @@ async function startBroadcast() {
 async function startWatching() {
   viewer = new MeshViewer(id, sock(), await api.iceServers(), makePeer);
   viewer.onState = (st) => (viewerState.value = st);
-  viewer.onStream = (ms) => { if (video.value) { video.value.srcObject = ms as MediaStream; void video.value.play().catch(() => {}); } };
+  viewer.onStream = (ms) => {
+    const v = video.value;
+    if (!v) return;
+    v.srcObject = ms as MediaStream;
+    // Browsers block autoplay with sound until the page has a user gesture: fall back to muted playback.
+    void v.play().catch(() => { v.muted = true; return v.play(); }).catch(() => {});
+  };
   viewer.start();
 }
 

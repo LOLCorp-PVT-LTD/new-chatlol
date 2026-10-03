@@ -14,6 +14,8 @@ const candidateJson = (c) => (c ? { candidate: c.candidate, sdpMid: c.sdpMid ?? 
 
 export class MeshHost {
   peers = new Map();
+  /** Viewer ICE candidates that arrived before that viewer's answer was applied. */
+  early = new Map();
   handlers = [];
   onViewersChange;
 
@@ -70,8 +72,14 @@ export class MeshHost {
   async onSignal(s) {
     const pc = this.peers.get(s.peer);
     if (!pc) return;
-    if (s.description?.type === 'answer') await pc.setRemoteDescription(s.description);
-    else if (s.candidate) await pc.addIceCandidate(s.candidate).catch(() => {});
+    if (s.description?.type === 'answer') {
+      await pc.setRemoteDescription(s.description);
+      for (const c of this.early.get(s.peer)?.splice(0) ?? []) await pc.addIceCandidate(c).catch(() => {});
+    } else if (s.candidate) {
+      // Signals can overtake each other on the server, so a candidate may arrive before the answer.
+      if (pc.remoteDescription) await pc.addIceCandidate(s.candidate).catch(() => {});
+      else this.early.set(s.peer, [...(this.early.get(s.peer) ?? []), s.candidate]);
+    }
   }
 
   drop(peer) {
@@ -79,6 +87,7 @@ export class MeshHost {
     if (!pc) return;
     pc.close();
     this.peers.delete(peer);
+    this.early.delete(peer);
     this.onViewersChange?.(this.peers.size);
   }
 
