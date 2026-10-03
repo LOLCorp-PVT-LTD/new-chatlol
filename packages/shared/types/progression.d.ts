@@ -1,4 +1,4 @@
-export type PowerKey = 'xp_surge' | 'boost_2x' | 'spotlight' | 'gate_pass' | 'ghost_mode' | 'wipe_shield' | 'arena_shield';
+export type PowerKey = 'xp_surge' | 'boost_2x' | 'spotlight' | 'gate_pass' | 'ghost_mode' | 'shout_storm' | 'overdrive' | 'free_talk' | 'wipe_shield' | 'arena_shield';
 export interface Power {
   key: PowerKey;
   name: string;

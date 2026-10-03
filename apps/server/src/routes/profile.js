@@ -21,6 +21,7 @@ import { db, newId, now, today } from '../db.js';
 import { config } from '../config.js';
 import { optionalAuth, requireAuth, uid } from '../lib/auth.js';
 import { HttpError, parse, rateLimit } from '../lib/http.js';
+import { postLimit } from '../lib/limits.js';
 import { authorCache, invalidateStats, isPremium, serializePosts, teaserAvatar, userPrivate, DEFAULT_SETTINGS } from '../lib/serialize.js';
 import { serializeShout } from './shouts.js';
 import { friendsFilter, otherOf } from '../lib/friends.js';
@@ -381,7 +382,7 @@ export async function profileRatingSummary(profileId, viewerId) {
 profileRouter.post('/users/:id/rate', requireAuth, async (req, res) => {
   const me = uid(req);
   const profileId = String(req.params.id);
-  await rateLimit(`profile-rate:${me}`, 60);
+  await postLimit(me, 'profile-rate', 60);
   const { score } = parse(z.object({ score: z.number().int().min(1).max(5) }), req.body);
   if (profileId === me) throw new HttpError(400, "You can't rate your own profile");
   const target = await db.users.findOne({ _id: profileId, deletedAt: null }, { projection: { _id: 1 } });
@@ -463,7 +464,7 @@ profileRouter.get('/users/:id/wall', optionalAuth, async (req, res) => {
 profileRouter.post('/users/:id/wall', requireAuth, async (req, res) => {
   const me = uid(req);
   const profileId = String(req.params.id);
-  await rateLimit(`wall:${me}`, 6);
+  await postLimit(me, 'wall', 6);
   const b = parse(
     z.object({
       body: z.string().trim().max(280).default(''),

@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { REACTIONS, SHOUT_COOLDOWN_SEC, SHOUT_MAX, SHOUT_MOODS, REACTION_KEYS } from '@chatlol/shared';
+import { REACTIONS, SHOUT_MAX, SHOUT_MOODS, REACTION_KEYS } from '@chatlol/shared';
 import { db, newId, now } from '../db.js';
 import { assertEmojiOwned, resolveSticker, stickerInput } from '../lib/stickers.js';
 import { optionalAuth, requireAuth, uid } from '../lib/auth.js';
 import { HttpError, parse } from '../lib/http.js';
+import { shoutGap } from '../lib/limits.js';
 import { authorCache } from '../lib/serialize.js';
 import { grant, notify } from '../lib/rewards.js';
 import { assertClean } from '../lib/moderation.js';
@@ -74,7 +75,7 @@ shoutsRouter.get('/shouts', optionalAuth, async (req, res) => {
 async function shoutCooldown(userId) {
   const last = await db.shouts.findOne({ authorId: userId }, { sort: { createdAt: -1 }, projection: { createdAt: 1 } });
   if (!last) return 0;
-  return Math.max(0, Math.ceil(SHOUT_COOLDOWN_SEC - (Date.now() - Date.parse(last.createdAt)) / 1000));
+  return Math.max(0, Math.ceil((await shoutGap(userId)) - (Date.now() - Date.parse(last.createdAt)) / 1000));
 }
 
 /** Resolves @handles in the text (up to 5) to users. */
@@ -155,8 +156,9 @@ shoutsRouter.post('/shouts', requireAuth, async (req, res) => {
   assertClean(b.body);
   await assertEmojiOwned(me, b.body);
   const sticker = await resolveSticker(me, b.sticker);
-  // One shout every 45 seconds, enforced cluster-wide.
-  if (!(await shared().setNx(`shout:cd:${me}`, '1', SHOUT_COOLDOWN_SEC * 1000))) {
+  // One shout every 45 seconds (3 with Shout Storm), enforced cluster-wide.
+  const gap = await shoutGap(me);
+  if (!(await shared().setNx(`shout:cd:${me}`, '1', gap * 1000))) {
     const wait = Math.max(1, await shoutCooldown(me));
     throw new HttpError(429, `Next shout in ${wait}s ⏳`, 'shout_cooldown');
   }
@@ -166,7 +168,7 @@ shoutsRouter.post('/shouts', requireAuth, async (req, res) => {
   track(me, 'shout');
   res.status(201).json({
     shout: await serializeShout(shout, me),
-    nextShoutAt: new Date(Date.now() + SHOUT_COOLDOWN_SEC * 1000).toISOString(),
+    nextShoutAt: new Date(Date.now() + gap * 1000).toISOString(),
     reward,
   });
 });

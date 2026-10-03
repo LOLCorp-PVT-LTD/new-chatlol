@@ -6,6 +6,7 @@ import { db, newId, now, isDuplicateKey } from '../db.js';
 import { assertEmojiOwned, resolveSticker, stickerInput, stickerPreview } from '../lib/stickers.js';
 import { optionalAuth, requireAuth, uid } from '../lib/auth.js';
 import { HttpError, parse, rateLimit } from '../lib/http.js';
+import { postLimit } from '../lib/limits.js';
 import { serializePost, serializePosts, serializeComment, authorCache, invalidateStats, userPublic } from '../lib/serialize.js';
 import { grant, notify, progressRatingQuest, recordDropStreak, ticker } from '../lib/rewards.js';
 import { assertClean } from '../lib/moderation.js';
@@ -180,7 +181,7 @@ export async function insertPost(authorId, b) {
 
 postsRouter.post('/posts', requireAuth, async (req, res) => {
   const me = uid(req);
-  await rateLimit(`post:${me}`, 6);
+  await postLimit(me, 'post', 6);
   const b = parse(createSchema, req.body);
   if (!b.body.trim() && !b.mediaUrl && !b.battle) throw new HttpError(400, 'Say something or add a photo');
   await assertCanPost(me);
@@ -262,7 +263,7 @@ async function ratingReward(me) {
 
 postsRouter.post('/posts/:id/rate', requireAuth, async (req, res) => {
   const me = uid(req);
-  await rateLimit(`rate:${me}`, 90);
+  await postLimit(me, 'rate', 90);
   const { score } = parse(z.object({ score: z.number().int().min(1).max(5) }), req.body);
   const r = await applyRating(String(req.params.id), me, score);
   const reward = r.isNew ? await ratingReward(me) : null;
@@ -342,7 +343,7 @@ export async function insertComment(postId, authorId, body, sticker = null) {
 
 postsRouter.post('/posts/:id/comments', requireAuth, async (req, res) => {
   const me = uid(req);
-  await rateLimit(`comment:${me}`, 20);
+  await postLimit(me, 'comment', 20);
   const { body, sticker: stickerIn } = parse(z.object({ body: z.string().trim().max(500).default(''), sticker: stickerInput }), req.body);
   if (!body && !stickerIn) throw new HttpError(400, 'Write something or pick a sticker');
   await assertCanPost(me);
@@ -495,7 +496,7 @@ postsRouter.get('/roulette/next', requireAuth, async (req, res) => {
 
 postsRouter.post('/roulette/vote', requireAuth, async (req, res) => {
   const me = uid(req);
-  await rateLimit(`rate:${me}`, 90);
+  await postLimit(me, 'rate', 90);
   const b = parse(z.object({ postId: z.string(), score: z.number().int().min(1).max(5) }), req.body);
   if (await db.ratings.findOne({ postId: b.postId, userId: me })) throw new HttpError(409, 'Already rated that one');
   const r = await applyRating(b.postId, me, b.score);

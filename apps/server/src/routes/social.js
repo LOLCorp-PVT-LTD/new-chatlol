@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { DM_SPARK_COST, REWARDS } from '@chatlol/shared';
+import { DM_SPARK_COST, REWARDS, hasPower } from '@chatlol/shared';
 import { db, newId, now, isDuplicateKey, isObjectIdHex } from '../db.js';
 import { assertEmojiOwned, resolveSticker, stickerInput, stickerPreview } from '../lib/stickers.js';
 import { optionalAuth, requireAuth, uid } from '../lib/auth.js';
 import { HttpError, parse, rateLimit } from '../lib/http.js';
+import { postLimit } from '../lib/limits.js';
 import {
   serializeThread,
   serializeReply,
@@ -131,7 +132,7 @@ export async function insertReply(threadId, authorId, body) {
 
 socialRouter.post('/forums', requireAuth, async (req, res) => {
   const me = uid(req);
-  await rateLimit(`thread:${me}`, 3);
+  await postLimit(me, 'thread', 3);
   const b = parse(
     z.object({ board: z.string(), title: z.string().trim().min(4).max(120), body: z.string().trim().min(1).max(4000) }),
     req.body,
@@ -149,7 +150,7 @@ socialRouter.post('/forums', requireAuth, async (req, res) => {
 
 socialRouter.post('/forums/:id/replies', requireAuth, async (req, res) => {
   const me = uid(req);
-  await rateLimit(`reply:${me}`, 20);
+  await postLimit(me, 'reply', 20);
   const { body } = parse(z.object({ body: z.string().trim().min(1).max(2000) }), req.body);
   await assertCanPost(me);
   await assertLevel(me, 'forum');
@@ -417,12 +418,12 @@ socialRouter.post('/conversations/:id/messages', requireAuth, async (req, res) =
     }))
   )
     throw new HttpError(403, "You can't message this person");
-  // DMs to real people cost Sparks (Premium members and chats with AI personas are free).
+  // DMs to real people cost Sparks (Premium members, Free Talk power-ups and chats with AI personas are free).
   const [sender, other] = await Promise.all([
-    db.users.findOne({ _id: me }, { projection: { premium: 1 } }),
+    db.users.findOne({ _id: me }, { projection: { premium: 1, powers: 1 } }),
     otherId ? db.users.findOne({ _id: otherId }, { projection: { isAi: 1 } }) : null,
   ]);
-  if (other && !other.isAi && !isPremium(sender)) {
+  if (other && !other.isAi && !isPremium(sender) && !hasPower(sender, 'free_talk')) {
     const paid = await db.users.updateOne({ _id: me, sparks: { $gte: DM_SPARK_COST } }, { $inc: { sparks: -DM_SPARK_COST } });
     if (!paid.modifiedCount)
       throw new HttpError(402, `Messages cost ${DM_SPARK_COST} Sparks — earn more, or go Premium to message free`, 'insufficient_sparks');
