@@ -8,6 +8,8 @@ export interface ServerEvents {
         joined?: UserPublic;
         left?: UserPublic;
     }) => void;
+    /** A radio station changed (new song, queue, votes). */
+    'radio:state': (s: import('./types').RadioState) => void;
     /** The lounge was deleted by its owner or staff. */
     'lounge:deleted': (p: { loungeId: ID }) => void;
     /** The lounge's name, topic, cover etc. changed. */
@@ -110,6 +112,9 @@ export interface ClientEvents {
     'stream:join': (streamId: ID) => void;
     'arena:watch': (arenaId: ID) => void;
     'arena:unwatch': (arenaId: ID) => void;
+    /** Listen to a radio station ('shouts' or 'lounge:<id>'). */
+    'radio:watch': (station: string) => void;
+    'radio:unwatch': (station: string) => void;
     'stream:leave': (streamId: ID) => void;
     'stream:chat': (p: {
         streamId: ID;

@@ -369,6 +369,12 @@ export declare function createApi(opts: ApiClientOptions): {
     songSearch: (q: string) => Promise<{ enabled: boolean; source: 'spotify' | 'apple' | 'youtube'; tracks: ProfileSong[] }>;
     updateLayout: (layout: import('./profileLayout').ProfileLayout) => Promise<{ user: UserPrivate; layout: import('./profileLayout').ProfileLayout; premiumRemoved: string[] }>;
     showcase: (userId: ID, types: import('./profileLayout').SectionType[], limit?: number) => Promise<Showcase>;
+    radio: (station: string) => Promise<import('./types').RadioState>;
+    radioSuggest: (station: string, youtubeId: string) => Promise<import('./types').RadioState>;
+    radioVote: (station: string, itemId: ID) => Promise<import('./types').RadioState>;
+    radioRemove: (station: string, itemId: ID) => Promise<import('./types').RadioState>;
+    radioSkip: (station: string) => Promise<import('./types').RadioState>;
+    radioEnded: (station: string, trackId: string) => Promise<{ ok: true }>;
     festival: () => Promise<{ festival: import('./festivals').FestivalSummary | null; loungeId?: ID | null; quiz?: { questions: { q: string; choices: string[] }[]; done: boolean; score: number | null; perRight: number; perfectBonus: number } }>;
     festivalQuiz: (answers: number[]) => Promise<{ right: number; total: number; answers: number[]; reward: RewardEvent | null }>;
     adminFestivals: () => Promise<{ current: import('./festivals').FestivalSummary | null; upcoming: (import('./festivals').FestivalSummary & { enabled: boolean })[]; all: { key: string; name: string; emoji: string }[] }>;
@@ -451,4 +457,4 @@ export declare function createApi(opts: ApiClientOptions): {
 };
 export type Api = ReturnType<typeof createApi>;
 
-export interface LoungeInput { name: string; emoji: string; topic?: string; nowPlaying?: string; coverUrl?: string | null }
+export interface LoungeInput { name: string; emoji: string; topic?: string; nowPlaying?: string; coverUrl?: string | null; radio?: boolean }

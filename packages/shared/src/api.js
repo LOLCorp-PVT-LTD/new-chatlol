@@ -132,6 +132,13 @@ export function createApi(opts) {
     spotifyResolve: (url) => req('GET', `/spotify/resolve${q({ url })}`),
     youtubeResolve: (url) => req('GET', `/youtube/resolve${q({ url })}`),
     festival: () => req('GET', '/festival'),
+    // radio: station = 'shouts' or 'lounge:<id>'
+    radio: (station) => req('GET', `/radio/${station.replace(':', '/')}`),
+    radioSuggest: (station, youtubeId) => req('POST', `/radio/${station.replace(':', '/')}/suggest`, { youtubeId }),
+    radioVote: (station, itemId) => req('POST', `/radio/${station.replace(':', '/')}/vote`, { itemId }),
+    radioRemove: (station, itemId) => req('DELETE', `/radio/${station.replace(':', '/')}/queue/${itemId}`),
+    radioSkip: (station) => req('POST', `/radio/${station.replace(':', '/')}/skip`),
+    radioEnded: (station, trackId) => req('POST', `/radio/${station.replace(':', '/')}/ended`, { trackId }),
     festivalQuiz: (answers) => req('POST', '/festival/quiz', { answers }),
     adminFestivals: () => req('GET', '/admin/festivals'),
     adminSetFestivals: (disabled) => req('PUT', '/admin/festivals', { disabled }),

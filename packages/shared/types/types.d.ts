@@ -265,6 +265,8 @@ export interface Lounge {
     /** Seasonal lounge for a festival (key), open until `expiresAt`. */
     festival?: string | null;
     expiresAt?: string | null;
+    /** This lounge has a live radio. */
+    radio?: boolean;
     /** The viewer may edit / delete it (owner or staff with the Lounges permission). */
     canManage?: boolean;
 }
@@ -534,3 +536,13 @@ export interface Showcase {
 
 /** none · outgoing (you sent a request) · incoming (they sent you one) · friends */
 export type Friendship = 'none' | 'outgoing' | 'incoming' | 'friends';
+
+/** A live radio station (lounge or shoutbox): the song everyone hears now and the voting queue. */
+export interface RadioState {
+    station: string;
+    now: { track: MusicTrack; by: ID | null; startedAt: ISODate; endsAt: ISODate; serverTime: ISODate } | null;
+    queue: { id: ID; track: MusicTrack; by: ID; votes: number; mine: boolean; voted: boolean }[];
+    serverTime: ISODate;
+    /** The viewer can skip songs and remove anything from the queue. */
+    host?: boolean;
+}

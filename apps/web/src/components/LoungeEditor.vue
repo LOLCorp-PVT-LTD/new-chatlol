@@ -15,6 +15,7 @@ const f = ref({
   topic: props.lounge?.topic ?? '',
   nowPlaying: props.lounge?.nowPlaying ?? '',
   coverUrl: props.lounge?.coverUrl ?? (null as string | null),
+  radio: props.lounge?.radio ?? true,
 });
 const official = ref(false);
 const busy = ref(false);
@@ -48,6 +49,10 @@ async function save() {
       </div>
       <input v-model="f.topic" class="input" placeholder="What’s it about? e.g. Late-night lo-fi & study vibes" maxlength="120" />
       <input v-model="f.nowPlaying" class="input" placeholder="Now playing (optional) — e.g. Frank Ocean — Pink + White" maxlength="80" />
+      <label class="flex items-start gap-3 rounded-md border border-sandstone p-3 cursor-pointer">
+        <input v-model="f.radio" type="checkbox" class="mt-1" />
+        <span><span class="text-label-lg">📻 Lounge radio</span><br /><span class="text-body-sm text-on-surface-variant">Live music for everyone in the room. Anyone can suggest songs from YouTube and vote on what plays next.</span></span>
+      </label>
       <label v-if="!lounge && isStaff()" class="flex items-center gap-2 text-body-sm"><input v-model="official" type="checkbox" /> Official ChatLOL lounge (no owner)</label>
       <p v-if="!lounge" class="text-body-sm text-on-surface-variant">You can have 1 lounge (3 with Premium). You can edit or close it any time.</p>
       <button class="btn-primary w-full" :disabled="busy || f.name.trim().length < 3">{{ lounge ? 'Save' : 'Open lounge' }}</button>

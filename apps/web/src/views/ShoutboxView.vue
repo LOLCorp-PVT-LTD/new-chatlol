@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import RadioPlayer from '../components/RadioPlayer.vue';
 import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import type { Shout, UserPublic } from '@chatlol/shared';
@@ -90,6 +91,7 @@ watch(mood, () => load(true));
         <h1 class="text-headline-xl mt-1 flex items-center gap-2"><Icon name="campaign" fill /> The Global Shoutbox</h1>
         <p class="text-body-md opacity-90">One message to the whole of ChatLOL. React, reply with your own shout, tag friends with @handle. One shout every {{ SHOUT_COOLDOWN_SEC }} seconds.</p>
       </header>
+      <RadioPlayer station="shouts" title="Shoutbox radio" />
       <ShoutComposer :reply-to="replyTo" :next-shout-at="nextShoutAt" @posted="posted" @cancel-reply="replyTo = null" />
       <div class="flex gap-2 overflow-x-auto scrollbar-none">
         <button class="chip" :class="{ 'chip-active': !mood }" @click="mood = undefined">All</button>

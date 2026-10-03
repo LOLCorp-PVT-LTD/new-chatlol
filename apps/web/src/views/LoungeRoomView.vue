@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import RadioPlayer from '../components/RadioPlayer.vue';
 import VideoEmbeds from '../components/VideoEmbeds.vue';
 import { withoutVideos } from '@chatlol/shared';
 import RemovedNote from '../components/RemovedNote.vue';
@@ -138,6 +139,7 @@ function send(text = draft.value, sticker: StickerInput | null = null) {
         <span class="w-[30px] h-[30px] rounded-full bg-surface-container-high ring-2 ring-sunlit flex items-center justify-center text-[11px] font-bold">{{ members.length > 4 ? `+${members.length - 4}` : members.length }}</span>
       </button>
     </header>
+    <RadioPlayer v-if="lounge?.radio" :key="lounge.id" :station="`lounge:${lounge.id}`" :title="`${lounge.name} radio`" class="mx-3 mt-3 shrink-0" />
     <Transition name="fade">
       <section v-if="showMembers" class="px-5 py-3 border-b border-sandstone/60 bg-surface-container-lowest/50 backdrop-blur-md">
         <p class="label mb-2">In the room · {{ members.length }}</p>
