@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import RichText from '../components/RichText.vue';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import type { Tournament } from '@chatlol/shared';
@@ -37,7 +38,7 @@ const playLink = computed(() => (t.value?.kind === 'arcade' ? `/arcade/${t.value
     <TournamentCard :t="t" wide />
     <div class="grid lg:grid-cols-[1fr_320px] gap-4 items-start">
       <section class="card p-5 space-y-4">
-        <p v-if="t.description" class="text-body-lg whitespace-pre-line">{{ t.description }}</p>
+        <p v-if="t.description" class="text-body-lg whitespace-pre-line"><RichText :text="t.description" /></p>
         <p class="text-body-md text-on-surface-variant">{{ t.kind === 'arcade' ? 'Your best verified score in the game while the tournament is live counts.' : 'Every arena win in this game while the tournament is live counts.' }} Level {{ t.minLevel }}+ to enter.</p>
         <div><p class="label mb-2">Prizes</p>
           <div v-for="p in t.prizes" :key="p.place" class="flex items-center gap-3 py-1.5"><span class="w-8 text-center text-xl">{{ p.place <= 3 ? ['🥇', '🥈', '🥉'][p.place - 1] : `#${p.place}` }}</span><span class="text-body-md">{{ p.text }}</span></div></div>

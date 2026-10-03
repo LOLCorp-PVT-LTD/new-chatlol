@@ -44,7 +44,7 @@ async function send() {
       <div class="flex items-center gap-3"><Avatar :user="thread.author" :size="44" /><div><UserName :user="thread.author" /><p class="text-body-sm text-on-surface-variant">{{ timeAgo(thread.createdAt) }} ago</p></div></div>
       <h1 class="text-headline-lg mt-4">{{ thread.title }}</h1>
       <RemovedNote v-if="thread.removed" what="thread" :removed="thread.removed" class="mt-2" />
-      <p v-else class="text-body-lg mt-2 whitespace-pre-line">{{ thread.body }}</p>
+      <p v-else class="text-body-lg mt-2 whitespace-pre-line"><RichText :text="thread.body" tags /></p>
       <p class="text-label-md text-on-surface-variant mt-4">⬆ {{ thread.upvotes }} • 💬 {{ replies.length }}</p>
     </article>
     <div v-for="r in replies" :key="r.id" class="flex gap-3">
