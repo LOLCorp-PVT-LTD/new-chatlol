@@ -62,3 +62,14 @@ export interface Ticket {
 export declare const TICKETS: Ticket[];
 export declare const ticketByKey: (key: string) => Ticket | undefined;
 export declare const KING: { key: string; name: string; emoji: string; gold: number; reignDays: number };
+export interface StatusRank {
+    key: 'commoner' | 'squire' | 'knight' | 'noble' | 'royalty' | 'legendary';
+    label: string;
+    emoji: string;
+    minLevel: number;
+    checkInBoost: number;
+    color: string;
+    badge?: boolean;
+}
+export declare const STATUS_RANKS: StatusRank[];
+export declare const statusFor: (level: number) => StatusRank;

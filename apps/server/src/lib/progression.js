@@ -11,6 +11,7 @@ import {
   levelForXp,
   levelGate,
   powerByKey,
+  statusFor,
 } from '@chatlol/shared';
 import { db, now, today } from '../db.js';
 import { HttpError } from './http.js';
@@ -83,7 +84,7 @@ export async function consumeAutoPower(userId, key) {
 // ——— Daily check-in ———
 /** First visit of the day: extends the login streak and pays a bonus that grows with it. */
 export async function dailyCheckIn(userId) {
-  const u = await db.users.findOne({ _id: userId }, { projection: { lastDailyClaim: 1, loginStreak: 1 } });
+  const u = await db.users.findOne({ _id: userId }, { projection: { lastDailyClaim: 1, loginStreak: 1, xp: 1 } });
   const t = today();
   if (!u || u.lastDailyClaim === t) return null;
   const streak = u.lastDailyClaim === today(new Date(Date.now() - DAY)) ? (u.loginStreak ?? 0) + 1 : 1;
@@ -93,8 +94,11 @@ export async function dailyCheckIn(userId) {
     { $set: { lastDailyClaim: t, loginStreak: streak, inactivityWarned: [], inactivityWarnedAt: null } },
   );
   if (!claimed.modifiedCount) return null;
-  const r = checkInReward(streak);
-  const reward = await grant(userId, r.sparks, r.xp, `Day ${streak} check-in ☀️ +${r.sparks} Sparks`);
+  const base = checkInReward(streak);
+  // Higher status ranks earn a bigger check-in bonus.
+  const rank = statusFor(levelForXp(u.xp ?? 0));
+  const r = { sparks: Math.round(base.sparks * rank.checkInBoost), xp: Math.round(base.xp * rank.checkInBoost) };
+  const reward = await grant(userId, r.sparks, r.xp, `Day ${streak} check-in ☀️${rank.checkInBoost > 1 ? ` (${rank.emoji} ${rank.label} ×${rank.checkInBoost})` : ''}`);
   reward.loginStreak = streak;
   if (LOGIN_STREAK_MILESTONES.includes(streak)) {
     await db.users.updateOne({ _id: userId }, { $addToSet: { badges: `login_${streak}` } });

@@ -197,3 +197,15 @@ export const ticketByKey = (key) => TICKETS.find((t) => t.key === key);
 
 /** King of ChatLOL: one reigning King at a time; buying the crown dethrones the current King. */
 export const KING = { key: 'king_crown', name: 'King of ChatLOL', emoji: '👑', gold: 10_000, reignDays: 30 };
+
+// ——— Status ranks ———
+/** Prestige by level. Each rank multiplies the daily check-in bonus; Noble and up show a badge by their name. */
+export const STATUS_RANKS = [
+  { key: 'commoner', label: 'Commoner', emoji: '🪵', minLevel: 1, checkInBoost: 1, color: '#8c7b6b' },
+  { key: 'squire', label: 'Squire', emoji: '🛡️', minLevel: 5, checkInBoost: 1.1, color: '#6b8fb3' },
+  { key: 'knight', label: 'Knight', emoji: '⚔️', minLevel: 10, checkInBoost: 1.25, color: '#5470e8' },
+  { key: 'noble', label: 'Noble', emoji: '🎩', minLevel: 18, checkInBoost: 1.5, color: '#8f63e8', badge: true },
+  { key: 'royalty', label: 'Royalty', emoji: '💍', minLevel: 28, checkInBoost: 1.75, color: '#d4a017', badge: true },
+  { key: 'legendary', label: 'Legendary', emoji: '🌟', minLevel: 40, checkInBoost: 2, color: '#ff5e00', badge: true },
+];
+export const statusFor = (level) => [...STATUS_RANKS].reverse().find((r) => level >= r.minLevel) ?? STATUS_RANKS[0];
