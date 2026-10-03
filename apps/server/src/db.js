@@ -73,6 +73,7 @@ export const COLLECTIONS = [
   'clanObjectives',
   'territories',
   'clanLedger',
+  'clanContrib',
   'tournaments',
   'tournamentEntries',
 ];

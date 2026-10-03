@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { CLAN_ACHIEVEMENTS, CLAN_CUSTOM_ROLES, CLAN_JOIN_POLICIES, CLAN_LEVELS, CLAN_PERMS, CLAN_RANKS, CLAN_WAR, clanRank, type ClanPerm, type ClanPolicy, type ClanRank, HQ_BUILDINGS, HQ_LEVELS, TERRITORIES, clanEventFor, hqLevel, siegeFor, type HqKey } from '@chatlol/shared';
+import { CLAN_ACHIEVEMENTS, CLAN_CUSTOM_ROLES, CLAN_JOIN_POLICIES, CLAN_LEVELS, CLAN_PERMS, CLAN_RANKS, CLAN_WAR, clanRank, type ClanPerm, type ClanPolicy, type ClanRank, HQ_BUILDINGS, HQ_LEVELS, TERRITORIES, clanEventFor, hqLevel, siegeFor, clanSeasonFor, type HqKey } from '@chatlol/shared';
 import { api } from '../lib/api';
 import { useSession } from '../stores/session';
 import { confirmDialog, promptDialog } from '../lib/dialog';
@@ -115,6 +115,10 @@ async function saveRoles() {
   await run(api.updateClanRoles(c.value!.id, roles.value), 'Roles saved');
   rolesOpen.value = false;
 }
+
+// Contributors
+const period = ref<'week' | 'season' | 'lifetime'>('week');
+const season = clanSeasonFor();
 
 // Tabs
 const TABS = [
@@ -283,12 +287,33 @@ async function declare() {
           </div>
         </section>
 
+        <!-- MVP & contributors -->
+        <section class="card p-5 space-y-3">
+          <div v-if="d.mvp" class="rounded-md p-4 text-white bg-[linear-gradient(135deg,#7c3aed,#ff5e00)] flex items-center gap-4">
+            <Avatar :user="d.mvp.user" :size="56" class="ring-2 ring-white/70 rounded-full" />
+            <div class="min-w-0 flex-1">
+              <p class="label !text-white/80">🏅 Clan MVP · last week</p>
+              <p class="text-headline-sm truncate">{{ d.mvp.user.displayName }}</p>
+              <p class="text-body-sm opacity-90">{{ d.mvp.points.toLocaleString() }} Contribution · {{ d.mvp.quests }} quests · {{ d.mvp.wars }} war victories · {{ d.mvp.reputation.toLocaleString() }} Reputation earned</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 flex-wrap"><p class="text-headline-sm flex-1">🔥 Top contributors</p>
+            <button v-for="p in (['week', 'season', 'lifetime'] as const)" :key="p" class="chip h-8" :class="{ 'chip-active': period === p }" @click="period = p">{{ p === 'week' ? 'This week' : p === 'season' ? `Season ${season.number}` : 'All time' }}</button></div>
+          <p v-if="!d.contributors[period].length" class="text-body-md text-on-surface-variant">Nobody yet — earn Clan XP, finish quests or deposit to the treasury to top this board.</p>
+          <div v-for="(x, i) in d.contributors[period]" :key="x.user.id" class="flex items-center gap-3 py-1.5">
+            <span class="w-6 text-center font-bold">{{ ['🥇', '🥈', '🥉'][i] ?? i + 1 }}</span>
+            <Avatar :user="x.user" :size="32" />
+            <div class="flex-1 min-w-0"><UserName :user="x.user" /><p class="text-body-sm text-on-surface-variant">{{ x.xp.toLocaleString() }} XP · {{ x.quests }} quests · {{ x.wars }} wars<template v-if="x.recruits"> · {{ x.recruits }} recruits</template><template v-if="x.donated"> · ✦ {{ x.donated.toLocaleString() }} given</template></p></div>
+            <span class="tabular-nums text-label-lg">{{ x.points.toLocaleString() }}</span>
+          </div>
+        </section>
+
         <!-- Members -->
         <section class="card p-5">
           <p class="text-headline-sm mb-2">Members</p>
           <div v-for="m in members" :key="m.user.id" class="flex items-center gap-3 py-2 border-b border-sandstone last:border-0">
             <Avatar :user="m.user" :size="38" />
-            <div class="flex-1 min-w-0"><UserName :user="m.user" /><p class="text-body-sm text-on-surface-variant">{{ rankOf(m.role).emoji }} {{ rankOf(m.role).name }} · {{ m.rep.toLocaleString() }} Clan XP earned</p></div>
+            <div class="flex-1 min-w-0"><UserName :user="m.user" /><p class="text-body-sm text-on-surface-variant">{{ rankOf(m.role).emoji }} {{ rankOf(m.role).name }} · {{ m.contribution.toLocaleString() }} contribution<template v-if="m.mvpCount"> · 🏅 MVP ×{{ m.mvpCount }}</template></p></div>
             <select v-if="can('promote') && m.user.id !== s.user?.id && canManage(m.role)" class="input h-8 w-auto text-label-sm py-0" :value="rankOf(m.role).key" :aria-label="`Rank for ${m.user.displayName}`" @change="setRole(m.user.id, ($event.target as HTMLSelectElement).value)">
               <option v-for="r in assignable" :key="r.key" :value="r.key">{{ r.emoji }} {{ r.name }}</option>
               <option v-if="!assignable.some((r) => r.key === rankOf(m.role).key)" :value="rankOf(m.role).key" disabled>{{ rankOf(m.role).name }}</option>

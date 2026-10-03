@@ -1,4 +1,4 @@
-import { CLAN_ACHIEVEMENTS, HQ_BUILDINGS, HQ_LEVELS, SIEGE, TERRITORIES, clanEventFor, clanHas, clanLevelFor, clanObjectives, hqLevel, objectiveTier, siegeFor, territoryByKey } from '@chatlol/shared';
+import { CLAN_ACHIEVEMENTS, CONTRIBUTION, HQ_BUILDINGS, HQ_LEVELS, SIEGE, TERRITORIES, clanEventFor, clanHas, clanLevelFor, clanObjectives, hqLevel, objectiveTier, siegeFor, territoryByKey } from '@chatlol/shared';
 import { db, now } from '../db.js';
 
 /**
@@ -44,6 +44,48 @@ export async function clanBoost(clanId, sparks, xp, reason) {
   }
   const pct = b.sparks + (isArcade(reason) ? b.arcade : 0) + (isSocial(reason) ? b.social : 0);
   return { sparks: sparks > 0 ? Math.round(sparks * (1 + pct / 100)) : sparks, xp: xp > 0 && b.xp ? Math.round(xp * (1 + b.xp / 100)) : xp };
+}
+
+// ——— Contribution & MVP ———
+/** Adds to a member's contribution (this week's row and their lifetime totals). `inc`: points, xp, reputation, quests, wars, recruits, donated. */
+export async function contribute(clanId, userId, inc) {
+  const clean = Object.fromEntries(Object.entries(inc).filter(([, v]) => v));
+  if (!Object.keys(clean).length) return;
+  const week = clanEventFor().week;
+  await db.clanContrib.updateOne({ week, clanId, userId }, { $inc: clean, $setOnInsert: { at: now() } }, { upsert: true });
+  await db.clanMembers.updateOne({ clanId, userId }, { $inc: Object.fromEntries(Object.entries(clean).map(([k, v]) => [`contrib.${k}`, v])) });
+}
+
+/** Top contributors of a clan for a range of weeks (one week, a season, or null for lifetime). */
+export async function topContributors(clanId, fromWeek = null, toWeek = fromWeek, limit = 10) {
+  if (fromWeek == null) {
+    const rows = await db.clanMembers.find({ clanId, 'contrib.points': { $gt: 0 } }).sort({ 'contrib.points': -1 }).limit(limit).toArray();
+    return rows.map((m) => ({ userId: m.userId, ...m.contrib }));
+  }
+  return db.clanContrib
+    .aggregate([
+      { $match: { clanId, week: { $gte: fromWeek, $lte: toWeek } } },
+      { $group: { _id: '$userId', points: { $sum: '$points' }, xp: { $sum: '$xp' }, reputation: { $sum: '$reputation' }, quests: { $sum: '$quests' }, wars: { $sum: '$wars' }, recruits: { $sum: '$recruits' }, donated: { $sum: '$donated' } } },
+      { $sort: { points: -1 } },
+      { $limit: limit },
+    ])
+    .toArray()
+    .then((r) => r.map((x) => ({ userId: x._id, ...x, _id: undefined })));
+}
+
+/** Once a week: each clan's top contributor of last week becomes its Clan MVP (badge + Sparks). */
+export async function awardMvps(week) {
+  const { grant, notify } = await import('./rewards.js');
+  const tops = await db.clanContrib.aggregate([{ $match: { week, points: { $gt: 0 } } }, { $sort: { points: -1 } }, { $group: { _id: '$clanId', userId: { $first: '$userId' }, points: { $first: '$points' } } }]).toArray();
+  for (const t of tops) {
+    const clan = await db.clans.findOne({ _id: t._id }, { projection: { name: 1, emoji: 1 } });
+    if (!clan || !(await db.clanMembers.findOne({ clanId: t._id, userId: t.userId }))) continue;
+    await db.clans.updateOne({ _id: t._id }, { $push: { mvps: { $each: [{ week, userId: t.userId, points: Math.floor(t.points) }], $slice: -52 } } });
+    await db.clanMembers.updateOne({ clanId: t._id, userId: t.userId }, { $inc: { mvpCount: 1 } });
+    await db.users.updateOne({ _id: t.userId }, { $set: { clanMvp: { week, clanId: t._id, clan: clan.name } } });
+    await grant(t.userId, CONTRIBUTION.mvpSparks, 50, `Clan MVP of ${clan.name}`, true, { boost: false });
+    await notify(t.userId, { kind: 'reward', title: `🏅 You’re ${clan.emoji} ${clan.name}’s Clan MVP!`, body: `Top contributor last week (${Math.floor(t.points).toLocaleString()} points) · +${CONTRIBUTION.mvpSparks} ✦`, link: `/clans/${t._id}` });
+  }
 }
 
 // ——— Reputation & achievements ———
@@ -100,10 +142,10 @@ export async function trackObjective(clanId, kind, amount, userId = null) {
   if (!c) return;
   const list = clanObjectives(week, objectiveTier(c.rep));
   const relevant = list.filter((o) => o.key === kind || (o.key === 'active' && userId && kind === 'sparks'));
-  if (!relevant.length) return;
+  if (!relevant.length && !(userId && kind === 'sparks')) return;
   const update = { $setOnInsert: { at: now() } };
   if (list.some((o) => o.key === kind) && kind !== 'active') update.$inc = { [`progress.${kind}`]: amount };
-  if (userId && kind === 'sparks' && list.some((o) => o.key === 'active')) update.$addToSet = { active: userId };
+  if (userId && kind === 'sparks') update.$addToSet = { active: userId };
   if (!update.$inc && !update.$addToSet) return;
   const row = await db.clanObjectives.findOneAndUpdate({ week, clanId }, update, { upsert: true, returnDocument: 'after' });
   for (const o of relevant) {
@@ -114,6 +156,7 @@ export async function trackObjective(clanId, kind, amount, userId = null) {
     await db.clans.updateOne({ _id: clanId }, { $inc: { treasury: o.reward.treasury, reputation: o.reward.reputation, objectivesDone: 1 } });
     const { addClanRep } = await import('./clans.js');
     await addClanRep(clanId, o.reward.xp);
+    for (const u of row?.active ?? []) await contribute(clanId, u, { points: CONTRIBUTION.quest, quests: 1 });
     const { notify } = await import('./rewards.js');
     for (const m of await db.clanMembers.find({ clanId }, { projection: { userId: 1 } }).toArray())
       await notify(m.userId, { kind: 'reward', title: `${o.emoji} Clan Quest complete: ${o.name}`, body: `+${o.reward.xp} Clan XP · +${o.reward.treasury.toLocaleString()} ✦ treasury · +${o.reward.reputation} Reputation`, link: `/clans/${clanId}` });
@@ -129,6 +172,7 @@ export async function trackReward(clanId, userId, sparks, reason) {
   if (isSocial(reason)) {
     await trackObjective(clanId, 'social', 1);
     await db.clans.updateOne({ _id: clanId }, { $inc: { reputation: 0.2 } }); // good social activity builds standing
+    await contribute(clanId, userId, { reputation: 0.2 });
   }
   if (isArenaWin(reason)) await trackObjective(clanId, 'arena', 1);
 }

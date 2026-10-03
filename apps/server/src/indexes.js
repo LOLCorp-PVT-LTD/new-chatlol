@@ -107,6 +107,8 @@ export async function ensureIndexes(db) {
     idx('clanObjectives', { week: 1, clanId: 1 }, { unique: true }),
     idx('territories', { clanId: 1 }),
     idx('clanLedger', { clanId: 1, at: -1 }),
+    idx('clanContrib', { week: 1, clanId: 1, userId: 1 }, { unique: true }),
+    idx('clanContrib', { clanId: 1, week: 1, points: -1 }),
     idx('kv', { exp: 1 }, { expireAfterSeconds: 0 }),
     idx('busEvents', { at: 1 }, { expireAfterSeconds: 300 }),
     idx('socketEvents', { createdAt: 1 }, { expireAfterSeconds: 300 }),

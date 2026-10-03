@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { CLAN_CUSTOM_ROLES, CLAN_FOUND, CLAN_JOIN_POLICIES, CLAN_PERMS, CLAN_RANKS, clanCan, clanRank, normalizePolicy, CLAN_TAG_RE, CLAN_WAR, HQ_BUILDINGS, HQ_LEVELS, SIEGE, TERRITORIES, clanEventFor, clanHas, clanLevelFor, clanMaxMembers, hqLevel, levelForXp, nextClanLevel, objectiveTier, siegeFor } from '@chatlol/shared';
+import { CLAN_CUSTOM_ROLES, CLAN_FOUND, CONTRIBUTION, clanSeasonFor, CLAN_JOIN_POLICIES, CLAN_PERMS, CLAN_RANKS, clanCan, clanRank, normalizePolicy, CLAN_TAG_RE, CLAN_WAR, HQ_BUILDINGS, HQ_LEVELS, SIEGE, TERRITORIES, clanEventFor, clanHas, clanLevelFor, clanMaxMembers, hqLevel, levelForXp, nextClanLevel, objectiveTier, siegeFor } from '@chatlol/shared';
 import { db, newId, now } from '../db.js';
 import { optionalAuth, requireAuth, uid } from '../lib/auth.js';
 import { HttpError, parse, rateLimit } from '../lib/http.js';
@@ -9,7 +9,7 @@ import { emitWallet, notify } from '../lib/rewards.js';
 import { assertClean } from '../lib/moderation.js';
 import { track } from '../lib/activity.js';
 import { forgetMember, membershipOf, syncMemberBadges } from '../lib/clans.js';
-import { checkAchievements, forgetBonuses, objectivesFor, siegeTarget, trackObjective } from '../lib/clanWorld.js';
+import { checkAchievements, contribute, forgetBonuses, objectivesFor, siegeTarget, topContributors, trackObjective } from '../lib/clanWorld.js';
 
 /**
  * Clans: found one (Gold), join, request / invite, roles (leader → officers → members), a shared treasury of Sparks,
@@ -109,7 +109,7 @@ clansRouter.get('/clans/:id', optionalAuth, async (req, res) => {
     myRole: me?.role ?? null,
     myPerms: me ? clanRank(me.role, c.customRoles).perms : [],
     myRequest: myRequest ? { invited: !!myRequest.invited } : null,
-    members: await Promise.all(members.map(async (m) => ({ user: await author(m.userId), role: m.role, rep: Math.floor(m.rep ?? 0), joinedAt: m.joinedAt }))),
+    members: await Promise.all(members.map(async (m) => ({ user: await author(m.userId), role: m.role, rep: Math.floor(m.rep ?? 0), joinedAt: m.joinedAt, contribution: Math.floor(m.contrib?.points ?? 0), mvpCount: m.mvpCount ?? 0 }))),
     requests: officer
       ? await Promise.all((await db.clanRequests.find({ clanId: c._id, invited: { $ne: true } }).toArray()).map(async (r) => ({ user: await author(r.userId), at: r.createdAt, message: r.message ?? '' })))
       : [],
@@ -123,6 +123,19 @@ clansRouter.get('/clans/:id', optionalAuth, async (req, res) => {
       achievements: c.achievements ?? [], territories: (await db.territories.find({ clanId: c._id }, { projection: { _id: 1 } }).toArray()).map((t) => t._id),
       siegeTarget: await siegeTarget(c._id), minLevel: c.minLevel ?? 0,
     },
+    contributors: await (async () => {
+      const week = clanEventFor().week;
+      const ss = clanSeasonFor(week);
+      const fill = async (rows) => Promise.all(rows.map(async (r) => ({ user: await author(r.userId), points: Math.floor(r.points ?? 0), xp: Math.floor(r.xp ?? 0), reputation: Math.floor(r.reputation ?? 0), quests: r.quests ?? 0, wars: r.wars ?? 0, recruits: r.recruits ?? 0, donated: r.donated ?? 0 })));
+      const [wk, season, life] = await Promise.all([topContributors(c._id, week), topContributors(c._id, ss.startWeek, ss.endWeek), topContributors(c._id, null)]);
+      return { week: await fill(wk), season: await fill(season), lifetime: await fill(life) };
+    })(),
+    mvp: await (async () => {
+      const last = (c.mvps ?? []).at(-1);
+      if (!last) return null;
+      const [row] = await topContributors(c._id, last.week);
+      return { week: last.week, user: await author(last.userId), points: last.points, quests: row?.quests ?? 0, wars: row?.wars ?? 0, reputation: Math.floor(row?.reputation ?? 0) };
+    })(),
     ledger: me
       ? await Promise.all((await db.clanLedger.find({ clanId: c._id }).sort({ at: -1 }).limit(30).toArray()).map(async (l) => ({ user: l.userId ? await author(l.userId) : null, amount: l.amount, what: l.what, at: l.at })))
       : [],
@@ -211,6 +224,7 @@ clansRouter.post('/clans/:id/join', requireAuth, async (req, res) => {
   }
   if (policy === 'open' || invite) {
     await addMember(c, me);
+    if (invite?.invitedBy && invite.invitedBy !== me) await contribute(c._id, invite.invitedBy, { points: CONTRIBUTION.recruit, recruits: 1 });
     track(me, 'clan');
     return res.json({ joined: true });
   }
@@ -249,7 +263,7 @@ clansRouter.post('/clans/:id/invite', requireAuth, async (req, res) => {
   const u = await db.users.findOne({ _id: userId, deletedAt: null, isAi: false }, { projection: { displayName: 1 } });
   if (!u) throw new HttpError(404, 'User not found');
   if (await membershipOf(userId)) throw new HttpError(409, 'They’re already in a clan');
-  await db.clanRequests.updateOne({ clanId: c._id, userId }, { $set: { invited: true }, $setOnInsert: { _id: newId(), createdAt: now() } }, { upsert: true });
+  await db.clanRequests.updateOne({ clanId: c._id, userId }, { $set: { invited: true, invitedBy: me }, $setOnInsert: { _id: newId(), createdAt: now() } }, { upsert: true });
   await notify(userId, { kind: 'system', title: `🏰 You’re invited to join ${c.emoji} ${c.name} [${c.tag}]`, body: 'Join now, or open the clan page', link: `/clans/${c._id}`, action: { type: 'clan_invite', id: c._id } });
   res.json({ ok: true });
 });
@@ -338,6 +352,7 @@ clansRouter.post('/clans/:id/donate', requireAuth, async (req, res) => {
   await db.clanMembers.updateOne({ clanId: c._id, userId: me }, { $inc: { donated: sparks } });
   void emitWallet(me);
   await logTreasury(c._id, me, sparks, 'Deposit');
+  await contribute(c._id, me, { points: Math.floor(sparks / CONTRIBUTION.perDeposit), donated: sparks });
   await trackObjective(c._id, 'donate', sparks);
   await checkAchievements(c._id);
   res.json({ treasury: (c.treasury ?? 0) + sparks });

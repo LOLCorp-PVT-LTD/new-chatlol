@@ -35,3 +35,7 @@ export interface ClanWorldInfo {
   siegeTarget: string | null;
   minLevel: number;
 }
+export declare const CONTRIBUTION: { perDeposit: number; recruit: number; quest: number; war: number; mvpSparks: number };
+export declare const CLAN_SEASON: { weeks: number };
+export declare function clanSeasonFor(week?: number): { season: number; number: number; startWeek: number; endWeek: number; startsAt: string; endsAt: string };
+export interface ClanContributor { user: import('./types').UserPublic; points: number; xp: number; reputation: number; quests: number; wars: number; recruits: number; donated: number }

@@ -98,3 +98,19 @@ export const CLAN_ACHIEVEMENTS = [
   { key: 'veterans', name: 'Old Guard', emoji: '🗓️', desc: 'Keep the clan going for a year', stat: 'ageDays', goal: 365, reputation: 200, rare: true },
   { key: 'deep_pockets', name: 'Deep Pockets', emoji: '🏦', desc: 'Hold 100,000 Sparks in the treasury', stat: 'treasury', goal: 100_000, reputation: 40 },
 ];
+
+/**
+ * Contribution: each member's score for what they did for the clan — Clan XP earned (1 per XP), deposits (1 per 100
+ * Sparks), recruits (+50), quests completed while active (+25), war victories (+100). Counted per week, per season and
+ * for life; the week's top contributor is the Clan MVP.
+ */
+export const CONTRIBUTION = { perDeposit: 100, recruit: 50, quest: 25, war: 100, mvpSparks: 500 };
+
+/** Clan seasons: six weeks each. Lifetime stats, levels and achievements carry over; seasonal points reset. */
+export const CLAN_SEASON = { weeks: 6 };
+export function clanSeasonFor(week = clanEventFor().week) {
+  const season = Math.floor(week / CLAN_SEASON.weeks);
+  const startWeek = season * CLAN_SEASON.weeks;
+  const start = (startWeek * 7 + 4) * 86_400_000; // weeks count from the Monday after 1 Jan 1970
+  return { season, number: season - 492, startWeek, endWeek: startWeek + CLAN_SEASON.weeks - 1, startsAt: new Date(start).toISOString(), endsAt: new Date(start + CLAN_SEASON.weeks * 7 * 86_400_000).toISOString() };
+}

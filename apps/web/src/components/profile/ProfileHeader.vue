@@ -63,6 +63,7 @@ const btnStyle = computed(() => buttonStyleByKey(u.value.cosmetics.button)?.css 
         <h1 class="text-headline-xl flex items-center gap-2 flex-wrap" :class="{ 'justify-center': centered, 'sm:justify-start justify-center': style === 'split', '!text-headline-lg': style === 'compact' }">
           {{ u.displayName }} <span v-if="gender" class="text-headline-sm" :title="gender.label">{{ gender.emoji }}</span>
           <span class="rounded-full px-3 py-1 text-label-md hdr-chip">{{ tier.emoji }} {{ tier.label.toUpperCase() }}</span>
+          <RouterLink v-if="u.clanMvp" :to="`/clans/${u.clanMvp.clanId}`" class="rounded-full px-3 py-1 text-label-md hdr-chip" :title="`Clan MVP of ${u.clanMvp.clan} last week`">🏅 CLAN MVP</RouterLink>
           <RouterLink v-if="u.clan" :to="`/clans/${u.clan.id}`" class="rounded-full px-3 py-1 text-label-md hdr-chip hdr-clan" :class="{ 'hdr-clan-glow': u.clan.glow >= 2 }" :style="u.clan.color ? { '--clan': u.clan.color } : undefined" :title="`Member of ${u.clan.name} · clan level ${u.clan.level}`">{{ u.clan.emoji }} {{ u.clan.name }} <b>[{{ u.clan.tag }}]</b></RouterLink>
           <span v-if="style === 'compact' && u.premium" class="text-label-md">👑</span>
         </h1>

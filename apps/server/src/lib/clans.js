@@ -1,6 +1,7 @@
 import { CLAN_EVENT_PRIZES, CLAN_WAR, RECRUIT_DAYS, REP_PER_SPARKS, clanEventFor, clanLevelFor } from '@chatlol/shared';
 import { db, newId, now } from '../db.js';
-import { addReputation, checkAchievements, clanBonuses, clanBoost, scoreSiege, trackReward } from './clanWorld.js';
+import { addReputation, awardMvps, checkAchievements, clanBonuses, clanBoost, contribute, scoreSiege, trackReward } from './clanWorld.js';
+import { CONTRIBUTION } from '@chatlol/shared';
 
 /**
  * Clans on the server: membership lookups (cached briefly), Rep from members' activity, level-ups, the Clan Wars
@@ -46,6 +47,7 @@ export async function addRepFromSparks(userId, sparks, reason) {
   const b = await clanBonuses(m.clanId);
   const rep = (sparks / REP_PER_SPARKS) * multiplier(reason) * (1 + b.clanxp / 100);
   await addClanRep(m.clanId, rep, userId);
+  await contribute(m.clanId, userId, { points: rep, xp: rep });
   await scoreSiege(m.clanId, rep);
   await trackReward(m.clanId, userId, sparks, reason);
 }
@@ -103,6 +105,10 @@ export async function resolveClanWars() {
       await db.clans.updateOne({ _id: winner === w.aId ? w.bId : w.aId }, { $inc: { losses: 1 } });
       await addClanRep(winner, CLAN_WAR.winRep);
       await addReputation(winner, 20);
+      // Everyone who pitched in during the war gets the victory on their record.
+      const weeks = [clanEventFor(Date.parse(w.startsAt ?? w.createdAt)).week, clanEventFor().week];
+      for (const userId of await db.clanContrib.distinct('userId', { clanId: winner, week: { $in: weeks }, points: { $gt: 0 } }))
+        await contribute(winner, userId, { points: CONTRIBUTION.war, wars: 1 });
       await checkAchievements(winner);
     }
     const [a, b] = await Promise.all([db.clans.findOne({ _id: w.aId }), db.clans.findOne({ _id: w.bId })]);
@@ -135,6 +141,7 @@ export async function payClanWeek() {
       await notify(m.userId, { kind: 'system', title: `🏆 ${clan.name} placed #${prize.place} in last week’s clan event!`, body: `+${prize.gems} 💎 for every member`, link: `/clans/${clan._id}` });
     }
   }
+  await awardMvps(last);
 }
 
 export const newClanId = newId;
