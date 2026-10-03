@@ -8,6 +8,7 @@ import { useSession } from '../stores/session';
 import { confetti, ding } from '../lib/fx';
 import Icon from '../components/Icon.vue';
 import Modal from '../components/Modal.vue';
+import ItemPreview from '../components/ItemPreview.vue';
 
 const s = useSession();
 const route = useRoute();
@@ -20,7 +21,7 @@ const tab = ref<Tab>((['gems', 'power', 'ticket', 'king', 'exchange'] as string[
 const won = ref<StoreItem | null>(null);
 const buying = ref<string | null>(null);
 const chest = ref<{ claimed: boolean; nextAt: string } | null>(null);
-const TABS: [Tab, string][] = [['king', '👑 King'], ['ticket', '🎫 Tickets'], ['power', '⚡ Power-ups'], ['exchange', '🔄 Exchange'], ['gems', '💎 Gems'], ['all', '✨ All'], ['frame', '⭕ Frames'], ['flair', '🔥 Flairs'], ['theme', '🎨 Themes'], ['banner', '🏙️ Banners'], ['crate', '🎁 Crates'], ['streak_freeze', '🧊 Boosts']];
+const TABS: [Tab, string][] = [['king', '👑 King'], ['ticket', '🎫 Tickets'], ['power', '⚡ Power-ups'], ['exchange', '🔄 Exchange'], ['gems', '💎 Gems'], ['all', '✨ All'], ['cover', '🖼️ Covers'], ['font', '🔤 Fonts'], ['button', '🔘 Buttons'], ['frame', '⭕ Frames'], ['flair', '🔥 Flairs'], ['theme', '🎨 Themes'], ['banner', '🏙️ Banners'], ['crate', '🎁 Crates'], ['streak_freeze', '🧊 Boosts']];
 const rarityStyle: Record<string, string> = { common: 'bg-surface-container text-on-surface-variant', rare: 'bg-sky-100 text-sky-700', epic: 'bg-violet-100 text-violet-700', legendary: 'bg-sunset text-white' };
 const shown = computed(() => items.value.filter((i) => tab.value === 'all' || i.kind === tab.value || (tab.value === 'streak_freeze' && i.kind === 'boost')));
 
@@ -85,7 +86,7 @@ const money = (cents: number | null, cur: string | null) => (cents == null ? '' 
 
 async function buy(i: StoreItem, currency: 'sparks' | 'gems' | 'gold' = 'sparks') {
   if (!s.user) return;
-  if (currency === 'gold' && !(await confirmDialog({ title: `Buy ${i.emoji} ${i.name}?`, body: `Costs 🪙 ${i.goldPrice?.toLocaleString()} Gold.` }))) return;
+  if (currency === 'gold' && !(await confirmDialog({ title: `Buy ${i.emoji} ${i.name}?`, body: `Costs 🪙 ${(i.goldPrice ?? i.goldAltPrice)?.toLocaleString()} Gold.` }))) return;
   buying.value = i.id;
   try {
     const r = await api.buy(i.id, currency);
@@ -120,7 +121,7 @@ async function usePower(i: StoreItem) {
   } catch (e) { s.toast({ kind: 'error', title: (e as Error).message }); } finally { using.value = null; }
 }
 async function equip(i: StoreItem) {
-  const key = i.kind as 'frame' | 'flair' | 'theme' | 'banner';
+  const key = i.kind as 'frame' | 'flair' | 'theme' | 'banner' | 'cover' | 'button';
   const r = await api.equip({ [key]: i.equipped ? null : i.id });
   s.applyUser(r.user);
   await load();
@@ -191,15 +192,16 @@ async function claim() {
     </template>
     <div v-else-if="tab !== 'exchange'" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
       <div v-for="i in shown" :key="i.id" class="card overflow-hidden flex flex-col">
-        <div class="h-28 flex items-center justify-center text-5xl relative" :style="{ background: i.preview }">
-          <span class="drop-shadow">{{ i.emoji }}</span>
+        <div class="relative">
+          <ItemPreview :item="i" />
           <span class="absolute top-2 left-2 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase" :class="rarityStyle[i.rarity]">{{ i.rarity }}</span>
           <span v-if="i.limited" class="absolute top-2 right-2 rounded-full px-2 py-0.5 text-[10px] font-bold bg-black/60 text-white">LIMITED</span>
         </div>
         <div class="p-3 flex-1 flex flex-col">
           <p class="text-label-lg">{{ i.name }}</p>
           <p class="text-body-sm text-on-surface-variant flex-1">{{ i.description }}</p>
-          <button v-if="i.owned && ['frame', 'flair', 'theme', 'banner'].includes(i.kind)" class="mt-3 h-9" :class="i.equipped ? 'btn-secondary' : 'btn-primary'" @click="equip(i)">{{ i.equipped ? 'Equipped ✓' : 'Equip' }}</button>
+          <p v-if="i.owned && i.kind === 'font'" class="mt-3 text-label-sm text-primary">Owned ✓ — pick it in your profile builder</p>
+          <button v-else-if="i.owned && ['frame', 'flair', 'theme', 'banner', 'cover', 'button'].includes(i.kind)" class="mt-3 h-9" :class="i.equipped ? 'btn-secondary' : 'btn-primary'" @click="equip(i)">{{ i.equipped ? 'Equipped ✓' : 'Equip' }}</button>
           <template v-else-if="i.goldPrice">
             <p v-if="i.qty && i.kind === 'ticket'" class="text-label-sm text-primary mt-2">You have {{ i.qty }}</p>
             <button v-if="i.qty && i.kind === 'ticket'" class="btn-secondary h-9 mt-2" @click="useTicket(i)">Use</button>
@@ -217,6 +219,7 @@ async function claim() {
           <div v-else class="flex gap-1.5 mt-3">
             <button class="btn-primary h-9 flex-1 px-2" :disabled="!s.user || buying === i.id || (s.user && s.user.sparks < i.price)" @click="buy(i)">✦ {{ i.price.toLocaleString() }}</button>
             <button v-if="i.gemPrice !== null" class="btn-secondary h-9 px-3" :disabled="!s.user || buying === i.id || (s.user && s.user.gems < i.gemPrice)" :title="`${i.gemPrice} Gems`" @click="buy(i, 'gems')">💎 {{ i.gemPrice }}</button>
+            <button v-if="i.goldAltPrice" class="h-9 px-3 rounded-full font-semibold text-[#3b2a00] bg-[linear-gradient(135deg,#fde047,#d4a017)] disabled:opacity-50" :disabled="!s.user || buying === i.id || (s.user && s.user.gold < i.goldAltPrice)" :title="`${i.goldAltPrice} Gold`" @click="buy(i, 'gold')">🪙 {{ i.goldAltPrice }}</button>
           </div>
         </div>
       </div>

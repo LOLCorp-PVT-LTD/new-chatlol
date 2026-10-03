@@ -57,10 +57,10 @@ storeRouter.post('/store/:id/buy', requireAuth, async (req, res) => {
   if (!item) throw new HttpError(404, 'Item not found');
   // Gold-only items (tickets, the crown) are always paid in Gold; nothing else takes Gold.
   const currency = item.goldPrice ? 'gold' : body.currency;
-  if (currency === 'gold' && !item.goldPrice) throw new HttpError(400, 'Gold only buys tickets and the crown', 'not_gold');
+  if (currency === 'gold' && !item.goldPrice && !item.goldAltPrice) throw new HttpError(400, 'That can’t be bought with Gold', 'not_gold');
   const gemPrice = gemPriceFor(item.kind, item.price);
   if (currency === 'gems' && gemPrice === null) throw new HttpError(400, 'This can only be unlocked with earned Sparks', 'sparks_only');
-  const cost = currency === 'gold' ? item.goldPrice : currency === 'gems' ? gemPrice : item.price;
+  const cost = currency === 'gold' ? (item.goldPrice ?? item.goldAltPrice) : currency === 'gems' ? gemPrice : item.price;
   const col = currency;
 
   const won = await db.tx(async () => {

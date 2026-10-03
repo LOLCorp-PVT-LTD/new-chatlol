@@ -8,6 +8,9 @@ export interface Cosmetics {
     flair: string | null;
     theme: string | null;
     banner: string | null;
+    /** Vault cover (designed art) and profile button style. */
+    cover?: string | null;
+    button?: string | null;
 }
 export interface UserPublic {
     id: ID;
@@ -284,7 +287,7 @@ export interface NotificationItem {
     read: boolean;
     createdAt: ISODate;
 }
-export type StoreItemKind = 'frame' | 'flair' | 'theme' | 'banner' | 'gift' | 'crate' | 'boost' | 'streak_freeze' | 'stickers' | 'emojis' | 'unlock' | 'power' | 'ticket' | 'king';
+export type StoreItemKind = 'frame' | 'flair' | 'theme' | 'banner' | 'gift' | 'crate' | 'boost' | 'streak_freeze' | 'stickers' | 'emojis' | 'unlock' | 'power' | 'ticket' | 'king' | 'cover' | 'button' | 'font';
 export type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
 export interface StoreItem {
     id: ID;
@@ -296,6 +299,8 @@ export interface StoreItem {
     gemPrice: number | null;
     /** Gold-only items (tickets, the King's crown): their Gold price. */
     goldPrice: number | null;
+    /** Rare cosmetics can also be bought with Gold. */
+    goldAltPrice?: number | null;
     rarity: Rarity;
     emoji: string;
     preview: string;

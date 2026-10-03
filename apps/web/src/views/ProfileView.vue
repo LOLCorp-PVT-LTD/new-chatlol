@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { loadFont } from '../lib/fonts';
 import { confirmDialog, formDialog, reportDialog } from '../lib/dialog';
 import { computed, onBeforeUnmount, onMounted, provide, ref, watch, watchEffect } from 'vue';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
@@ -283,6 +284,8 @@ async function lookSaved() {
 }
 
 // ——— Page look ———
+// Vault fonts come from Google Fonts: load the one this page uses.
+watchEffect(() => loadFont(PROFILE_FONTS.find((f) => f.key === layout.value.font)?.family));
 const pageStyle = computed(() => ({
   maxWidth: `${PAGE_WIDTHS.find((w) => w.key === layout.value.width)?.px ?? 1040}px`,
   fontFamily: PROFILE_FONTS.find((f) => f.key === layout.value.font)?.css,

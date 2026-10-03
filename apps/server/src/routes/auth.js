@@ -300,7 +300,14 @@ authRouter.post('/me/equip', requireAuth, async (req, res) => {
   const id = uid(req);
   const b = parse(
     z
-      .object({ frame: z.string().nullable(), flair: z.string().nullable(), theme: z.string().nullable(), banner: z.string().nullable() })
+      .object({
+        frame: z.string().nullable(),
+        flair: z.string().nullable(),
+        theme: z.string().nullable(),
+        banner: z.string().nullable(),
+        cover: z.string().nullable(),
+        button: z.string().nullable(),
+      })
       .partial(),
     req.body,
   );

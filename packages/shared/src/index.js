@@ -10,3 +10,4 @@ export * from './permissions.js';
 export * from './themes.js';
 export * from './progression.js';
 export * from './games/index.js';
+export * from './cosmetics.js';

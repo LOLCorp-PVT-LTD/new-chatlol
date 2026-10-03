@@ -910,3 +910,19 @@ test('referrals: invite link, friend joins, inviter gets 1 Gold once the friend 
   assert.equal((await db.users.findOne({ _id: inviter.id })).gold, 1);
   assert.equal((await as('refa').referral()).paid, 1);
 });
+
+test('profile cosmetics: covers and buttons equip, Vault fonts need the item, rare ones also cost Gold', async () => {
+  const u = await signUp('cos');
+  const c = as('cos');
+  await db.users.updateOne({ _id: u.id }, { $set: { sparks: 10_000, gold: 5 } });
+  await c.buy('cover_aurora', 'gold');
+  assert.equal((await db.users.findOne({ _id: u.id })).gold, 4, 'Aurora cover for 1 Gold');
+  await assert.rejects(c.buy('cover_ocean', 'gold'), (e) => e.code === 'not_gold');
+  await c.buy('btn_neon');
+  const eq = await c.equip({ cover: 'cover_aurora', button: 'btn_neon' });
+  assert.deepEqual([eq.user.cosmetics.cover, eq.user.cosmetics.button], ['cover_aurora', 'btn_neon']);
+  const r1 = await c.updateLayout({ font: 'font_orbitron', sections: [] });
+  assert.equal(r1.layout.font, 'default', 'font not owned yet');
+  await c.buy('font_orbitron');
+  assert.equal((await c.updateLayout({ font: 'font_orbitron', sections: [] })).layout.font, 'font_orbitron');
+});

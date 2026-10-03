@@ -1,3 +1,4 @@
+import { SHOP_FONTS } from './cosmetics.js';
 /**
  * Profile page builder: a member arranges sections on a 12-column grid and picks the page's overall look.
  * Shared by the server (validation), web (drag-and-drop editor) and native (renderer + editor).
@@ -54,6 +55,8 @@ export const PROFILE_FONTS = [
   { key: 'mono', label: 'Typewriter', css: "'Courier New', ui-monospace, monospace", native: 'monospace' },
   { key: 'rounded', label: 'Rounded', css: "ui-rounded, 'SF Pro Rounded', 'Nunito', system-ui, sans-serif", native: undefined },
   { key: 'condensed', label: 'Condensed', css: "'Arial Narrow', 'Roboto Condensed', system-ui, sans-serif", native: 'sans-serif-condensed' },
+  // Vault fonts: usable once the member owns the item (`item`), loaded from Google Fonts (`family`).
+  ...SHOP_FONTS.map((f) => ({ key: f.key, label: f.label, css: f.css, native: undefined, item: f.key, family: f.family })),
 ];
 
 const LIMIT = (min, max, def) => ({ limit: { min, max, def } });

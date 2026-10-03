@@ -5,6 +5,7 @@ import {
   PREMIUM_PLANS,
   PREMIUM_PROFILE,
   hasPower,
+  shopFontByKey,
   stripPremiumLayout,
   SHOWCASE_TYPES,
   WALL_MOODS,
@@ -25,6 +26,7 @@ import { serializeShout } from './shouts.js';
 import { friendsFilter, otherOf } from '../lib/friends.js';
 import { emitWallet, notify } from '../lib/rewards.js';
 import { assertClean, classify } from '../lib/moderation.js';
+import { itemIdFor } from '../lib/ids.js';
 import { cleanCounts, myReaction, react } from '../lib/reactions.js';
 import { REACTION_KEYS } from '@chatlol/shared';
 import { assertCanPost } from '../lib/enforcement.js';
@@ -242,6 +244,12 @@ profileRouter.put('/me/profile/layout', requireAuth, async (req, res) => {
   // Premium-only looks and sections are dropped for free members (also covers a Premium pass that ran out).
   let premiumRemoved = [];
   if (!isPremium(owner)) ({ layout, removed: premiumRemoved } = stripPremiumLayout(layout));
+  // Vault fonts need the item.
+  const shopFont = shopFontByKey(layout.font);
+  if (shopFont && !(await db.inventory.findOne({ userId: id, itemId: itemIdFor(shopFont.key), qty: { $gt: 0 } }))) {
+    layout = { ...layout, font: 'default' };
+    premiumRemoved = [...premiumRemoved, 'font'];
+  }
   // Text boxes, quotes and links are public, so they get the full check (threats, scams, NemoGuard), not just the word list.
   const text = layoutText(layout);
   if (text) {

@@ -8,7 +8,7 @@ export type HeaderStyle = 'cover' | 'centered' | 'split' | 'compact';
 export type PageWidth = 'narrow' | 'normal' | 'wide';
 export type SectionGap = 'tight' | 'normal' | 'airy';
 export type CornerStyle = 'sharp' | 'soft' | 'round';
-export type ProfileFont = 'default' | 'serif' | 'mono' | 'rounded' | 'condensed';
+export type ProfileFont = 'default' | 'serif' | 'mono' | 'rounded' | 'condensed' | `font_${string}`;
 export interface SectionConfig {
   limit?: number;
   columns?: number;
@@ -39,7 +39,7 @@ export declare const HEADER_STYLES: Opt<HeaderStyle>[];
 export declare const PAGE_WIDTHS: (Opt<PageWidth> & { px: number })[];
 export declare const SECTION_GAPS: (Opt<SectionGap> & { px: number })[];
 export declare const CORNER_STYLES: (Opt<CornerStyle> & { px: number })[];
-export declare const PROFILE_FONTS: (Opt<ProfileFont> & { css: string; native?: string })[];
+export declare const PROFILE_FONTS: (Opt<ProfileFont> & { css: string; native?: string; item?: string; family?: string })[];
 export declare const PROFILE_SECTIONS: SectionDef[];
 export declare function sectionDef(type: string): SectionDef | undefined;
 export declare const MAX_PROFILE_SECTIONS: number;

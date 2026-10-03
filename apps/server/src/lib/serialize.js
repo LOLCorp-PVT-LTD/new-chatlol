@@ -139,7 +139,7 @@ async function stats(userId) {
   return s;
 }
 
-const NO_COSMETICS = { frame: null, flair: null, theme: null, banner: null };
+const NO_COSMETICS = { frame: null, flair: null, theme: null, banner: null, cover: null, button: null };
 
 export async function userPublic(u, viewerId) {
   const s = await stats(u._id);
@@ -446,6 +446,8 @@ export function serializeStoreItem(i, owned, equipped, qty) {
     gemPrice: i.goldPrice ? null : gemPriceFor(i.kind, i.price),
     /** Gold-only items (tickets, the King's crown) have a Gold price and no Sparks / Gem price. */
     goldPrice: i.goldPrice ?? null,
+    /** Rare cosmetics can also be bought with Gold. */
+    goldAltPrice: i.goldAltPrice ?? null,
     rarity: i.rarity,
     emoji: i.emoji,
     preview: i.preview,

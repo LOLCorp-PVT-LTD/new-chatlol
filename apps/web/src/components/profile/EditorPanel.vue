@@ -4,6 +4,8 @@ import Sortable from 'sortablejs';
 import type { ProfileSection, SectionType } from '@chatlol/shared';
 import { CORNER_STYLES, HEADER_STYLES, LAYOUT_PRESETS, PAGE_WIDTHS, PREMIUM_PROFILE, PROFILE_FONTS, PROFILE_SECTIONS, SECTION_GAPS } from '@chatlol/shared';
 import { useSession } from '../../stores/session';
+import { api } from '../../lib/api';
+import { loadFont } from '../../lib/fonts';
 import Icon from '../Icon.vue';
 import { useProfileCtx } from './context';
 import SectionSettings from './SectionSettings.vue';
@@ -22,12 +24,18 @@ const ctx = useProfileCtx();
 const session = useSession();
 const premium = computed(() => !!session.user?.premiumUntil);
 /** Premium-only options show a crown; free members are pointed at Premium instead of getting them. */
+// Vault fonts need the item; the builder shows them with a 🔒 until bought.
+const ownedItems = ref(new Set<string>());
+void api.inventory().then((r) => (ownedItems.value = new Set(r.items.map((i) => i.id)))).catch(() => {});
+for (const f of PROFILE_FONTS) loadFont(f.family);
+const shopLocked = (key: string) => !!PROFILE_FONTS.find((f) => f.key === key)?.item && !ownedItems.value.has(key);
 const locked = (group: 'header' | 'width' | 'gap' | 'corners' | 'font' | 'section', key: string) => {
+  if (group === 'font' && shopLocked(key)) return true;
   if (premium.value) return false;
   const P = PREMIUM_PROFILE;
   return group === 'header' ? P.headerStyles.includes(key) : group === 'font' ? P.fonts.includes(key) : group === 'width' ? P.pageWidths.includes(key) : group === 'section' ? P.sections.includes(key) : false;
 };
-const premiumNudge = () => session.toast({ kind: 'info', title: 'That’s a Premium perk 👑', body: 'Get Premium to use it on your page.' });
+const premiumNudge = () => session.toast({ kind: 'info', title: 'That’s locked 🔒', body: 'Premium perks need Premium; Vault fonts are in the Sparks Vault → Fonts.' });
 const tab = ref<'add' | 'page' | 'section'>('add');
 const palette = ref<HTMLElement>();
 const used = computed(() => new Set(ctx.layout.value.sections.map((s) => s.type)));
@@ -96,7 +104,7 @@ const set = <K extends 'header' | 'width' | 'gap' | 'corners' | 'font'>(k: K, v:
         <div v-for="g in ([['width', 'Page width', PAGE_WIDTHS], ['gap', 'Spacing', SECTION_GAPS], ['corners', 'Corners', CORNER_STYLES], ['font', 'Font', PROFILE_FONTS]] as const)" :key="g[0]">
           <p class="label mb-2">{{ g[1] }}</p>
           <div class="flex flex-wrap gap-1.5">
-            <button v-for="o in g[2]" :key="o.key" class="chip h-9" :class="{ 'chip-active': ctx.layout.value[g[0]] === o.key }" :style="g[0] === 'font' ? { fontFamily: (o as { css?: string }).css } : {}" @click="locked(g[0], o.key) ? premiumNudge() : set(g[0], o.key)">{{ o.label }}<span v-if="locked(g[0], o.key)">&nbsp;👑</span></button>
+            <button v-for="o in g[2]" :key="o.key" class="chip h-9" :class="{ 'chip-active': ctx.layout.value[g[0]] === o.key }" :style="g[0] === 'font' ? { fontFamily: (o as { css?: string }).css } : {}" @click="locked(g[0], o.key) ? premiumNudge() : set(g[0], o.key)">{{ o.label }}<span v-if="locked(g[0], o.key)">&nbsp;{{ g[0] === 'font' && shopLocked(o.key) ? '🔒' : '👑' }}</span></button>
           </div>
         </div>
         <div><p class="label mb-2">Background, colours, cover & song</p>
