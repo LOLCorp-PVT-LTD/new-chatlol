@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import ScrollRow from '../components/ScrollRow.vue';
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { EXCHANGE, KING, powerByKey, ticketByKey, type PowerKey, type StoreItem, type StoreItemKind, type TicketKey } from '@chatlol/shared';
 import { confirmDialog, promptDialog } from '../lib/dialog';
@@ -22,8 +22,11 @@ const tab = ref<Tab>((['gems', 'power', 'ticket', 'king', 'exchange'] as string[
 const won = ref<StoreItem | null>(null);
 const buying = ref<string | null>(null);
 const chest = ref<{ claimed: boolean; nextAt: string } | null>(null);
-const TABS: [Tab, string][] = [['king', '👑 King'], ['ticket', '🎫 Tickets'], ['power', '⚡ Power-ups'], ['exchange', '🔄 Exchange'], ['gems', '💎 Gems'], ['all', '✨ All'], ['cover', '🖼️ Covers'], ['font', '🔤 Fonts'], ['button', '🔘 Buttons'], ['frame', '⭕ Frames'], ['flair', '🔥 Flairs'], ['theme', '🎨 Themes'], ['banner', '🏙️ Banners'], ['crate', '🎁 Crates'], ['streak_freeze', '🧊 Boosts']];
+watch(() => route.query.tab, (t) => { if (typeof t === 'string' && TABS.some((x) => x[0] === t)) tab.value = t as Tab; });
+const TABS: [Tab, string][] = [['exchange', '🔄 Exchange'], ['king', '👑 King'], ['ticket', '🎫 Tickets'], ['power', '⚡ Power-ups'], ['gems', '💎 Gems'], ['all', '✨ All'], ['cover', '🖼️ Covers'], ['font', '🔤 Fonts'], ['button', '🔘 Buttons'], ['frame', '⭕ Frames'], ['flair', '🔥 Flairs'], ['theme', '🎨 Themes'], ['banner', '🏙️ Banners'], ['crate', '🎁 Crates'], ['streak_freeze', '🧊 Boosts']];
 const rarityStyle: Record<string, string> = { common: 'bg-surface-container text-on-surface-variant', rare: 'bg-sky-100 text-sky-700', epic: 'bg-violet-100 text-violet-700', legendary: 'bg-sunset text-white' };
+const maxGems = computed(() => Math.floor((s.user?.sparks ?? 0) / EXCHANGE.sparksPerGem));
+const maxGold = computed(() => Math.floor((s.user?.gems ?? 0) / EXCHANGE.gemsPerGold));
 const shown = computed(() => items.value.filter((i) => tab.value === 'all' || i.kind === tab.value || (tab.value === 'streak_freeze' && i.kind === 'boost')));
 
 async function load() {
@@ -140,8 +143,11 @@ async function claim() {
       <div class="absolute -right-8 -bottom-12 text-[160px] opacity-20 rotate-12">💎</div>
       <p class="label !text-white/80">Sparks Vault</p>
       <h1 class="text-headline-xl">✦ {{ s.user?.sparks.toLocaleString() ?? 0 }} <span class="text-headline-md opacity-90 ml-2">💎 {{ s.user?.gems.toLocaleString() ?? 0 }}</span> <span class="text-headline-md opacity-90 ml-2">🪙 {{ s.user?.gold.toLocaleString() ?? 0 }}</span></h1>
-      <p class="text-body-md opacity-90 max-w-md">Earn ✦ Sparks by dropping daily, matching the crowd and winning Hot Takes. 💎 Gems are the premium shortcut for cosmetics.</p>
-      <button class="btn bg-white text-flame mt-4 shadow-float" @click="claim"><Icon name="redeem" /> Open Daily Sunset Chest</button>
+      <p class="text-body-md opacity-90 max-w-md">Earn ✦ Sparks everywhere — posts, drops, games, the arcade. Swap {{ EXCHANGE.sparksPerGem.toLocaleString() }} ✦ for 1 💎, and {{ EXCHANGE.gemsPerGold.toLocaleString() }} 💎 for 1 🪙 Gold.</p>
+      <div class="flex flex-wrap gap-2 mt-4">
+        <button class="btn bg-white text-flame shadow-float" @click="claim"><Icon name="redeem" /> Open Daily Sunset Chest</button>
+        <button class="btn bg-white/20 text-white" @click="tab = 'exchange'">🔄 Exchange ✦ → 💎 → 🪙</button>
+      </div>
     </section>
     <section v-if="running.length" class="card p-4 flex flex-wrap gap-2 items-center">
       <span class="label">Active now</span>
@@ -154,11 +160,13 @@ async function claim() {
       <div class="card p-5 space-y-3">
         <p class="text-headline-sm">✦ Sparks → 💎 Gems</p>
         <p class="text-body-sm text-on-surface-variant">{{ EXCHANGE.sparksPerGem.toLocaleString() }} Sparks = 1 Gem</p>
+        <p class="text-body-sm">You have ✦ {{ (s.user?.sparks ?? 0).toLocaleString() }} — enough for <b>{{ maxGems.toLocaleString() }}</b> 💎 <button v-if="maxGems" class="underline text-primary" @click="swap.gems = maxGems">use max</button></p>
         <div class="flex gap-2"><input v-model.number="swap.gems" type="number" min="1" class="input h-11 w-28" /><button class="btn-primary h-11 flex-1" :disabled="swapping || !s.user || s.user.sparks < swap.gems * EXCHANGE.sparksPerGem" @click="doExchange('gems')">Get {{ swap.gems || 1 }} 💎 for ✦ {{ ((swap.gems || 1) * EXCHANGE.sparksPerGem).toLocaleString() }}</button></div>
       </div>
       <div class="card p-5 space-y-3">
         <p class="text-headline-sm">💎 Gems → 🪙 Gold</p>
         <p class="text-body-sm text-on-surface-variant">{{ EXCHANGE.gemsPerGold.toLocaleString() }} Gems = 1 Gold. Gold buys tickets and the King’s crown.</p>
+        <p class="text-body-sm">You have 💎 {{ (s.user?.gems ?? 0).toLocaleString() }} — enough for <b>{{ maxGold.toLocaleString() }}</b> 🪙 <button v-if="maxGold" class="underline text-primary" @click="swap.gold = maxGold">use max</button></p>
         <div class="flex gap-2"><input v-model.number="swap.gold" type="number" min="1" class="input h-11 w-28" /><button class="btn-primary h-11 flex-1" :disabled="swapping || !s.user || s.user.gems < swap.gold * EXCHANGE.gemsPerGold" @click="doExchange('gold')">Get {{ swap.gold || 1 }} 🪙 for 💎 {{ ((swap.gold || 1) * EXCHANGE.gemsPerGold).toLocaleString() }}</button></div>
       </div>
     </section>

@@ -454,6 +454,8 @@ export interface Insights {
 }
 export interface HomeData {
     stats: { members: number; online: number };
+    /** Richest members (wealth in Sparks, Gems and Gold valued at the exchange rate). */
+    royalty: { rank: number; user: UserPublic; sparks: number; gems: number; gold: number; worth: number }[];
     popularMembers: UserPublic[];
     rate: Post | null;
     forums: ShoutThread[];

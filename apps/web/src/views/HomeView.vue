@@ -155,6 +155,21 @@ async function nextRate() {
         </RouterLink>
       </section>
 
+      <!-- Royalty: the richest members -->
+      <section v-if="h.royalty?.length" class="card p-5 relative overflow-hidden">
+        <div class="absolute -right-6 -top-6 text-[110px] opacity-10 rotate-12 pointer-events-none">👑</div>
+        <SectionHead title="Royalty" icon="workspace_premium" to="/vault?tab=exchange" hint="The richest on ChatLOL" />
+        <RouterLink v-for="e in h.royalty" :key="e.user.id" :to="`/u/${e.user.handle}`" class="flex items-center gap-3 py-2">
+          <span class="w-8 h-8 rounded-full flex items-center justify-center font-bold shrink-0"
+            :class="e.rank === 1 ? 'bg-[linear-gradient(135deg,#fff3b0,#fcd34d_45%,#d4a017)] text-[#3b2a00] shadow-[0_0_14px_rgb(212_160_23/.6)]' : e.rank <= 3 ? 'bg-[#f3e2b3] text-[#6b4e00]' : 'bg-surface-container-low'">{{ e.rank === 1 ? '👑' : e.rank }}</span>
+          <Avatar :user="e.user" :size="40" />
+          <div class="flex-1 min-w-0">
+            <UserName :user="e.user" :link="false" class="text-body-md" />
+            <p class="text-[11px] text-on-surface-variant tabular-nums">🪙 {{ compact(e.gold) }} · 💎 {{ compact(e.gems) }} · ✦ {{ compact(e.sparks) }}</p>
+          </div>
+        </RouterLink>
+      </section>
+
       <!-- Hall of Fame -->
       <section class="card p-5">
         <SectionHead title="Hall of Fame" icon="emoji_events" to="/leaderboard" hint="All-time top vibes" />
