@@ -133,7 +133,7 @@ export function createApi(opts) {
     youtubeResolve: (url) => req('GET', `/youtube/resolve${q({ url })}`),
     festival: () => req('GET', '/festival'),
     // clans
-    clans: (query) => req('GET', `/clans${q({ q: query })}`),
+    clans: (query, sort) => req('GET', `/clans${q({ q: query, sort })}`),
     clan: (id) => req('GET', `/clans/${id}`),
     createClan: (b) => req('POST', '/clans', b),
     updateClan: (id, b) => req('PATCH', `/clans/${id}`, b),
@@ -149,6 +149,9 @@ export function createApi(opts) {
     declareWar: (id, opponentId, stake) => req('POST', `/clans/${id}/wars`, { opponentId, stake }),
     answerWar: (warId, verdict) => req('POST', `/clan-wars/${warId}/${verdict}`),
     clanWars: () => req('GET', '/clan-wars'),
+    clanTerritories: () => req('GET', '/clan-territories'),
+    buildClanHq: (id, key) => req('POST', `/clans/${id}/hq/${key}`),
+    joinSiege: (id, territory) => req('POST', `/clans/${id}/siege`, { territory }),
     searchGames: (query) => req('GET', `/games-catalog/search${q({ q: query })}`),
     // radio: station = 'shouts' or 'lounge:<id>'
     radio: (station) => req('GET', `/radio/${station.replace(':', '/')}`),

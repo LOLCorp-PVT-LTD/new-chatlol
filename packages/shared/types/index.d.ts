@@ -17,5 +17,6 @@ export * from './arcade';
 export * from './youtube';
 export * from './festivals';
 export * from './clans';
+export * from './clanWorld';
 export * from './gamesCatalog';
 export * from './legal';

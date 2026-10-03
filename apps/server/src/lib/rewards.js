@@ -26,9 +26,9 @@ export async function grant(userId, sparks, xp, reason, emit = true, { boost = t
   let boosted = false;
   if (boost && sparks > 0 && hasPower(before, 'boost_2x')) (sparks *= 2), (boosted = true);
   if (boost && xp > 0 && hasPower(before, 'xp_surge')) (xp *= 2), (boosted = true);
-  // Clans: the level-6 perk adds 5% to members' Spark rewards.
-  const clans = boost && sparks > 0 && !before.isAi ? await import('./clans.js') : null;
-  if (clans) sparks = await clans.clanSparkBonus(userId, sparks);
+  // Clans: perks, HQ buildings and territories boost members' Sparks / XP.
+  const clans = boost && (sparks > 0 || xp > 0) && !before.isAi ? await import('./clans.js') : null;
+  if (clans) ({ sparks, xp } = await clans.clanRewardBonus(userId, sparks, xp, reason));
   // Sparks never go below zero.
   await db.users.updateOne({ _id: userId }, [
     { $set: { sparks: { $max: [0, { $add: ['$sparks', sparks] }] }, xp: { $add: ['$xp', xp] } } },

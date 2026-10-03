@@ -16,7 +16,7 @@ export declare const CLAN_TAG_RE: RegExp;
 
 export interface ClanSummary {
   id: string; name: string; tag: string; emoji: string; description: string; color: string | null; bannerUrl: string | null;
-  policy: 'open' | 'request' | 'invite'; rep: number; level: number; nextLevel: ClanLevel | null; memberCount: number; maxMembers: number;
+  policy: 'open' | 'request' | 'invite'; rep: number; level: number; nextLevel: ClanLevel | null; memberCount: number; maxMembers: number; reputation: number; prestige: number; minLevel: number;
   wins: number; losses: number; treasury: number; trophies: { week: number; place: number; at: string }[]; loungeId: string | null; createdAt: string;
 }
 export interface ClanWarSide { id: string; name?: string; tag?: string; emoji?: string; score: number }

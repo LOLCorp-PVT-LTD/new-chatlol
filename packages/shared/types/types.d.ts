@@ -13,8 +13,8 @@ export interface Cosmetics {
     button?: string | null;
 }
 export interface UserPublic {
-    /** Clan tag shown next to their name (clans level 2+). */
-    clan?: { id: string; tag: string; name: string; color: string | null; legend: boolean } | null;
+    /** Their clan (badge on the profile; tag next to their name from clan level 2). `glow` = Prestige upgrade level. */
+    clan?: { id: string; tag: string; name: string; emoji: string; color: string | null; level: number; legend: boolean; glow: number } | null;
     id: ID;
     handle: string;
     displayName: string;

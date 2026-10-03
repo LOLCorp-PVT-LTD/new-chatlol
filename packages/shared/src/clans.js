@@ -37,10 +37,10 @@ export const CLAN_WAR = { hours: 48, winRep: 750, maxStake: 50_000, minLevel: 3 
  * three clans of the week by Rep earned share a Gem prize, paid to every member.
  */
 export const CLAN_EVENTS = [
-  { key: 'rush', name: 'Spark Rush', emoji: '⚡', desc: 'Every Spark your members earn counts. Double Rep all weekend.' },
-  { key: 'arcade', name: 'Arcade Clash', emoji: '🕹️', desc: 'Arcade points count double toward clan Rep this week.' },
-  { key: 'social', name: 'Social Surge', emoji: '📣', desc: 'Posts, shouts and comments earn extra clan Rep this week.' },
-  { key: 'arena', name: 'Arena Week', emoji: '⚔️', desc: 'Arena and tournament wins earn bonus clan Rep this week.' },
+  { key: 'rush', name: 'Spark Rush', emoji: '⚡', desc: 'Every Spark your members earn counts. Double Clan XP all weekend.' },
+  { key: 'arcade', name: 'Arcade Clash', emoji: '🕹️', desc: 'Arcade points count double toward Clan XP this week.' },
+  { key: 'social', name: 'Social Surge', emoji: '📣', desc: 'Posts, shouts and comments earn extra Clan XP this week.' },
+  { key: 'arena', name: 'Arena Week', emoji: '⚔️', desc: 'Arena and tournament wins earn bonus Clan XP this week.' },
 ];
 export const CLAN_EVENT_PRIZES = [{ place: 1, gems: 30 }, { place: 2, gems: 15 }, { place: 3, gems: 8 }];
 

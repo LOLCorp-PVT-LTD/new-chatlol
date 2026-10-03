@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { CLAN_FOUND, CLAN_JOIN_POLICIES, CLAN_TAG_RE, CLAN_WAR, clanEventFor, clanHas, clanLevelFor, levelForXp, nextClanLevel } from '@chatlol/shared';
+import { CLAN_FOUND, CLAN_JOIN_POLICIES, CLAN_TAG_RE, CLAN_WAR, HQ_BUILDINGS, HQ_LEVELS, SIEGE, TERRITORIES, clanEventFor, clanHas, clanLevelFor, clanMaxMembers, hqLevel, levelForXp, nextClanLevel, objectiveTier, siegeFor } from '@chatlol/shared';
 import { db, newId, now } from '../db.js';
 import { optionalAuth, requireAuth, uid } from '../lib/auth.js';
 import { HttpError, parse, rateLimit } from '../lib/http.js';
@@ -9,6 +9,7 @@ import { emitWallet, notify } from '../lib/rewards.js';
 import { assertClean } from '../lib/moderation.js';
 import { track } from '../lib/activity.js';
 import { forgetMember, membershipOf, syncMemberBadges } from '../lib/clans.js';
+import { checkAchievements, forgetBonuses, objectivesFor, siegeTarget, trackObjective } from '../lib/clanWorld.js';
 
 /**
  * Clans: found one (Gold), join, request / invite, roles (leader → officers → members), a shared treasury of Sparks,
@@ -20,7 +21,8 @@ function clanPublic(c, memberCount) {
   const lvl = clanLevelFor(c.rep);
   return {
     id: c._id, name: c.name, tag: c.tag, emoji: c.emoji, description: c.description ?? '', color: c.color ?? null, bannerUrl: c.bannerUrl ?? null,
-    policy: c.policy, rep: Math.floor(c.rep), level: lvl.level, nextLevel: nextClanLevel(c.rep), memberCount, maxMembers: lvl.members,
+    policy: c.policy, rep: Math.floor(c.rep), level: lvl.level, nextLevel: nextClanLevel(c.rep), memberCount, maxMembers: clanMaxMembers(c.rep, c.hq),
+    reputation: Math.floor(c.reputation ?? 0), prestige: c.prestige ?? 0, minLevel: c.minLevel ?? 0,
     wins: c.wins ?? 0, losses: c.losses ?? 0, treasury: c.treasury ?? 0, trophies: c.trophies ?? [], loungeId: c.loungeId ?? null, createdAt: c.createdAt,
   };
 }
@@ -38,7 +40,7 @@ async function roleIn(clanId, userId, need = 'member') {
   return m;
 }
 async function addMember(c, userId, role = 'member') {
-  if ((await countMembers(c._id)) >= clanLevelFor(c.rep).members) throw new HttpError(409, 'This clan is full — it needs a higher level for more members');
+  if ((await countMembers(c._id)) >= clanMaxMembers(c.rep, c.hq)) throw new HttpError(409, 'This clan is full — it needs a higher level for more members');
   try {
     await db.clanMembers.insertOne({ _id: newId(), clanId: c._id, userId, role, rep: 0, joinedAt: now() });
   } catch {
@@ -47,6 +49,7 @@ async function addMember(c, userId, role = 'member') {
   forgetMember(userId);
   await db.clanRequests.deleteMany({ userId });
   await syncMemberBadges(c._id);
+  void checkAchievements(c._id).catch(() => {});
 }
 async function removeMember(clanId, userId) {
   await db.clanMembers.deleteOne({ clanId, userId });
@@ -54,11 +57,16 @@ async function removeMember(clanId, userId) {
   await db.users.updateOne({ _id: userId }, { $unset: { clan: '' } });
 }
 
+/** Treasury ledger: every deposit and purchase, visible to members. */
+async function logTreasury(clanId, userId, amount, what) {
+  await db.clanLedger.insertOne({ _id: newId(), clanId, userId, amount, what, at: now() });
+}
+
 // ——— Browse ———
 clansRouter.get('/clans', optionalAuth, async (req, res) => {
   const q = String(req.query.q ?? '').trim().toLowerCase();
   const filter = q ? { $or: [{ nameLower: { $regex: q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') } }, { tag: q.toUpperCase() }] } : {};
-  const rows = await db.clans.find(filter).sort({ rep: -1 }).limit(50).toArray();
+  const rows = await db.clans.find(filter).sort(req.query.sort === 'reputation' ? { reputation: -1, rep: -1 } : { rep: -1 }).limit(50).toArray();
   const mine = req.userId ? await membershipOf(req.userId) : null;
   const ev = clanEventFor();
   const week = await db.clanWeeks.find({ week: ev.week }).sort({ rep: -1 }).limit(10).toArray();
@@ -93,6 +101,14 @@ clansRouter.get('/clans/:id', optionalAuth, async (req, res) => {
       a: { ...others.get(w.aId), id: w.aId, score: Math.floor(w.aScore ?? 0) }, b: { ...others.get(w.bId), id: w.bId, score: Math.floor(w.bScore ?? 0) },
       incoming: w.status === 'pending' && w.bId === c._id,
     })),
+    world: {
+      reputation: Math.floor(c.reputation ?? 0), hq: c.hq ?? {}, tier: objectiveTier(c.rep), objectives: me ? await objectivesFor(c) : [],
+      achievements: c.achievements ?? [], territories: (await db.territories.find({ clanId: c._id }, { projection: { _id: 1 } }).toArray()).map((t) => t._id),
+      siegeTarget: await siegeTarget(c._id), minLevel: c.minLevel ?? 0,
+    },
+    ledger: me
+      ? await Promise.all((await db.clanLedger.find({ clanId: c._id }).sort({ at: -1 }).limit(30).toArray()).map(async (l) => ({ user: l.userId ? await author(l.userId) : null, amount: l.amount, what: l.what, at: l.at })))
+      : [],
     perks: { tag: clanHas(c.rep, 'tag'), wars: clanHas(c.rep, 'wars'), lounge: clanHas(c.rep, 'lounge'), banner: clanHas(c.rep, 'banner'), bonus: clanHas(c.rep, 'bonus'), radio: clanHas(c.rep, 'radio'), legend: clanHas(c.rep, 'legend') },
   });
 });
@@ -134,7 +150,7 @@ clansRouter.patch('/clans/:id', requireAuth, async (req, res) => {
   const c = await clanOr404(req.params.id);
   await roleIn(c._id, uid(req), 'leader');
   const b = parse(
-    clanBody.partial().extend({ color: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(), bannerUrl: z.string().url().max(600).nullable().optional() }),
+    clanBody.partial().extend({ minLevel: z.number().int().min(0).max(100).optional(), color: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(), bannerUrl: z.string().url().max(600).nullable().optional() }),
     req.body,
   );
   if ((b.color !== undefined || b.bannerUrl !== undefined) && !clanHas(c.rep, 'banner')) throw new HttpError(403, 'Custom colour and banner unlock at clan level 5');
@@ -166,6 +182,10 @@ clansRouter.post('/clans/:id/join', requireAuth, async (req, res) => {
   const me = uid(req);
   const c = await clanOr404(req.params.id);
   if (await membershipOf(me)) throw new HttpError(409, 'You’re already in a clan — leave it first');
+  if (c.minLevel) {
+    const u = await db.users.findOne({ _id: me }, { projection: { xp: 1 } });
+    if (levelForXp(u?.xp ?? 0) < c.minLevel) throw new HttpError(403, `${c.name} takes members from level ${c.minLevel}`);
+  }
   const invite = await db.clanRequests.findOne({ clanId: c._id, userId: me, invited: true });
   if (c.policy === 'open' || invite) {
     await addMember(c, me);
@@ -266,6 +286,9 @@ clansRouter.post('/clans/:id/donate', requireAuth, async (req, res) => {
   await db.clans.updateOne({ _id: c._id }, { $inc: { treasury: sparks } });
   await db.clanMembers.updateOne({ clanId: c._id, userId: me }, { $inc: { donated: sparks } });
   void emitWallet(me);
+  await logTreasury(c._id, me, sparks, 'Deposit');
+  await trackObjective(c._id, 'donate', sparks);
+  await checkAchievements(c._id);
   res.json({ treasury: (c.treasury ?? 0) + sparks });
 });
 
@@ -341,4 +364,66 @@ clansRouter.get('/clan-wars', optionalAuth, async (_req, res) => {
   res.json({
     wars: wars.map((w) => ({ id: w._id, stake: w.stake, endsAt: w.endsAt, a: { ...names.get(w.aId), id: w.aId, score: Math.floor(w.aScore) }, b: { ...names.get(w.bId), id: w.bId, score: Math.floor(w.bScore) } })),
   });
+});
+
+// ——— Clan HQ: buildings bought from the treasury ———
+clansRouter.post('/clans/:id/hq/:key', requireAuth, async (req, res) => {
+  const c = await clanOr404(req.params.id);
+  await roleIn(c._id, uid(req), 'officer');
+  const b = HQ_BUILDINGS.find((x) => x.key === req.params.key);
+  if (!b) throw new HttpError(404, 'No such building');
+  const cur = hqLevel(c.hq, b.key);
+  const next = HQ_LEVELS[cur];
+  if (!next) throw new HttpError(409, `${b.name} is already fully built`);
+  if (clanLevelFor(c.rep).level < next.clanLevel) throw new HttpError(403, `${b.name} level ${next.level} needs clan level ${next.clanLevel}`);
+  const r = await db.clans.updateOne(
+    { _id: c._id, treasury: { $gte: next.cost }, [`hq.${b.key}`]: cur ? cur : { $in: [0, null] } },
+    { $inc: { treasury: -next.cost }, $set: { [`hq.${b.key}`]: next.level } },
+  );
+  if (!r.modifiedCount) throw new HttpError(402, `The treasury needs ${next.cost.toLocaleString()} Sparks`);
+  forgetBonuses(c._id);
+  await logTreasury(c._id, uid(req), -next.cost, `Upgraded ${b.name} to level ${next.level}`);
+  if (b.key === 'prestige') await syncMemberBadges(c._id);
+  await checkAchievements(c._id);
+  res.json({ clan: clanPublic(await db.clans.findOne({ _id: c._id }), await countMembers(c._id)) });
+});
+
+// ——— Territories & the Siege ———
+clansRouter.get('/clan-territories', optionalAuth, async (req, res) => {
+  const s = siegeFor();
+  const held = new Map((await db.territories.find({}).toArray()).map((t) => [t._id, t]));
+  const entries = await db.clanSieges.find({ week: s.week }).sort({ score: -1 }).toArray();
+  const ids = [...new Set([...[...held.values()].map((t) => t.clanId), ...entries.map((e) => e.clanId)])];
+  const clans = new Map((await db.clans.find({ _id: { $in: ids } }, { projection: { name: 1, tag: 1, emoji: 1 } }).toArray()).map((c) => [c._id, c]));
+  const mine = req.userId ? await membershipOf(req.userId) : null;
+  res.json({
+    siege: s,
+    myClanId: mine?.clanId ?? null,
+    myTarget: mine ? await siegeTarget(mine.clanId, s.week) : null,
+    territories: TERRITORIES.map((t) => {
+      const h = held.get(t.key);
+      const hc = h && clans.get(h.clanId);
+      return {
+        ...t,
+        holder: hc ? { id: hc._id, name: hc.name, tag: hc.tag, emoji: hc.emoji, since: h.since } : null,
+        history: [...(h?.history ?? [])].reverse(),
+        battles: [...(h?.battles ?? [])].reverse(),
+        contenders: entries.filter((e) => e.territory === t.key).slice(0, 5).map((e) => ({ clanId: e.clanId, name: clans.get(e.clanId)?.name, tag: clans.get(e.clanId)?.tag, emoji: clans.get(e.clanId)?.emoji, score: Math.floor(e.score ?? 0), defending: h?.clanId === e.clanId })),
+      };
+    }),
+  });
+});
+
+clansRouter.post('/clans/:id/siege', requireAuth, async (req, res) => {
+  const c = await clanOr404(req.params.id);
+  await roleIn(c._id, uid(req), 'officer');
+  const { territory } = parse(z.object({ territory: z.enum(TERRITORIES.map((t) => t.key)) }), req.body);
+  if (clanLevelFor(c.rep).level < SIEGE.minLevel) throw new HttpError(403, `Clans join the Siege from level ${SIEGE.minLevel}`);
+  if ((c.reputation ?? 0) < SIEGE.minReputation) throw new HttpError(403, `Clans need ${SIEGE.minReputation} Reputation to join the Siege — complete quests and win wars first`);
+  const s = siegeFor();
+  if (s.over) throw new HttpError(409, 'This week’s Siege is over — the next one opens Monday');
+  const row = await db.clanSieges.findOne({ week: s.week, clanId: c._id });
+  if (row?.score > 0 && row.territory !== territory) throw new HttpError(409, 'Your clan is already fighting for another territory this Siege');
+  await db.clanSieges.updateOne({ week: s.week, clanId: c._id }, { $set: { territory }, $setOnInsert: { score: 0, at: new Date().toISOString() } }, { upsert: true });
+  res.json({ ok: true, territory });
 });

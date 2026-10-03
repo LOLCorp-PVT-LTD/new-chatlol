@@ -34,6 +34,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/admin/:section?', component: () => import('./views/AdminView.vue'), meta: { auth: true, rails: false, title: 'Admin' } },
   { path: '/lounges', component: () => import('./views/LoungesView.vue'), meta: { title: 'Lounges' } },
   { path: '/clans', component: () => import('./views/ClansView.vue'), meta: { title: 'Clans' } },
+  { path: '/clans/map', component: () => import('./views/ClanMapView.vue'), meta: { title: 'Social Map' } },
   { path: '/clans/:id', component: () => import('./views/ClanView.vue'), meta: { title: 'Clan' } },
   { path: '/lounges/:id', component: () => import('./views/LoungeRoomView.vue'), meta: { remount: true, rails: false, title: 'Lounge' } },
   { path: '/live', component: () => import('./views/LiveView.vue'), meta: { title: 'Live' } },

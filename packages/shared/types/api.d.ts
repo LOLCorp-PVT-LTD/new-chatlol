@@ -375,10 +375,10 @@ export declare function createApi(opts: ApiClientOptions): {
     radioRemove: (station: string, itemId: ID) => Promise<import('./types').RadioState>;
     radioSkip: (station: string) => Promise<import('./types').RadioState>;
     radioEnded: (station: string, trackId: string) => Promise<{ ok: true }>;
-    clans: (q?: string) => Promise<{ clans: import('./clans').ClanSummary[]; myClanId: string | null; found: { gold: number; minLevel: number }; event: ReturnType<typeof import('./clans').clanEventFor> & { standings: { rank: number; clanId: string; name?: string; tag?: string; emoji?: string; rep: number }[] } }>;
-    clan: (id: string) => Promise<{ clan: import('./clans').ClanSummary; myRole: 'leader' | 'officer' | 'member' | null; myRequest: { invited: boolean } | null; members: { user: import('./types').UserPublic; role: 'leader' | 'officer' | 'member'; rep: number; joinedAt: string }[]; requests: { user: import('./types').UserPublic; at: string }[]; wars: import('./clans').ClanWar[]; perks: Record<'tag' | 'wars' | 'lounge' | 'banner' | 'bonus' | 'radio' | 'legend', boolean> }>;
+    clans: (q?: string, sort?: 'rep' | 'reputation') => Promise<{ clans: import('./clans').ClanSummary[]; myClanId: string | null; found: { gold: number; minLevel: number }; event: ReturnType<typeof import('./clans').clanEventFor> & { standings: { rank: number; clanId: string; name?: string; tag?: string; emoji?: string; rep: number }[] } }>;
+    clan: (id: string) => Promise<{ clan: import('./clans').ClanSummary; myRole: 'leader' | 'officer' | 'member' | null; myRequest: { invited: boolean } | null; members: { user: import('./types').UserPublic; role: 'leader' | 'officer' | 'member'; rep: number; joinedAt: string }[]; requests: { user: import('./types').UserPublic; at: string }[]; wars: import('./clans').ClanWar[]; world: import('./clanWorld').ClanWorldInfo; ledger: { user: import('./types').UserPublic | null; amount: number; what: string; at: string }[]; perks: Record<'tag' | 'wars' | 'lounge' | 'banner' | 'bonus' | 'radio' | 'legend', boolean> }>;
     createClan: (b: { name: string; tag: string; emoji: string; description?: string; policy?: 'open' | 'request' | 'invite' }) => Promise<{ clan: import('./clans').ClanSummary }>;
-    updateClan: (id: string, b: Partial<{ name: string; tag: string; emoji: string; description: string; policy: 'open' | 'request' | 'invite'; color: string | null; bannerUrl: string | null }>) => Promise<{ clan: import('./clans').ClanSummary }>;
+    updateClan: (id: string, b: Partial<{ name: string; tag: string; emoji: string; description: string; policy: 'open' | 'request' | 'invite'; color: string | null; bannerUrl: string | null; minLevel: number }>) => Promise<{ clan: import('./clans').ClanSummary }>;
     disbandClan: (id: string) => Promise<{ ok: true }>;
     joinClan: (id: string) => Promise<{ joined?: boolean; requested?: boolean }>;
     leaveClan: (id: string) => Promise<{ ok: true }>;
@@ -392,6 +392,9 @@ export declare function createApi(opts: ApiClientOptions): {
     answerWar: (warId: string, verdict: 'accept' | 'decline') => Promise<{ ok: true }>;
     searchGames: (q?: string) => Promise<{ games: import('./gamesCatalog').ProfileGame[] }>;
     clanWars: () => Promise<{ wars: import('./clans').ClanWar[] }>;
+    clanTerritories: () => Promise<{ siege: ReturnType<typeof import('./clanWorld').siegeFor>; myClanId: string | null; myTarget: string | null; territories: import('./clanWorld').TerritoryState[] }>;
+    buildClanHq: (id: string, key: import('./clanWorld').HqKey) => Promise<{ clan: import('./clans').ClanSummary }>;
+    joinSiege: (id: string, territory: string) => Promise<{ ok: true; territory: string }>;
     festival: () => Promise<{ festival: import('./festivals').FestivalSummary | null; loungeId?: ID | null; quiz?: { questions: { q: string; choices: string[] }[]; done: boolean; score: number | null; perRight: number; perfectBonus: number } }>;
     festivalQuiz: (answers: number[]) => Promise<{ right: number; total: number; answers: number[]; reward: RewardEvent | null }>;
     adminFestivals: () => Promise<{ current: import('./festivals').FestivalSummary | null; upcoming: (import('./festivals').FestivalSummary & { enabled: boolean })[]; all: { key: string; name: string; emoji: string }[] }>;

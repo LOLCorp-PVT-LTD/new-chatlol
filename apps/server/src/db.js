@@ -69,6 +69,10 @@ export const COLLECTIONS = [
   'clanRequests',
   'clanWars',
   'clanWeeks',
+  'clanSieges',
+  'clanObjectives',
+  'territories',
+  'clanLedger',
   'tournaments',
   'tournamentEntries',
 ];

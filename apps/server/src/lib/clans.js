@@ -1,5 +1,6 @@
-import { CLAN_EVENT_PRIZES, CLAN_WAR, REP_PER_SPARKS, clanEventFor, clanHas, clanLevelFor } from '@chatlol/shared';
+import { CLAN_EVENT_PRIZES, CLAN_WAR, REP_PER_SPARKS, clanEventFor, clanLevelFor } from '@chatlol/shared';
 import { db, newId, now } from '../db.js';
+import { addReputation, checkAchievements, clanBonuses, clanBoost, scoreSiege, trackReward } from './clanWorld.js';
 
 /**
  * Clans on the server: membership lookups (cached briefly), Rep from members' activity, level-ups, the Clan Wars
@@ -15,13 +16,10 @@ export async function membershipOf(userId) {
 }
 export const forgetMember = (userId) => memberCache.delete(userId);
 
-/** Clan bonus perk (level 6): +5% Sparks for members. Called from grant() before paying out. */
-export async function clanSparkBonus(userId, sparks) {
-  if (sparks <= 0) return sparks;
+/** Clan boosts on a member's reward: the level-6 perk, the HQ Workshop, territories. Called from grant(). */
+export async function clanRewardBonus(userId, sparks, xp, reason) {
   const m = await membershipOf(userId);
-  if (!m) return sparks;
-  const clan = await db.clans.findOne({ _id: m.clanId }, { projection: { rep: 1 } });
-  return clan && clanHas(clan.rep, 'bonus') ? Math.round(sparks * 1.05) : sparks;
+  return m ? clanBoost(m.clanId, sparks, xp, reason) : { sparks, xp };
 }
 
 /** How much this reward counts this week (weekend double Rep, plus the week's themed bonus). */
@@ -40,7 +38,11 @@ export async function addRepFromSparks(userId, sparks, reason) {
   if (sparks <= 0) return;
   const m = await membershipOf(userId);
   if (!m) return;
-  await addClanRep(m.clanId, (sparks / REP_PER_SPARKS) * multiplier(reason), userId);
+  const b = await clanBonuses(m.clanId);
+  const rep = (sparks / REP_PER_SPARKS) * multiplier(reason) * (1 + b.clanxp / 100);
+  await addClanRep(m.clanId, rep, userId);
+  await scoreSiege(m.clanId, rep);
+  await trackReward(m.clanId, userId, sparks, reason);
 }
 
 export async function addClanRep(clanId, rep, userId = null) {
@@ -51,8 +53,9 @@ export async function addClanRep(clanId, rep, userId = null) {
   const week = clanEventFor().week;
   await db.clanWeeks.updateOne({ week, clanId }, { $inc: { rep }, $setOnInsert: { at: now() } }, { upsert: true });
   // Active war: the score goes to whichever side this clan is on.
-  await db.clanWars.updateOne({ status: 'active', aId: clanId }, { $inc: { aScore: rep } });
-  await db.clanWars.updateOne({ status: 'active', bId: clanId }, { $inc: { bScore: rep } });
+  const war = rep * (1 + (await clanBonuses(clanId)).war / 100);
+  await db.clanWars.updateOne({ status: 'active', aId: clanId }, { $inc: { aScore: war } });
+  await db.clanWars.updateOne({ status: 'active', bId: clanId }, { $inc: { bScore: war } });
   const from = clanLevelFor(before.rep);
   const to = clanLevelFor(before.rep + rep);
   if (to.level > from.level) await onLevelUp(clanId, before.name, to);
@@ -60,6 +63,7 @@ export async function addClanRep(clanId, rep, userId = null) {
 
 async function onLevelUp(clanId, name, lvl) {
   await syncMemberBadges(clanId);
+  await checkAchievements(clanId);
   const { notify } = await import('./rewards.js');
   for (const m of await db.clanMembers.find({ clanId }, { projection: { userId: 1 } }).toArray())
     await notify(m.userId, { kind: 'system', title: `🏰 ${name} reached level ${lvl.level}!`, body: `Unlocked: ${lvl.perk}`, link: `/clans/${clanId}` });
@@ -70,7 +74,7 @@ export async function syncMemberBadges(clanId) {
   const c = await db.clans.findOne({ _id: clanId });
   if (!c) return;
   const ids = (await db.clanMembers.find({ clanId }, { projection: { userId: 1 } }).toArray()).map((m) => m.userId);
-  await db.users.updateMany({ _id: { $in: ids } }, { $set: { clan: { id: c._id, tag: c.tag, name: c.name, color: c.color ?? null, level: clanLevelFor(c.rep).level } } });
+  await db.users.updateMany({ _id: { $in: ids } }, { $set: { clan: { id: c._id, tag: c.tag, name: c.name, emoji: c.emoji, color: c.color ?? null, level: clanLevelFor(c.rep).level, glow: c.hq?.prestige ?? 0 } } });
 }
 
 // ——— Clan Wars ———
@@ -93,6 +97,8 @@ export async function resolveClanWars() {
       await db.clans.updateOne({ _id: winner }, { $inc: { treasury: w.stake * 2, wins: 1 } });
       await db.clans.updateOne({ _id: winner === w.aId ? w.bId : w.aId }, { $inc: { losses: 1 } });
       await addClanRep(winner, CLAN_WAR.winRep);
+      await addReputation(winner, 20);
+      await checkAchievements(winner);
     }
     const [a, b] = await Promise.all([db.clans.findOne({ _id: w.aId }), db.clans.findOne({ _id: w.bId })]);
     const title = winner ? `⚔️ ${(winner === w.aId ? a : b)?.name} won the war!` : '⚔️ The war ended in a draw';
@@ -117,7 +123,8 @@ export async function payClanWeek() {
     const prize = CLAN_EVENT_PRIZES[i];
     const clan = await db.clans.findOne({ _id: row.clanId });
     if (!clan) continue;
-    await db.clans.updateOne({ _id: clan._id }, { $push: { trophies: { week: last, place: prize.place, at: now() } } });
+    await db.clans.updateOne({ _id: clan._id }, { $push: { trophies: { week: last, place: prize.place, at: now() } }, $inc: { reputation: 40 - i * 15 } });
+    await checkAchievements(clan._id);
     for (const m of await db.clanMembers.find({ clanId: clan._id }, { projection: { userId: 1 } }).toArray()) {
       await db.users.updateOne({ _id: m.userId }, { $inc: { gems: prize.gems } });
       await notify(m.userId, { kind: 'system', title: `🏆 ${clan.name} placed #${prize.place} in last week’s clan event!`, body: `+${prize.gems} 💎 for every member`, link: `/clans/${clan._id}` });
