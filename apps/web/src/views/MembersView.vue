@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ScrollRow from '../components/ScrollRow.vue';
 import { onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { UserPublic } from '@chatlol/shared';
@@ -46,14 +47,14 @@ async function dm(u: UserPublic) {
     <h1 class="text-headline-xl">Browse Members</h1>
     <div class="relative"><Icon name="search" class="absolute left-5 top-1/2 -translate-y-1/2 text-flame" />
       <input v-model="q" class="input pl-14" placeholder="Search by name, @handle or city" aria-label="Search members" /></div>
-    <div class="flex gap-2 overflow-x-auto scrollbar-none pb-1">
+    <ScrollRow inner-class="gap-2 pb-1">
       <button class="chip" :class="{ 'chip-active': onlineOnly }" @click="onlineOnly = !onlineOnly"><span class="w-2 h-2 rounded-full bg-online" /> Online now</button>
       <button v-for="x in (['vibe', 'new', 'streak'] as const)" :key="x" class="chip capitalize" :class="{ 'chip-active': sort === x }" @click="sort = x">{{ x === 'vibe' ? '⭐ Top vibe' : x === 'new' ? '✨ New' : '🔥 Streak' }}</button>
       <span class="w-px bg-sandstone mx-1" />
       <button v-for="g in GENDERS" :key="g.key" class="chip" :class="{ 'chip-active': gender === g.key }" @click="gender = gender === g.key ? undefined : g.key">{{ g.emoji }} {{ g.label }}</button>
       <span class="w-px bg-sandstone mx-1" />
       <button v-for="i in INTERESTS" :key="i" class="chip" :class="{ 'chip-active': interest === i }" @click="interest = interest === i ? undefined : i">#{{ i }}</button>
-    </div>
+    </ScrollRow>
     <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
       <div v-for="u in users" :key="u.id" class="card p-5 text-center hover:shadow-pop transition">
         <RouterLink :to="`/u/${u.handle}`" class="flex flex-col items-center">

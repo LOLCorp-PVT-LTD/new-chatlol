@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ScrollRow from '../ScrollRow.vue';
 import { computed, ref, watch } from 'vue';
 import type { AdminUser, Permission } from '@chatlol/shared';
 import { PERMISSIONS, ROLE_DEFAULTS, ROLES, can, statusFor, timeAgo } from '@chatlol/shared';
@@ -166,9 +167,9 @@ const FEATURE_LABEL: Record<string, string> = { post: 'Posts', shout: 'Shouts', 
     </div>
     <p v-if="u.deleted" class="rounded-md bg-error/10 text-error p-3 text-body-md">This account is closed.</p>
 
-    <nav class="flex gap-1.5 overflow-x-auto scrollbar-none -mx-1 px-1 pb-1 border-b border-sandstone">
+    <ScrollRow class="border-b border-sandstone" inner-class="gap-1.5 -mx-1 px-1 pb-1">
       <button v-for="t in TABS" :key="t[0]" class="chip h-9 shrink-0" :class="{ 'chip-active': tab === t[0] }" @click="tab = t[0]"><Icon :name="t[1]" :size="16" /> {{ t[2] }}</button>
-    </nav>
+    </ScrollRow>
 
     <!-- Profile -->
     <section v-if="tab === 'profile'" class="space-y-3">

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ScrollRow from '../components/ScrollRow.vue';
 import { confirmDialog, formDialog, promptDialog } from '../lib/dialog';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -141,9 +142,9 @@ const INTEGRATION_LABELS: Record<string, string> = { database: 'Database', redis
       <h1 class="text-headline-xl flex items-center gap-2"><Icon name="admin_panel_settings" class="text-flame" /> Admin</h1>
       <span class="chip h-7 text-label-sm">{{ roleLabel(s.user?.role ?? 'user') }}</span>
     </div>
-    <div class="flex gap-2 overflow-x-auto scrollbar-none">
+    <ScrollRow>
       <button v-for="x in TABS" :key="x[0]" class="chip" :class="{ 'chip-active': section === x[0] }" @click="router.push(`/admin/${x[0]}`)"><Icon :name="x[1]" :size="18" /> {{ x[2] }}</button>
-    </div>
+    </ScrollRow>
 
     <!-- Overview -->
     <template v-if="section === 'overview' && overview">

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ScrollRow from '../components/ScrollRow.vue';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { EXCHANGE, KING, powerByKey, ticketByKey, type PowerKey, type StoreItem, type StoreItemKind, type TicketKey } from '@chatlol/shared';
@@ -146,9 +147,9 @@ async function claim() {
       <span class="label">Active now</span>
       <span v-for="r in running" :key="r.p!.key" class="chip chip-active">{{ r.p!.emoji }} {{ r.p!.name }} · {{ leftLabel(r.left) }} left</span>
     </section>
-    <div class="flex gap-2 overflow-x-auto scrollbar-none pb-1">
+    <ScrollRow inner-class="gap-2 pb-1">
       <button v-for="t in TABS" :key="t[0]" class="chip" :class="{ 'chip-active': tab === t[0] }" @click="tab = t[0]">{{ t[1] }}</button>
-    </div>
+    </ScrollRow>
     <section v-if="tab === 'exchange'" class="grid md:grid-cols-2 gap-4">
       <div class="card p-5 space-y-3">
         <p class="text-headline-sm">✦ Sparks → 💎 Gems</p>
