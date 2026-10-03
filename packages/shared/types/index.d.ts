@@ -16,4 +16,5 @@ export * from './cosmetics';
 export * from './arcade';
 export * from './youtube';
 export * from './festivals';
+export * from './clans';
 export * from './legal';

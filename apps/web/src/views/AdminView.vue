@@ -16,6 +16,7 @@ import AdminTournaments from '../components/admin/AdminTournaments.vue';
 import AdminAds from '../components/admin/AdminAds.vue';
 import AdminOversight from '../components/admin/AdminOversight.vue';
 import AdminFestivals from '../components/admin/AdminFestivals.vue';
+import TurnTest from '../components/admin/TurnTest.vue';
 
 type Api = typeof api.admin;
 type Awaited2<T> = T extends Promise<infer U> ? U : never;
@@ -162,6 +163,7 @@ const INTEGRATION_LABELS: Record<string, string> = { database: 'Database', redis
           <p class="text-body-sm text-on-surface-variant mb-3">Configured in <code>apps/server/.env</code> — secrets never reach the browser.</p>
           <div v-for="(v, k) in overview.integrations" :key="k" class="flex justify-between py-1 text-body-md"><span>{{ INTEGRATION_LABELS[k] ?? k }}</span>
             <span v-if="typeof v === 'boolean'" :class="v ? 'text-green-600' : 'text-error'">{{ v ? '✓ on' : '✗ not set' }}</span><span v-else class="text-on-surface-variant truncate max-w-[55%]">{{ v ?? '—' }}</span></div>
+          <TurnTest />
         </section>
       </div>
     </template>

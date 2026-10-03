@@ -284,9 +284,9 @@ export async function attachRealtime(server) {
     socket.on('rtc:unwatch', safe(stopWatching));
 
     /** Relays SDP/ICE only between a stream's host and its admitted viewers. */
-    socket.on(
-      'rtc:signal',
-      safe(async (sig) => {
+    // Relay in arrival order: each relay awaits lookups, so without this chain a candidate could overtake the offer.
+    let signalChain = Promise.resolve();
+    const relaySignal = async (sig) => {
         if (!sig || typeof sig.streamId !== 'string' || typeof sig.peer !== 'string' || !allowSignal()) return;
         const host = await shared().get(streamKeys.host(sig.streamId));
         if (!host) return;
@@ -308,8 +308,10 @@ export async function attachRealtime(server) {
               : undefined,
         };
         io.to(sig.peer).emit('rtc:signal', payload);
-      }),
-    );
+    };
+    socket.on('rtc:signal', (sig) => {
+      signalChain = signalChain.then(() => relaySignal(sig)).catch((e) => console.warn('[socket] rtc:signal', e.message));
+    });
 
     socket.on(
       'disconnect',

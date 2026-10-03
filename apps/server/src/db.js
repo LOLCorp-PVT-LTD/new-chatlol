@@ -64,6 +64,11 @@ export const COLLECTIONS = [
   'arenas',
   'arcadeRuns',
   'radioStations',
+  'clans',
+  'clanMembers',
+  'clanRequests',
+  'clanWars',
+  'clanWeeks',
   'tournaments',
   'tournamentEntries',
 ];
