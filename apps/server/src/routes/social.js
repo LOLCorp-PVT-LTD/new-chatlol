@@ -220,6 +220,7 @@ export async function serializeLounge(l, author, viewer = null) {
     isLive: active.size > 0,
     owner: l.ownerId ? await author(l.ownerId) : null,
     festival: l.festival ?? null,
+    radio: !!l.radio,
     expiresAt: l.expiresAt ?? null,
     canManage: !!viewer && (l.ownerId === viewer._id || can(viewer, 'lounges')),
   };
@@ -255,6 +256,8 @@ const loungeBody = z.object({
   topic: z.string().trim().max(120).default(''),
   nowPlaying: z.string().trim().max(80).default(''),
   coverUrl: z.string().url().max(600).nullable().optional(),
+  /** Live radio in this lounge (everyone hears the same song; listeners vote on what's next). */
+  radio: z.boolean().optional(),
 });
 const slugify = (name) =>
   name.toLowerCase().normalize('NFKD').replace(/[^\w\s-]/g, '').trim().replace(/[\s_]+/g, '-').slice(0, 32) || 'lounge';
@@ -278,7 +281,7 @@ socialRouter.post('/lounges', requireAuth, async (req, res) => {
   const doc = {
     _id: newId(), slug, name: b.name, emoji: b.emoji, topic: b.topic, nowPlaying: b.nowPlaying,
     coverUrl: b.coverUrl || `https://picsum.photos/seed/${slug}/800/500`,
-    ownerId: staff && req.body.official ? null : me, position: (last[0]?.position ?? 0) + 1, createdAt: now(),
+    ownerId: staff && req.body.official ? null : me, position: (last[0]?.position ?? 0) + 1, createdAt: now(), radio: b.radio ?? true,
   };
   await db.lounges.insertOne(doc);
   track(me, 'lounge');

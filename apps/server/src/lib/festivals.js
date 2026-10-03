@@ -37,7 +37,7 @@ export async function ensureFestivalLounge(f) {
   const doc = {
     _id: newId(), slug: `${f.key}-${f.day.slice(0, 4)}`, name, emoji, topic, nowPlaying,
     coverUrl: `https://picsum.photos/seed/${f.key}-festival/800/500`,
-    ownerId: null, festival: f.key, expiresAt: f.endsAt, position: -1, createdAt: now(),
+    ownerId: null, festival: f.key, expiresAt: f.endsAt, position: -1, createdAt: now(), radio: true,
   };
   try {
     await db.lounges.insertOne(doc);

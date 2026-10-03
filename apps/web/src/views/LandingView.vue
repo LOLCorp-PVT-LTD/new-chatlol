@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { COPYRIGHT } from '@chatlol/shared';
+import CompanyText from '../components/CompanyText.vue';
 import Logo from '../components/Logo.vue';
 import Icon from '../components/Icon.vue';
 const collage = [
@@ -59,7 +60,7 @@ const features = [
     </section>
 
     <footer class="border-t border-sandstone py-8 text-center text-body-sm text-on-surface-variant">
-      {{ COPYRIGHT }} • Community Guidelines • Privacy • Terms
+      <CompanyText :text="COPYRIGHT" /> • Community Guidelines • Privacy • Terms
     </footer>
   </div>
 </template>

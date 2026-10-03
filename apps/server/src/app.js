@@ -13,6 +13,7 @@ import { arenasRouter } from './routes/arenas.js';
 import { arcadeRouter } from './routes/arcade.js';
 import { tournamentsRouter } from './routes/tournaments.js';
 import { festivalsRouter } from './routes/festivals.js';
+import { radioRouter } from './routes/radio.js';
 import { adsRouter } from './routes/ads.js';
 import { paymentsRouter } from './routes/payments.js';
 import { profileRouter } from './routes/profile.js';
@@ -63,6 +64,7 @@ export function createApp() {
     arcadeRouter,
     tournamentsRouter,
     festivalsRouter,
+    radioRouter,
     adsRouter,
     socialRouter,
     storeRouter,

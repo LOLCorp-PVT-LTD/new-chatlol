@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { RefreshControl, ScrollView, View } from 'react-native';
+import { Linking, RefreshControl, ScrollView, View } from 'react-native';
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
 import type { HomeData, Post, RatingSummary, Shout, VibeScore } from '@chatlol/shared';
-import { TIERS, compact, tierByKey, toTen, timeAgo } from '@chatlol/shared';
+import { COMPANY_URL, TIERS, compact, tierByKey, toTen, timeAgo } from '@chatlol/shared';
 import { api } from '../../lib/api';
 import { errorToast, reward, toast } from '../../lib/actions';
 import { getSocket } from '../../lib/socket';
@@ -198,7 +198,10 @@ export default function Home() {
           ))}
         </ScrollView>
       </Card>
-      <Text variant="bodySm" color={c.onSurfaceVariant} style={{ textAlign: 'center' }}>ChatLOL 2026 - All rights reserved by LOLCorp PVT LTD.</Text>
+      <Text variant="bodySm" color={c.onSurfaceVariant} style={{ textAlign: 'center' }}>
+        ChatLOL 2026 - All rights reserved by{' '}
+        <Text variant="bodySm" color={c.onSurfaceVariant} style={{ textDecorationLine: 'underline' }} onPress={() => void Linking.openURL(COMPANY_URL)}>LOLCorp PVT LTD.</Text>
+      </Text>
     </ScrollView>
   );
 }

@@ -63,6 +63,7 @@ export const COLLECTIONS = [
   'contentReactions',
   'arenas',
   'arcadeRuns',
+  'radioStations',
   'tournaments',
   'tournamentEntries',
 ];

@@ -24,6 +24,7 @@ import Modal from './components/Modal.vue';
 import VerifyBanner from './components/VerifyBanner.vue';
 import { appTheme, themeMode } from './stores/theme';
 import { COPYRIGHT } from '@chatlol/shared';
+import CompanyText from './components/CompanyText.vue';
 import { api } from './lib/api';
 
 const route = useRoute();
@@ -77,7 +78,7 @@ async function acceptTerms() {
       <RightRail v-if="rails" class="hidden xl:block sticky top-28 self-start" />
     </div>
     <footer class="max-w-[1320px] mx-auto px-4 lg:px-10 pb-36 lg:pb-10 flex flex-col sm:flex-row items-center justify-between gap-3 text-body-sm text-on-surface-variant">
-      <p class="flex items-center gap-2"><img src="/brand/mascot.webp" alt="" class="h-6 w-auto" /> {{ COPYRIGHT }}</p>
+      <p class="flex items-center gap-2"><img src="/brand/mascot.webp" alt="" class="h-6 w-auto" /> <span><CompanyText :text="COPYRIGHT" /></span></p>
       <nav class="flex flex-wrap justify-center gap-4" aria-label="Footer"><RouterLink to="/guidelines" class="hover:text-primary">Community Guidelines</RouterLink><RouterLink to="/safety" class="hover:text-primary">Safety</RouterLink><RouterLink to="/terms" class="hover:text-primary">Terms</RouterLink><RouterLink to="/privacy" class="hover:text-primary">Privacy</RouterLink><RouterLink to="/premium" class="hover:text-primary">Premium</RouterLink></nav>
     </footer>
     <!-- Updated Terms / Guidelines: members accept once per version. -->

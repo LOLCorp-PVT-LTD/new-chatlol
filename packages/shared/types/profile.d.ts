@@ -24,6 +24,8 @@ export declare const MOD_STATUSES: ModStatus[];
 export declare const STRIKE_LADDER: { strikes: number; action: 'warn' | 'mute' | 'suspend'; minutes?: number }[];
 export declare const STRIKE_WINDOW_DAYS = 30;
 export declare const COPYRIGHT: string;
+export declare const COMPANY_NAME: string;
+export declare const COMPANY_URL: string;
 export interface PremiumPlan { id: string; days: number; usd: number; sparks: number; label: string; best?: boolean }
 export declare const PREMIUM_PLANS: PremiumPlan[];
 export declare function premiumPlan(id: string): PremiumPlan | undefined;
