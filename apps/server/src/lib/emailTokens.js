@@ -35,7 +35,7 @@ export async function consumeToken(token, kind) {
 export async function sendVerification(user) {
   const token = await issueToken(user._id, 'verify');
   const url = `${config.appUrl}/verify?token=${token}`;
-  await sendMail({
+  return sendMail({
     to: user.email,
     subject: 'Confirm your ChatLOL email ✨',
     ...template({

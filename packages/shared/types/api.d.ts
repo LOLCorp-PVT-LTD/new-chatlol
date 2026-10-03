@@ -311,6 +311,7 @@ export declare function createApi(opts: ApiClientOptions): {
     }) => Promise<{
         stream: LiveStream;
     }>;
+    adminTestEmail: (to?: string) => Promise<{ ok: boolean; step?: 'config' | 'connect' | 'send'; error?: string; from?: string; appUrl?: string }>;
     iceServers: () => Promise<IceConfig>;
     endLive: (id: ID) => Promise<{
         ok: true;
@@ -413,7 +414,7 @@ export declare function createApi(opts: ApiClientOptions): {
         overview: () => Promise<{
             counts: Record<'users' | 'newToday' | 'ai' | 'online' | 'postsToday' | 'shoutsToday' | 'openReports' | 'openFlags' | 'premium' | 'banned' | 'suspended', number>;
             revenue30d: { currency: string; cents: number; purchases: number }[];
-            integrations: Record<string, boolean | string | null>;
+            integrations: Record<string, boolean | string | null | { at: string; to: string; error: string }>;
         }>;
         users: (p?: { q?: string; status?: string; role?: string; ai?: '0' | '1'; staff?: '1'; cursor?: string }) => Promise<Page<AdminUser>>;
         user: (id: ID) => Promise<{

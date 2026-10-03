@@ -7,33 +7,69 @@ let transport = null;
 /** True when an SMTP server is set (SMTP_HOST, or the SMTP_URL alternative). */
 export const smtpConfigured = () => !!(config.mail.host || config.mail.url);
 
+/** The last delivery failure (shown in Admin → Integrations), or null after a success. */
+export let lastMailError = null;
+
+function getTransport() {
+  if (transport) return transport;
+  return import('nodemailer').then((nodemailer) => {
+    const c = config.mail;
+    const timeouts = { connectionTimeout: 10_000, greetingTimeout: 10_000, socketTimeout: 20_000 };
+    transport = nodemailer.default.createTransport(
+      c.host
+        ? {
+            host: c.host,
+            port: c.port,
+            secure: c.secure,
+            auth: c.user ? { user: c.user, pass: c.pass } : undefined,
+            tls: c.allowSelfSigned ? { rejectUnauthorized: false } : undefined,
+            ...timeouts,
+          }
+        : c.url,
+      c.host ? undefined : timeouts,
+    );
+    return transport;
+  });
+}
+
+/**
+ * Sends an email. Returns { ok, error }: failures are logged and remembered (Admin → Integrations shows the last one)
+ * instead of vanishing. Never throws.
+ */
 export async function sendMail(m) {
   outbox.push(m);
   if (outbox.length > 50) outbox.shift();
   if (!smtpConfigured()) {
-    console.log(`[mail] (SMTP_URL not set) to=${m.to} subject="${m.subject}"\n${m.text}`);
-    return;
-  }
-  if (!transport) {
-    const nodemailer = await import('nodemailer');
-    const m = config.mail;
-    transport = nodemailer.default.createTransport(
-      m.host
-        ? {
-            host: m.host,
-            port: m.port,
-            secure: m.secure,
-            auth: m.user ? { user: m.user, pass: m.pass } : undefined,
-            tls: m.allowSelfSigned ? { rejectUnauthorized: false } : undefined,
-          }
-        : m.url,
-    );
+    const error = 'No SMTP server is configured (set SMTP_HOST or SMTP_URL)';
+    lastMailError = { at: new Date().toISOString(), to: m.to, error };
+    console.warn(`[mail] ${error} — not sent: to=${m.to} subject="${m.subject}"`);
+    return { ok: false, error };
   }
   try {
-    await transport.sendMail({ from: config.mail.from, ...m });
+    const t = await getTransport();
+    const info = await t.sendMail({ from: config.mail.from, ...m });
+    if (info.rejected?.length) throw new Error(`Rejected by the server for ${info.rejected.join(', ')} (${info.response ?? ''})`);
+    lastMailError = null;
+    return { ok: true, id: info.messageId };
   } catch (e) {
+    transport = null; // rebuild next time (credentials or settings may have changed)
+    lastMailError = { at: new Date().toISOString(), to: m.to, error: e.message };
     console.error('[mail] send failed', e.message);
+    return { ok: false, error: e.message };
   }
+}
+
+/** Admin check: connects and logs in to the SMTP server, then sends a test message. Returns the real error if any. */
+export async function testMail(to) {
+  if (!smtpConfigured()) return { ok: false, step: 'config', error: 'No SMTP server is configured (set SMTP_HOST or SMTP_URL)' };
+  try {
+    await (await getTransport()).verify();
+  } catch (e) {
+    transport = null;
+    return { ok: false, step: 'connect', error: e.message };
+  }
+  const r = await sendMail({ to, subject: 'ChatLOL test email ✅', text: `SMTP works. Sent from ${config.mail.from}. Links in emails point to ${config.appUrl}.` });
+  return r.ok ? { ok: true, from: config.mail.from, appUrl: config.appUrl } : { ok: false, step: 'send', error: r.error };
 }
 
 const esc = (s) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);

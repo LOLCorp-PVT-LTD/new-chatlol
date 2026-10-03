@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { db, escapeRegex, newId, now, today } from '../db.js';
 import { config } from '../config.js';
+import { lastMailError, testMail } from '../lib/mailer.js';
 import { LEVEL_GATES, PERMISSION_KEYS, activePowers, levelForXp, permissionsOf } from '@chatlol/shared';
 import { featureTotals, userFeatureUse } from '../lib/activity.js';
 import { dismissFinding, reinstateStaff, reviewStaffAction } from '../lib/oversight.js';
@@ -107,6 +108,8 @@ adminRouter.get('/admin/overview', requirePerm('overview'), async (req, res) => 
       smtp: !!(config.mail.host || config.mail.url),
       smtpServer: config.mail.host ? `${config.mail.host}:${config.mail.port}${config.mail.secure ? ' (TLS)' : ''}` : null,
       mailFrom: config.mail.from,
+      mailError: lastMailError,
+      appUrl: config.appUrl,
       stripe: !!config.payments.stripeSecretKey && !!config.payments.stripeWebhookSecret,
       revenueCat: !!config.payments.revenueCatWebhookAuth,
       nvidiaNim: !!config.nim.apiKey,
@@ -808,4 +811,12 @@ adminRouter.patch('/admin/personas/:id', requirePerm('personas'), async (req, re
   if (b.active !== undefined) set.deletedAt = b.active ? null : now();
   await db.users.updateOne({ _id: String(req.params.id), isAi: true }, { $set: set });
   res.json({ ok: true });
+});
+
+/** Integrations: send a test email and report exactly where it fails (config, connect/login, or send). */
+adminRouter.post('/admin/integrations/test-email', requirePerm('overview'), async (req, res) => {
+  const me = await db.users.findOne({ _id: uid(req) }, { projection: { email: 1 } });
+  const to = String(req.body?.to ?? me?.email ?? '').trim();
+  if (!/^[^@\s]+@[^@\s]+$/.test(to)) throw new HttpError(400, 'Enter an email address to send the test to');
+  res.json(await testMail(to));
 });

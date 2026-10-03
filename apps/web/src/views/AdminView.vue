@@ -17,6 +17,7 @@ import AdminAds from '../components/admin/AdminAds.vue';
 import AdminOversight from '../components/admin/AdminOversight.vue';
 import AdminFestivals from '../components/admin/AdminFestivals.vue';
 import TurnTest from '../components/admin/TurnTest.vue';
+import MailTest from '../components/admin/MailTest.vue';
 
 type Api = typeof api.admin;
 type Awaited2<T> = T extends Promise<infer U> ? U : never;
@@ -136,7 +137,7 @@ const product = (p: AdminPayment) => [p.gems ? `💎 ${p.gems.toLocaleString()} 
 const payStatusColor = (st: string) => ({ completed: 'bg-online/15 text-green-700 dark:text-green-300', refunded: 'bg-surface-container text-on-surface-variant', pending: 'bg-yellow-400/20 text-yellow-800 dark:text-yellow-200', failed: 'bg-error/15 text-error' })[st] ?? '';
 const statusColor = (st: string) => ({ active: 'bg-online/15 text-green-700 dark:text-green-300', muted: 'bg-yellow-400/20 text-yellow-800 dark:text-yellow-200', suspended: 'bg-orange-500/20 text-orange-800 dark:text-orange-200', banned: 'bg-error/15 text-error' })[st] ?? '';
 const roleLabel = (r: string) => ROLES.find((x) => x.key === r)?.label ?? r;
-const INTEGRATION_LABELS: Record<string, string> = { database: 'Database', redis: 'Redis (optional)', sharedState: 'Shared state', smtp: 'Email (SMTP)', smtpServer: 'SMTP server', mailFrom: 'From address', stripe: 'Stripe', revenueCat: 'RevenueCat (in-app purchases)', nvidiaNim: 'NVIDIA NIM (AI)', safetyModel: 'AI safety model', turn: 'TURN server', s3: 'Object storage', songSearch: 'Song search', fullSongs: 'Full-length songs', pushIos: 'Push — iPhone', pushAndroid: 'Push — Android', pushWeb: 'Push — web browsers' };
+const INTEGRATION_LABELS: Record<string, string> = { database: 'Database', redis: 'Redis (optional)', sharedState: 'Shared state', smtp: 'Email (SMTP)', smtpServer: 'SMTP server', mailFrom: 'From address', mailError: 'Last email error', appUrl: 'Links in emails go to', stripe: 'Stripe', revenueCat: 'RevenueCat (in-app purchases)', nvidiaNim: 'NVIDIA NIM (AI)', safetyModel: 'AI safety model', turn: 'TURN server', s3: 'Object storage', songSearch: 'Song search', fullSongs: 'Full-length songs', pushIos: 'Push — iPhone', pushAndroid: 'Push — Android', pushWeb: 'Push — web browsers' };
 </script>
 
 <template>
@@ -162,7 +163,10 @@ const INTEGRATION_LABELS: Record<string, string> = { database: 'Database', redis
         <section class="card p-5"><h2 class="text-headline-sm mb-1">Integrations</h2>
           <p class="text-body-sm text-on-surface-variant mb-3">Configured in <code>apps/server/.env</code> — secrets never reach the browser.</p>
           <div v-for="(v, k) in overview.integrations" :key="k" class="flex justify-between py-1 text-body-md"><span>{{ INTEGRATION_LABELS[k] ?? k }}</span>
-            <span v-if="typeof v === 'boolean'" :class="v ? 'text-green-600' : 'text-error'">{{ v ? '✓ on' : '✗ not set' }}</span><span v-else class="text-on-surface-variant truncate max-w-[55%]">{{ v ?? '—' }}</span></div>
+            <span v-if="typeof v === 'boolean'" :class="v ? 'text-green-600' : 'text-error'">{{ v ? '✓ on' : '✗ not set' }}</span>
+            <span v-else-if="v && typeof v === 'object'" class="text-error text-right max-w-[60%] break-words" :title="v.at">{{ v.error }}</span>
+            <span v-else class="text-on-surface-variant truncate max-w-[55%]">{{ v ?? (k === 'mailError' ? '✓ none' : '—') }}</span></div>
+          <MailTest />
           <TurnTest />
         </section>
       </div>

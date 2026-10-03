@@ -91,7 +91,7 @@ authRouter.post('/auth/register', async (req, res) => {
     body: 'Drop your first Sunset photo today to start a streak and earn 120 Sparks.',
     link: '/drops',
   });
-  await sendVerification(user);
+  void sendVerification(user); // don't hold up signup on the mail server
   res.status(201).json({ token: session(user), user: await userPrivate(user) });
 });
 
@@ -127,7 +127,8 @@ authRouter.post('/auth/verify/resend', requireAuth, async (req, res) => {
   await rateLimit(`verify-resend:${id}`, 3);
   const u = await db.users.findOne({ _id: id });
   if (u.emailVerifiedAt) return res.json({ ok: true, alreadyVerified: true });
-  await sendVerification(u);
+  const r = await sendVerification(u);
+  if (!r?.ok) throw new HttpError(502, 'We couldn’t send the email right now — please try again later (the team has been alerted)', 'mail_failed');
   res.json({ ok: true });
 });
 

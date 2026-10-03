@@ -275,6 +275,7 @@ export function createApi(opts) {
     streams: () => req('GET', '/live'),
     stream: (id) => req('GET', `/live/${id}`),
     goLive: (b) => req('POST', '/live', b),
+    adminTestEmail: (to) => req('POST', '/admin/integrations/test-email', { to }),
     iceServers: () => req('GET', '/rtc/ice'),
     endLive: (id) => req('DELETE', `/live/${id}`),
     sendGift: (id, giftId) => req('POST', `/live/${id}/gift`, { giftId }),

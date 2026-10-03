@@ -194,7 +194,13 @@ export const config = {
     allowSelfSigned: env.SMTP_ALLOW_SELF_SIGNED === '1',
     /** Alternative to the fields above: one smtp(s):// connection string. */
     url: env.SMTP_URL ?? '',
-    from: env.MAIL_FROM ?? 'ChatLOL <hello@chatlol.app>',
+    /**
+     * Sender. Most SMTP providers reject (or spam-folder) mail "from" a domain they haven't verified, so without
+     * MAIL_FROM we send from the SMTP login when it's an address, else noreply@ the site's own domain.
+     */
+    from:
+      (env.MAIL_FROM && !/yourdomain|example\.com/i.test(env.MAIL_FROM) ? env.MAIL_FROM : '') ||
+      (/^[^@\s]+@[^@\s]+$/.test(env.SMTP_USER ?? '') ? `ChatLOL <${env.SMTP_USER}>` : `ChatLOL <noreply@${(() => { try { return new URL(env.APP_URL ?? '').hostname.replace(/^www\./, '') || 'chatlol.net'; } catch { return 'chatlol.net'; } })()}>`),
   },
 };
 // Uploads to a bucket need a public address for the files, or every photo link would be broken.
