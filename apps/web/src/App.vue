@@ -15,6 +15,7 @@ import TopBar from './components/TopBar.vue';
 import RightRail from './components/RightRail.vue';
 import TabBar from './components/TabBar.vue';
 import Toasts from './components/Toasts.vue';
+import ChatHeads from './components/ChatHeads.vue';
 import LevelUp from './components/LevelUp.vue';
 import Composer from './components/Composer.vue';
 import Notifications from './components/Notifications.vue';
@@ -59,6 +60,7 @@ async function acceptTerms() {
 </script>
 
 <template>
+  <ChatHeads v-if="s.user && !route.path.startsWith('/messages')" />
   <Toasts />
   <DialogHost />
   <LevelUp />
