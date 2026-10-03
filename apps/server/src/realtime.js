@@ -95,7 +95,10 @@ export async function attachRealtime(server) {
     socket.on(
       'lounge:join',
       safe(async (loungeId, ack) => {
-        if (typeof loungeId !== 'string' || !(await db.lounges.findOne({ _id: loungeId }))) return;
+        const lg = typeof loungeId === 'string' ? await db.lounges.findOne({ _id: loungeId }, { projection: { clanId: 1 } }) : null;
+        if (!lg) return;
+        // Clan lounges: members only.
+        if (lg.clanId && !(userId && (await db.clanMembers.findOne({ clanId: lg.clanId, userId })))) return ack?.({ kicked: true });
         // Kicked with a Kick Ticket: locked out of this lounge for a while.
         if (userId && (await shared().get(kickKey(loungeId, userId)))) return ack?.({ kicked: true });
         socket.join(room.lounge(loungeId));

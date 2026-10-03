@@ -26,6 +26,9 @@ export async function grant(userId, sparks, xp, reason, emit = true, { boost = t
   let boosted = false;
   if (boost && sparks > 0 && hasPower(before, 'boost_2x')) (sparks *= 2), (boosted = true);
   if (boost && xp > 0 && hasPower(before, 'xp_surge')) (xp *= 2), (boosted = true);
+  // Clans: the level-6 perk adds 5% to members' Spark rewards.
+  const clans = boost && sparks > 0 && !before.isAi ? await import('./clans.js') : null;
+  if (clans) sparks = await clans.clanSparkBonus(userId, sparks);
   // Sparks never go below zero.
   await db.users.updateOne({ _id: userId }, [
     { $set: { sparks: { $max: [0, { $add: ['$sparks', sparks] }] }, xp: { $add: ['$xp', xp] } } },
@@ -49,6 +52,8 @@ export async function grant(userId, sparks, xp, reason, emit = true, { boost = t
       link: '/locker',
     });
   }
+  // …and every Spark a member earns builds their clan's Rep.
+  if (clans) void clans.addRepFromSparks(userId, sparks, reason).catch((e) => console.warn('[clans] rep', e.message));
   if (emit && !before.isAi) await emitWallet(userId, ev);
   return ev;
 }

@@ -14,6 +14,7 @@ import { arcadeRouter } from './routes/arcade.js';
 import { tournamentsRouter } from './routes/tournaments.js';
 import { festivalsRouter } from './routes/festivals.js';
 import { radioRouter } from './routes/radio.js';
+import { clansRouter } from './routes/clans.js';
 import { adsRouter } from './routes/ads.js';
 import { paymentsRouter } from './routes/payments.js';
 import { profileRouter } from './routes/profile.js';
@@ -65,6 +66,7 @@ export function createApp() {
     tournamentsRouter,
     festivalsRouter,
     radioRouter,
+    clansRouter,
     adsRouter,
     socialRouter,
     storeRouter,

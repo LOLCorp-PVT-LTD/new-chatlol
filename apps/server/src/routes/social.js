@@ -228,7 +228,13 @@ export async function serializeLounge(l, author, viewer = null) {
 
 const viewerOf = (req) => (req.userId ? db.users.findOne({ _id: req.userId }, { projection: { role: 1, perms: 1 } }) : null);
 /** Seasonal lounges close when their festival ends. */
-const openLounges = () => ({ $or: [{ expiresAt: null }, { expiresAt: { $exists: false } }, { expiresAt: { $gt: now() } }] });
+const openLounges = () => ({ clanId: null, $or: [{ expiresAt: null }, { expiresAt: { $exists: false } }, { expiresAt: { $gt: now() } }] });
+/** Clan lounges are for that clan's members only. */
+async function assertLoungeAccess(l, userId) {
+  if (!l.clanId) return;
+  if (!userId || !(await db.clanMembers.findOne({ clanId: l.clanId, userId }))) throw new HttpError(403, 'This is a private clan lounge');
+}
+export { assertLoungeAccess };
 
 socialRouter.get('/lounges', optionalAuth, async (req, res) => {
   const author = authorCache(req.userId);
@@ -242,6 +248,7 @@ socialRouter.get('/lounges', optionalAuth, async (req, res) => {
 socialRouter.get('/lounges/:id', optionalAuth, async (req, res) => {
   const l = await db.lounges.findOne(byIdOrSlug(req.params.id));
   if (!l) throw new HttpError(404, 'Lounge not found');
+  await assertLoungeAccess(l, req.userId);
   const author = authorCache(req.userId);
   const rows = (await recentMessages('lounge', l._id, 60)).reverse();
   res.json({ lounge: await serializeLounge(l, author, await viewerOf(req)), messages: await Promise.all(rows.map((m) => serializeMessage(m, author))) });

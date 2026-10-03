@@ -182,6 +182,8 @@ export async function userPublic(u, viewerId) {
     premium: isPremium(u),
     boosted: !!(u.boost?.until && u.boost.until > now()),
     isKing: await isKing(u._id),
+    // Clan tag next to their name once the clan reaches level 2.
+    clan: u.clan && u.clan.level >= 2 ? { id: u.clan.id, tag: u.clan.tag, name: u.clan.name, color: u.clan.color ?? null, legend: u.clan.level >= 8 } : null,
     createdAt: u.createdAt,
   };
   if (viewerId && viewerId !== u._id) {
