@@ -201,6 +201,7 @@ export function createApi(opts) {
     unlockTheme: (key) => req('POST', `/me/themes/${key}/unlock`),
     changeHandle: (handle) => req('POST', '/me/handle', { handle }),
     referral: () => req('GET', '/me/referral'),
+    acceptTerms: () => req('POST', '/me/accept-terms'),
     inviteByEmail: (emails) => req('POST', '/me/referral/invite', { emails }),
     exchange: (to, amount) => req('POST', '/wallet/exchange', { to, amount }),
     useTicket: (key, targetId, loungeId) => req('POST', `/tickets/${key}/use`, { targetId, loungeId }),

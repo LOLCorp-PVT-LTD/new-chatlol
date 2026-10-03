@@ -19,6 +19,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/roulette', component: () => import('./views/RouletteView.vue'), meta: { auth: true, title: 'Vibe Roulette' } },
   { path: '/arena', component: () => import('./views/ArenaView.vue'), meta: { title: 'Hot Take Arena' } },
   { path: '/invite', component: () => import('./views/InviteView.vue'), meta: { title: 'Invite friends' } },
+  ...(['terms', 'guidelines', 'safety', 'privacy'] as const).map((doc) => ({ path: `/${doc}`, component: () => import('./views/LegalView.vue'), meta: { doc, title: doc[0].toUpperCase() + doc.slice(1) } })),
   { path: '/tournaments', component: () => import('./views/TournamentsView.vue'), meta: { title: 'Tournaments' } },
   { path: '/tournaments/:id', component: () => import('./views/TournamentView.vue'), meta: { remount: true, title: 'Tournament' } },
   { path: '/arcade', component: () => import('./views/ArcadeView.vue'), meta: { title: 'Arcade' } },

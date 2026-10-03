@@ -25,6 +25,7 @@ export declare function createApi(opts: ApiClientOptions): {
         interests?: string[];
         /** Referral code from an invite link. */
         ref?: string;
+        acceptTerms?: string;
     }) => Promise<AuthResponse>;
     login: (b: {
         login: string;
@@ -265,6 +266,7 @@ export declare function createApi(opts: ApiClientOptions): {
     changeHandle: (handle: string) => Promise<{ user: UserPrivate }>;
     referral: () => Promise<{ code: string; link: string; joined: number; paid: number; goldEarned: number; friends: { id: ID; displayName: string; handle: string; avatarUrl: string; paid: boolean; joinedAt: string }[] }>;
     inviteByEmail: (emails: string[]) => Promise<{ sent: number }>;
+    acceptTerms: () => Promise<{ user: UserPrivate }>;
     exchange: (to: 'gems' | 'gold', amount: number) => Promise<{ sparks: number; gems: number; gold: number }>;
     useTicket: (key: import('./progression').TicketKey, targetId: ID, loungeId?: ID) => Promise<{ used: string; free: boolean; target: { id: ID; handle: string } }>;
     gamesLeaderboard: (game?: string) => Promise<{ game: string | null; entries: { rank: number; user: UserPublic; wins: number; played: number }[] }>;

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { ageFrom, MIN_AGE, GENDERS, INTEREST_GROUPS, MAX_INTERESTS, type Gender } from '@chatlol/shared';
+import { ageFrom, LEGAL_VERSION, MIN_AGE, GENDERS, INTEREST_GROUPS, MAX_INTERESTS, type Gender } from '@chatlol/shared';
 import { useSession } from '../stores/session';
 import Logo from '../components/Logo.vue';
 import Icon from '../components/Icon.vue';
@@ -25,7 +25,7 @@ async function submit() {
   try {
     let ref: string | undefined;
     try { ref = localStorage.getItem('chatlol.ref') ?? undefined; } catch { /* private mode */ }
-    await s.register({ ...f.value, gender: f.value.gender!, handle: f.value.handle.trim(), email: f.value.email.trim(), ref });
+    await s.register({ ...f.value, gender: f.value.gender!, handle: f.value.handle.trim(), email: f.value.email.trim(), ref, acceptTerms: LEGAL_VERSION });
     try { localStorage.removeItem('chatlol.ref'); } catch { /* ignore */ }
     router.replace('/drops');
   } catch (e) { error.value = (e as Error).message; step.value = 1; } finally { busy.value = false; }
@@ -57,7 +57,7 @@ async function submit() {
             </div></div>
           <label class="flex items-start gap-3 text-body-sm text-on-surface-variant px-2 pt-1">
             <input v-model="agree" type="checkbox" class="mt-0.5 w-5 h-5 accent-flame" />
-            <span>I’m 18+ and agree to the Community Guidelines & Terms. I understand some members are clearly-labeled ✦ AI personas.</span>
+            <span>I’m 18+ and agree to the <RouterLink to="/guidelines" target="_blank" class="underline">Community Guidelines</RouterLink>, <RouterLink to="/terms" target="_blank" class="underline">Terms</RouterLink> and <RouterLink to="/privacy" target="_blank" class="underline">Privacy Notice</RouterLink>. I understand some members are clearly-labeled ✦ AI personas.</span>
           </label>
           <p v-if="error" class="text-error text-body-md">{{ error }}</p>
           <button class="btn-primary w-full h-[52px]" :disabled="!step1Ok">Next <Icon name="arrow_forward" /></button>

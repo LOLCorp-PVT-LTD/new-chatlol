@@ -14,6 +14,7 @@ import {
   PREMIUM_PROFILE,
   themeAllowed,
   DEFAULT_APP_THEME,
+  LEGAL_VERSION,
 } from '@chatlol/shared';
 import { db, now, today } from '../db.js';
 import { presence } from './presence.js';
@@ -217,6 +218,8 @@ export async function userPrivate(u) {
     comboCount: u.comboCount ?? 0,
     settings: { ...DEFAULT_SETTINGS, ...u.settings, appTheme: effectiveTheme(u) },
     unlockedThemes: u.unlockedThemes ?? [],
+    /** False when the member hasn't accepted the current Terms / Guidelines yet. */
+    termsAccepted: (u.acceptedTermsVersion ?? null) === LEGAL_VERSION || !!u.isAi,
     gender: u.gender ?? null,
     city: u.city ?? '',
     role: u.role ?? 'user',

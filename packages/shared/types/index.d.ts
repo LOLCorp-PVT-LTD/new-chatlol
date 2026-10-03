@@ -14,3 +14,4 @@ export * from './progression';
 export * from './games';
 export * from './cosmetics';
 export * from './arcade';
+export * from './legal';

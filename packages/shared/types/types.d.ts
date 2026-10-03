@@ -61,6 +61,8 @@ export interface UserPrivate extends UserPublic {
     gold: number;
     /** Paid themes unlocked with Gold (kept even without Premium). */
     unlockedThemes: string[];
+    /** False when the current Terms / Guidelines haven't been accepted yet. */
+    termsAccepted: boolean;
     dailyGoal: {
         done: number;
         target: number;

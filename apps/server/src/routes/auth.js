@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { ageFrom, APP_THEMES, HANDLE_CHANGE_GOLD, MAX_INTERESTS, MIN_AGE, THEME_UNLOCK_GOLD, appThemeByKey, themeAllowed } from '@chatlol/shared';
+import { ageFrom, APP_THEMES, HANDLE_CHANGE_GOLD, LEGAL_VERSION, MAX_INTERESTS, MIN_AGE, THEME_UNLOCK_GOLD, appThemeByKey, themeAllowed } from '@chatlol/shared';
 import { db, newId, now, today, isDuplicateKey } from '../db.js';
 import { hashPassword, verifyPassword, signToken, requireAuth, uid, passwordVersion } from '../lib/auth.js';
 import { HttpError, parse, rateLimit } from '../lib/http.js';
@@ -36,6 +36,8 @@ authRouter.post('/auth/register', async (req, res) => {
       interests: z.array(z.string().max(30)).max(MAX_INTERESTS).optional(),
       /** Referral code from an invite link. */
       ref: z.string().max(16).optional(),
+      /** The legal version the member agreed to on the sign-up form. */
+      acceptTerms: z.string().max(20).optional(),
     }),
     req.body,
   );
@@ -58,6 +60,8 @@ authRouter.post('/auth/register', async (req, res) => {
     role: config.adminEmails.includes(email) ? 'admin' : 'user',
     interests: b.interests ?? [],
     badges: ['early_spark'],
+    acceptedTermsVersion: b.acceptTerms ?? null,
+    acceptedTermsAt: b.acceptTerms ? t : null,
     lastSeenAt: t,
     createdAt: t,
   });
@@ -244,6 +248,13 @@ authRouter.patch('/me/settings', requireAuth, async (req, res) => {
   }
   const set = Object.fromEntries(Object.entries(b).map(([k, v]) => [`settings.${k}`, v]));
   if (Object.keys(set).length) await db.users.updateOne({ _id: id }, { $set: set });
+  res.json({ user: await me(id) });
+});
+
+/** Accept the current Terms / Guidelines (asked again whenever LEGAL_VERSION changes). */
+authRouter.post('/me/accept-terms', requireAuth, async (req, res) => {
+  const id = uid(req);
+  await db.users.updateOne({ _id: id }, { $set: { acceptedTermsVersion: LEGAL_VERSION, acceptedTermsAt: now() } });
   res.json({ user: await me(id) });
 });
 
