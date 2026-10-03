@@ -24,9 +24,14 @@ const text = (x: Ctx, t: string, cx: number, cy: number, size: number, color = '
   x.fillText(t, cx, cy);
 };
 
-/** Echo: how long each pad lights during playback. */
-export const ECHO_STEP_MS = 520;
-export const echoPlaying = (st: any, ui: ArcadeUi, now: number) => !st.dead && ui.echoRound === st.round && now - ui.echoT0 < st.round * ECHO_STEP_MS + 300;
+/** Echo: how long each pad lights during playback (faster every level). */
+export const echoStep = (st: any) => ARCADE.echo.stepMs!(st);
+export const echoPlaying = (st: any, ui: ArcadeUi, now: number) => !st.dead && ui.echoRound === st.round && now - ui.echoT0 < st.round * echoStep(st) + 300;
+/** [cols, rows] for grid games, by level. */
+export const gridOf = (key: string, st: any): [number, number] => {
+  const g = ARCADE[key as keyof typeof ARCADE];
+  return g.grid ? g.grid(st) : [g.cols ?? 1, g.rows ?? 1];
+};
 
 const breakout: Draw = (x, st, W) => {
   const C = ARCADE.breakout.C!;
@@ -37,15 +42,17 @@ const breakout: Draw = (x, st, W) => {
   st.bricks.forEach((b: number, i: number) => {
     if (!b) return;
     const r = brickRect(i);
-    x.fillStyle = ROW[r.row % ROW.length];
+    // Tough bricks: silver (2 hits left) and steel (3), with cracks as they wear down.
+    x.fillStyle = b >= 3 ? '#8a94a6' : b === 2 ? '#cfd6e2' : ROW[r.row % ROW.length];
     rr(x, r.x, r.y, r.w, r.h, 4);
     x.fillStyle = 'rgba(255,255,255,.25)';
     x.fillRect(r.x + 3, r.y + 2, r.w - 6, 3);
+    if (b >= 2) text(x, '◆'.repeat(b - 1), r.x + r.w / 2, r.y + r.h / 2 + 1, 9, 'rgba(30,30,50,.6)', 800);
   });
   x.fillStyle = '#fff';
   x.shadowColor = '#ff9a4d';
   x.shadowBlur = 14;
-  rr(x, st.x - C.PW / 2, C.PY, C.PW, 10, 5);
+  rr(x, st.x - st.pw / 2, C.PY, st.pw, 10, 5);
   if (st.ball) {
     x.beginPath();
     x.arc(st.ball.x, st.ball.y, C.R, 0, Math.PI * 2);
@@ -118,6 +125,17 @@ const runner: Draw = (x, st, W) => {
   x.fillStyle = 'rgba(0,0,0,.15)';
   for (let i = 0; i < 20; i++) x.fillRect(((i * 47 - st.dist) % C.W + C.W) % C.W, C.GY + 10 + (i % 3) * 12, 14, 3);
   for (const o of st.obs) {
+    if (o.fly) {
+      x.font = '26px serif';
+      x.textAlign = 'center';
+      x.textBaseline = 'middle';
+      x.save();
+      x.translate(o.x + o.w / 2, C.GY - o.fly - o.h / 2);
+      x.scale(-1, 1);
+      x.fillText(Math.floor(st.ticks / 10) % 2 ? '🦅' : '🐦', 0, 0);
+      x.restore();
+      continue;
+    }
     x.fillStyle = '#2f8f4e';
     rr(x, o.x, C.GY - o.h, o.w, o.h, 6);
     x.fillStyle = '#3fb064';
@@ -155,29 +173,40 @@ const whack: Draw = (x, st, W, H, now) => {
       x.textAlign = 'center';
       x.textBaseline = 'middle';
       if (u.gold) (x.shadowColor = '#ffd700'), (x.shadowBlur = 24);
-      x.fillText(u.gold ? '🌟' : '✨', cx, cy + cell * 0.35 - rise * cell * 0.45);
+      x.fillText(u.bomb ? '💣' : u.gold ? '🌟' : '✨', cx, cy + cell * 0.35 - rise * cell * 0.45);
       x.restore();
     }
-    if (st.flash[i]) text(x, '+', cx, cy - cell * 0.3, cell * 0.3, '#fff59d', 800);
+    if (st.flash[i] > 0) text(x, '+', cx, cy - cell * 0.3, cell * 0.3, '#fff59d', 800);
+    if (st.flash[i] < 0) text(x, '−', cx, cy - cell * 0.3, cell * 0.3, '#ff6b6b', 800);
   }
-  const left = Math.max(0, 45 - st.ticks / 60);
+  // Time left this level (top) and hits towards the target (bottom).
+  const LT = ARCADE.whack.C!.LEVEL_TICKS;
+  const left = Math.max(0, 1 - st.clock / LT);
+  const goal = ARCADE.whack.goal!(st);
   x.fillStyle = 'rgba(0,0,0,.25)';
   rr(x, W * 0.04, W * 0.03, W * 0.92, W * 0.025, W * 0.0125);
-  x.fillStyle = left < 10 ? '#ff6b6b' : '#fff59d';
-  rr(x, W * 0.04, W * 0.03, W * 0.92 * (left / 45), W * 0.025, W * 0.0125);
+  rr(x, W * 0.04, H - W * 0.055, W * 0.92, W * 0.025, W * 0.0125);
+  x.fillStyle = left < 0.25 ? '#ff6b6b' : '#fff59d';
+  rr(x, W * 0.04, W * 0.03, W * 0.92 * left, W * 0.025, W * 0.0125);
+  x.fillStyle = st.levelHits >= goal ? '#7CFC9A' : '#ffffff';
+  rr(x, W * 0.04, H - W * 0.055, W * 0.92 * Math.min(1, st.levelHits / goal), W * 0.025, W * 0.0125);
+  text(x, `${st.levelHits}/${goal} hits`, W / 2, H - W * 0.09, W * 0.035, '#fff', 700);
   void now;
 };
 
 const memory: Draw = (x, st, W, H) => {
   bgGrad(x, W, H, '#2b1a4a', '#4b1f5a');
-  const cell = W / 4;
+  const [cols, rows] = gridOf('memory', st);
+  const cw = W / cols;
+  const ch = H / rows;
+  const cell = Math.min(cw, ch);
   const faces = ARCADE.memory.faces!;
   st.cards.forEach((f: number, i: number) => {
-    const cx = (i % 4) * cell;
-    const cy = Math.floor(i / 4) * cell;
+    const cx = (i % cols) * cw + (cw - cell) / 2;
+    const cy = Math.floor(i / cols) * ch + (ch - cell) / 2;
     const up = st.matched[i] || st.open.includes(i);
     x.fillStyle = st.matched[i] ? 'rgba(255,255,255,.18)' : up ? '#fff5ec' : '#ff7a3d';
-    rr(x, cx + 7, cy + 7, cell - 14, cell - 14, 14);
+    rr(x, cx + cell * 0.06, cy + cell * 0.06, cell * 0.88, cell * 0.88, cell * 0.14);
     if (up) {
       x.globalAlpha = st.matched[i] ? 0.55 : 1;
       x.font = `${cell * 0.48}px serif`;
@@ -187,10 +216,13 @@ const memory: Draw = (x, st, W, H) => {
       x.globalAlpha = 1;
     } else text(x, '?', cx + cell / 2, cy + cell / 2, cell * 0.36, 'rgba(255,255,255,.85)', 800);
   });
+  // Misses left this board.
+  const left = Math.max(0, st.allowed - st.misses);
+  text(x, `${left} miss${left === 1 ? '' : 'es'} left`, W / 2, H - 12, Math.max(11, W * 0.026), left <= 2 ? '#ff8a8a' : 'rgba(255,255,255,.75)', 700);
 };
 
 const mines: Draw = (x, st, W) => {
-  const n = ARCADE.mines.C!.N;
+  const n = st.n;
   const cell = W / n;
   const NUM = ['', '#1e88e5', '#43a047', '#e53935', '#5e35b1', '#8d6e63', '#00897b', '#000', '#777'];
   x.fillStyle = '#d9c7b4';
@@ -217,47 +249,52 @@ const mines: Draw = (x, st, W) => {
   }
 };
 
-const ECHO_COLORS = [['#ff5e5e', '#ffb3b3'], ['#4fc3f7', '#b3e5fc'], ['#ffd54f', '#fff3c4'], ['#81c784', '#d7f5d8']];
+const ECHO_COLORS = [['#ff5e5e', '#ffb3b3'], ['#4fc3f7', '#b3e5fc'], ['#ffd54f', '#fff3c4'], ['#81c784', '#d7f5d8'], ['#ba68c8', '#ecc6f2'], ['#ff8a3d', '#ffd2b0'], ['#4db6ac', '#c4f0eb'], ['#f06292', '#ffc7da'], ['#9575cd', '#d9ccf5']];
 const echo: Draw = (x, st, W, H, now, ui) => {
   bgGrad(x, W, H, '#1a1033', '#2d1450');
   const playing = echoPlaying(st, ui, now);
+  const stepMs = echoStep(st);
   let lit = -1;
   if (playing) {
-    const k = Math.floor((now - ui.echoT0 - 300) / ECHO_STEP_MS);
-    const into = (now - ui.echoT0 - 300) % ECHO_STEP_MS;
-    if (k >= 0 && k < st.round && into < ECHO_STEP_MS * 0.7) lit = st.seq[k];
+    const k = Math.floor((now - ui.echoT0 - 300) / stepMs);
+    const into = (now - ui.echoT0 - 300) % stepMs;
+    if (k >= 0 && k < st.round && into < stepMs * 0.7) lit = st.seq[k];
   } else if (ui.tap && now - ui.tap.t < 220) lit = ui.tap.i;
   if (st.dead && st.wrong >= 0) lit = st.wrong;
-  const cell = W / 2;
-  for (let i = 0; i < 4; i++) {
-    const cx = (i % 2) * cell;
-    const cy = Math.floor(i / 2) * cell;
+  const [cols, rows] = gridOf('echo', st);
+  const cw = W / cols;
+  const ch = H / rows;
+  for (let i = 0; i < cols * rows; i++) {
+    const cx = (i % cols) * cw;
+    const cy = Math.floor(i / cols) * ch;
     const on = lit === i;
-    x.fillStyle = on ? ECHO_COLORS[i][1] : ECHO_COLORS[i][0];
-    if (on) (x.shadowColor = ECHO_COLORS[i][1]), (x.shadowBlur = 40);
+    const [base, glow] = ECHO_COLORS[i % ECHO_COLORS.length];
+    x.fillStyle = on ? glow : base;
+    if (on) (x.shadowColor = glow), (x.shadowBlur = 40);
     x.globalAlpha = on ? 1 : 0.75;
-    rr(x, cx + 12, cy + 12, cell - 24, cell - 24, 28);
+    rr(x, cx + 10, cy + 10, cw - 20, ch - 20, 24);
     x.shadowBlur = 0;
     x.globalAlpha = 1;
   }
   x.fillStyle = 'rgba(20,10,40,.85)';
   x.beginPath();
-  x.arc(W / 2, H / 2, W * 0.13, 0, Math.PI * 2);
+  x.arc(W / 2, H / 2, W * 0.11, 0, Math.PI * 2);
   x.fill();
-  text(x, playing ? '👀' : String(st.round), W / 2, H / 2 + 2, W * 0.08);
+  text(x, playing ? '👀' : String(st.round), W / 2, H / 2 + 2, W * 0.07);
 };
 
 const slide: Draw = (x, st, W) => {
   x.fillStyle = '#e7d8c9';
   rr(x, 0, 0, W, W, 18);
-  const cell = W / 4;
+  const n = st.n;
+  const cell = W / n;
   st.tiles.forEach((v: number, i: number) => {
     if (!v) return;
-    const cx = (i % 4) * cell;
-    const cy = Math.floor(i / 4) * cell;
+    const cx = (i % n) * cell;
+    const cy = Math.floor(i / n) * cell;
     const home = v - 1 === i;
     x.fillStyle = home ? '#ff9a4d' : '#fff5ec';
-    rr(x, cx + 6, cy + 6, cell - 12, cell - 12, 14);
+    rr(x, cx + cell * 0.05, cy + cell * 0.05, cell * 0.9, cell * 0.9, cell * 0.12);
     text(x, String(v), cx + cell / 2, cy + cell / 2 + 2, cell * 0.38, home ? '#fff' : '#5b4137', 700);
   });
 };

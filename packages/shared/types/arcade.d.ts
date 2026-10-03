@@ -8,6 +8,14 @@ export interface ArcadeGame<S = any> {
   cols?: number; rows?: number;
   gridInput?(i: number, alt?: boolean): string;
   faces?: string[];
+  /** Current level (every game gets harder level by level). */
+  level?(s: S): number;
+  /** Grid games whose board changes size by level: [cols, rows]. */
+  grid?(s: S): [number, number];
+  /** Echo: playback speed (ms per pad). */
+  stepMs?(s: S): number;
+  /** Whack-a-Spark: hits needed this level. */
+  goal?(s: S): number;
   init(seed: number): S; step(s: S, input: string | null): S; over(s: S): boolean; score(s: S): number; N?: number; C?: Record<string, number>;
 }
 export type ArcadeKey = 'snake' | 'flight' | '2048' | 'tower' | 'breakout' | 'meteor' | 'runner' | 'whack' | 'memory' | 'mines' | 'echo' | 'slide';

@@ -8,7 +8,7 @@ import { api } from '../lib/api';
 import { useSession } from '../stores/session';
 import { confetti, ding } from '../lib/fx';
 import Avatar from '../components/Avatar.vue';
-import { ARCADE_DRAW, echoPlaying, type ArcadeUi } from '../lib/arcadeDraw';
+import { ARCADE_DRAW, echoPlaying, gridOf, type ArcadeUi } from '../lib/arcadeDraw';
 
 /**
  * Plays one arcade game. A fixed-step loop runs the shared simulation and records each input against its tick —
@@ -23,6 +23,20 @@ const ui: ArcadeUi = { echoT0: 0, echoRound: 0, tap: null };
 const canvas = ref<HTMLCanvasElement>();
 const phase = ref<'ready' | 'playing' | 'over'>('ready');
 const score = ref(0);
+/** Current level, and a short "Level N!" banner when it goes up. */
+const level = ref(1);
+const levelUp = ref(0);
+let levelUpTimer: ReturnType<typeof setTimeout> | undefined;
+function checkLevel() {
+  const l = g.level ? g.level(st) : 1;
+  if (l > level.value) {
+    levelUp.value = l;
+    ding('level');
+    clearTimeout(levelUpTimer);
+    levelUpTimer = setTimeout(() => (levelUp.value = 0), 1600);
+  }
+  level.value = l;
+}
 const result = ref<Awaited<ReturnType<typeof api.arcadeFinish>> | null>(null);
 const board = ref<{ rank: number; user: UserPublic; score: number }[]>([]);
 const period = ref<'day' | 'week' | 'all'>('all');
@@ -55,6 +69,8 @@ async function start() {
   acc = 0;
   lastT = performance.now();
   score.value = 0;
+  level.value = g.level ? g.level(st) : 1;
+  levelUp.value = 0;
   result.value = null;
   ui.tap = null;
   if (key === 'echo') (ui.echoT0 = performance.now() + 300), (ui.echoRound = 1);
@@ -74,6 +90,7 @@ function press(v: string) {
       anim = { moves: plan.moves, merged: plan.merged, spawned: new Set(st.grid.map((x: number, i: number) => (x && !dests.has(i) ? i : -1)).filter((i: number) => i >= 0)), t0: performance.now() };
     } else bump = { dir: v, t0: performance.now() }; // nothing moved: a little nudge so you know it registered
     score.value = g.score(st);
+    checkLevel();
     if (g.over(st)) void finish();
     return;
   }
@@ -84,6 +101,7 @@ function press(v: string) {
     st = g.step(st, v);
     if (key === 'echo' && st.round !== round) (ui.echoT0 = performance.now() + 450), (ui.echoRound = st.round);
     score.value = g.score(st);
+    checkLevel();
     if (g.over(st)) void finish();
     return;
   }
@@ -101,6 +119,7 @@ function frame(t: number) {
       st = g.step.call(g, st, input);
       tick++;
       score.value = g.score(st);
+      checkLevel();
       if (g.over(st)) void finish();
     }
   }
@@ -172,6 +191,13 @@ function draw() {
     const k = W / n;
     x.fillStyle = '#0f172a'; x.fillRect(0, 0, W, H);
     for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) if ((i + j) % 2) (x.fillStyle = '#131c33'), x.fillRect(i * k, j * k, k, k);
+    // Rocks (level 3+)
+    for (const [rx, ry] of st.rocks ?? []) {
+      x.fillStyle = '#6b7280';
+      x.beginPath(); x.roundRect(rx * k + 2, ry * k + 2, k - 4, k - 4, k / 4); x.fill();
+      x.fillStyle = 'rgba(255,255,255,.18)';
+      x.fillRect(rx * k + k * 0.25, ry * k + k * 0.25, k * 0.25, k * 0.12);
+    }
     const pulse = 0.8 + Math.sin(performance.now() / 150) * 0.15;
     x.fillStyle = '#fde047'; x.shadowColor = '#fde047'; x.shadowBlur = 16;
     x.beginPath(); x.arc((st.food[0] + 0.5) * k, (st.food[1] + 0.5) * k, (k / 2.6) * pulse, 0, Math.PI * 2); x.fill(); x.shadowBlur = 0;
@@ -191,7 +217,7 @@ function draw() {
     for (const p of st.pipes) {
       x.fillStyle = '#16a34a';
       x.beginPath(); x.roundRect(p.x, -10, C.PIPE_W, p.gapY + 10, 10); x.fill();
-      x.beginPath(); x.roundRect(p.x, p.gapY + C.GAP, C.PIPE_W, C.H, 10); x.fill();
+      x.beginPath(); x.roundRect(p.x, p.gapY + p.gap, C.PIPE_W, C.H, 10); x.fill();
       x.fillStyle = 'rgba(255,255,255,.18)'; x.fillRect(p.x + 8, 0, 8, C.H);
     }
     x.save(); x.translate(C.X, st.y); x.rotate(Math.max(-0.5, Math.min(1, st.vy / 10)));
@@ -332,7 +358,9 @@ function onUp(e: PointerEvent) {
   if (g.controls === 'grid' && touch) {
     // Tap a cell; long-press (or right-click) is the alternate action (flag in Minesweeper).
     const { fx, fy } = frac(e);
-    const i = Math.min(g.rows! - 1, Math.max(0, Math.floor(fy * g.rows!))) * g.cols! + Math.min(g.cols! - 1, Math.max(0, Math.floor(fx * g.cols!)));
+    const [cols, rows] = gridOf(key, st);
+    // Memory boards that aren't square are centred in the square canvas (see arcadeDraw).
+    const i = Math.min(rows - 1, Math.max(0, Math.floor(fy * rows))) * cols + Math.min(cols - 1, Math.max(0, Math.floor(fx * cols)));
     const alt = e.button === 2 || performance.now() - touch.t > 450;
     touch = null;
     ui.tap = { i, t: performance.now() };
@@ -381,9 +409,16 @@ const canCashOut = computed(() => !!g.TURN);
 <template>
   <div class="max-w-[1000px] mx-auto grid lg:grid-cols-[1fr_300px] gap-4 items-start">
     <section class="card p-4 space-y-3">
-      <div class="flex items-center justify-between"><h1 class="text-headline-md">{{ g.emoji }} {{ g.name }}</h1><span class="text-headline-md tabular-nums">{{ score.toLocaleString() }}</span></div>
+      <div class="flex items-center justify-between gap-2"><h1 class="text-headline-md flex-1 truncate">{{ g.emoji }} {{ g.name }}</h1>
+        <span v-if="g.level" class="chip chip-active h-8 tabular-nums">Level {{ level }}</span>
+        <span class="text-headline-md tabular-nums min-w-[4ch] text-right">{{ score.toLocaleString() }}</span></div>
       <div class="relative mx-auto w-full" :style="{ maxWidth: key === 'flight' || key === 'meteor' ? '380px' : key === 'runner' ? '640px' : '480px' }">
         <canvas ref="canvas" class="w-full rounded-[22px] touch-none select-none shadow-float" :style="{ aspectRatio: aspect }" @contextmenu.prevent @pointerdown="onDown" @pointermove="onMove" @pointerup="onUp" @pointercancel="onCancel" />
+        <Transition name="lvl">
+          <div v-if="levelUp && phase === 'playing'" class="absolute inset-x-0 top-[38%] flex justify-center pointer-events-none">
+            <div class="px-6 py-3 rounded-full text-white font-extrabold text-headline-md tracking-wide bg-[linear-gradient(135deg,#ff9900,#ff3d6e)] shadow-[0_10px_40px_-6px_rgb(255_94_0/.8)]">⬆ Level {{ levelUp }}!</div>
+          </div>
+        </Transition>
         <div v-if="phase !== 'playing'" class="absolute inset-0 rounded-[22px] bg-black/45 backdrop-blur-[2px] flex flex-col items-center justify-center text-white text-center p-6 gap-3">
           <template v-if="phase === 'over' && result">
             <p class="text-headline-lg">{{ result.newBest ? '🏆 New best!' : 'Game over' }}</p>
