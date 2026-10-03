@@ -14,6 +14,19 @@ import ChessBoard from '../components/games/ChessBoard.vue';
 import CheckersBoard from '../components/games/CheckersBoard.vue';
 import PokerTable from '../components/games/PokerTable.vue';
 import TycoonBoard from '../components/games/TycoonBoard.vue';
+import { defineAsyncComponent, type Component } from 'vue';
+// The newer games load on demand.
+const BOARDS: Record<string, Component> = {
+  ludo: defineAsyncComponent(() => import('../components/games/LudoBoard.vue')),
+  dominoes: defineAsyncComponent(() => import('../components/games/DominoBoard.vue')),
+  backgammon: defineAsyncComponent(() => import('../components/games/BackgammonBoard.vue')),
+  yahtzee: defineAsyncComponent(() => import('../components/games/YahtzeeTable.vue')),
+  trivia: defineAsyncComponent(() => import('../components/games/TriviaGame.vue')),
+  mahjong: defineAsyncComponent(() => import('../components/games/MahjongBoard.vue')),
+  words: defineAsyncComponent(() => import('../components/games/WordRaceGame.vue')),
+  pool: defineAsyncComponent(() => import('../components/games/PoolTable.vue')),
+  tower: defineAsyncComponent(() => import('../components/games/TowerGame.vue')),
+};
 
 /** One arena: the lobby (invite, start) and then the live game. Updates arrive over the socket. */
 const s = useSession();
@@ -31,7 +44,8 @@ const CUR: Record<string, string> = { sparks: '✦', gems: '💎', gold: '🪙' 
 const game = computed(() => (arena.value ? GAMES[arena.value.game] : null));
 const isHost = computed(() => arena.value?.hostId === s.user?.id);
 const seated = computed(() => arena.value?.mySeat != null);
-const myTurn = computed(() => arena.value?.status === 'playing' && arena.value.turnSeat === arena.value.mySeat && seated.value);
+// Simultaneous games (trivia, mahjong, word race) report turnSeat -1: everyone plays at once.
+const myTurn = computed(() => arena.value?.status === 'playing' && seated.value && (arena.value.turnSeat === -1 || arena.value.turnSeat === arena.value.mySeat));
 const secondsLeft = computed(() => (arena.value?.turnDeadline ? Math.max(0, Math.ceil((Date.parse(arena.value.turnDeadline) - now.value) / 1000)) : null));
 const err = (e: unknown) => s.toast({ kind: 'error', title: (e as Error).message });
 
@@ -93,7 +107,7 @@ const payout = (userId: string) => arena.value?.payouts.find((p) => p.userId ===
         <h1 class="text-headline-sm truncate">{{ arena.name }}</h1>
         <p class="text-body-sm text-on-surface-variant">{{ game.name }} · {{ arena.stake.amount ? `${CUR[arena.stake.currency]} ${arena.stake.amount.toLocaleString()} each` : 'Just for fun' }} · {{ arena.visibility === 'private' ? '🔒 Invite-only' : '🌍 Public' }}</p>
       </div>
-      <span v-if="arena.status === 'playing'" class="chip" :class="{ 'chip-active': myTurn }">{{ myTurn ? 'Your turn' : 'Waiting' }}<template v-if="secondsLeft != null"> · ⏱ {{ secondsLeft }}s</template></span>
+      <span v-if="arena.status === 'playing'" class="chip" :class="{ 'chip-active': myTurn }">{{ arena.turnSeat === -1 ? 'Everyone plays' : myTurn ? 'Your turn' : 'Waiting' }}<template v-if="secondsLeft != null"> · ⏱ {{ secondsLeft }}s</template></span>
       <button v-if="arena.code" class="btn-secondary h-10" @click="copyLink"><Icon name="link" :size="18" /> {{ arena.code }}</button>
       <button v-if="seated && arena.status !== 'finished' && arena.status !== 'closed'" class="btn-ghost h-10 text-error" @click="leave">{{ arena.status === 'playing' ? 'Resign' : isHost ? 'Close room' : 'Leave' }}</button>
     </header>
@@ -122,6 +136,7 @@ const payout = (userId: string) => arena.value?.payouts.find((p) => p.userId ===
       <CheckersBoard v-else-if="arena.game === 'checkers'" :arena="arena" :my-turn="myTurn" @move="move" />
       <PokerTable v-else-if="arena.game === 'poker'" :arena="arena" :my-turn="myTurn" @move="move" />
       <TycoonBoard v-else-if="arena.game === 'tycoon'" :arena="arena" :my-turn="myTurn" @move="move" />
+      <component :is="BOARDS[arena.game]" v-else-if="BOARDS[arena.game]" :arena="arena" :my-turn="myTurn" @move="move" />
     </template>
     <p v-else-if="arena.status === 'closed'" class="card p-5 text-center">This room was closed.</p>
 

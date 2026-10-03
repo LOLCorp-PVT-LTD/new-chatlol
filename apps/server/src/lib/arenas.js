@@ -4,6 +4,7 @@ import { db, newId, now } from '../db.js';
 import { HttpError } from './http.js';
 import { io, room } from './io.js';
 import { emitWallet, notify } from './rewards.js';
+import { isWord } from './words.js';
 
 /**
  * Game arenas: rooms where 2–6 members play one of the GAMES, optionally for a stake. The host creates it (public or
@@ -144,17 +145,20 @@ export async function startArena(a, userId) {
   }
   // Seats in random order (white / first to act isn't always the host).
   const seats = [...a.playerIds].sort(() => randomInt(3) - 1);
-  const state = g.init(seats.length, randomInt(2 ** 31));
+  const state = g.init(seats.length, randomInt(2 ** 31), { now: Date.now() });
   const next = await save(a, {
     status: 'playing',
     playerIds: seats,
     escrowIds,
     state,
     startedAt: now(),
-    turnDeadline: new Date(Date.now() + g.turnSeconds * 1000).toISOString(),
+    turnDeadline: deadlineFor(g, state),
   });
   return settleIfOver(next);
 }
+
+/** When the current turn / round times out: the game's own clock if it has one, else turnSeconds from now. */
+const deadlineFor = (g, state) => new Date(g.deadline ? g.deadline(state) : Date.now() + g.turnSeconds * 1000).toISOString();
 
 /** A player's action. `{ type: 'resign' }` forfeits. */
 export async function playMove(a, userId, action) {
@@ -165,12 +169,14 @@ export async function playMove(a, userId, action) {
   const g = GAMES[a.game];
   let state;
   try {
-    state = g.move(a.state, seat, action);
+    // The server's clock, never the client's: timed games (tower, trivia speed) use it.
+    state = g.move(a.state, seat, { ...action, at: Date.now() }, { isWord });
   } catch (e) {
     throw new HttpError(400, e.message, 'illegal_move');
   }
   state = await autoplayForfeits(a, state);
-  const next = await save(a, { state, turnDeadline: new Date(Date.now() + g.turnSeconds * 1000).toISOString() });
+  // Simultaneous games keep their round clock (deadline()); turn-based games restart the turn timer.
+  const next = await save(a, { state, turnDeadline: deadlineFor(g, state) });
   return settleIfOver(next);
 }
 
@@ -180,7 +186,7 @@ async function autoplayForfeits(a, state, forfeits = a.forfeitIds) {
   for (let guard = 0; guard < 200 && !g.outcome(state); guard++) {
     const t = g.turn(state);
     if (t == null || !forfeits.includes(a.playerIds[t])) break;
-    state = g.timeout(state);
+    state = g.timeout(state, Date.now());
   }
   return state;
 }
@@ -252,8 +258,8 @@ export async function resolveArenaTimeouts() {
   for (const a of due) {
     try {
       const g = GAMES[a.game];
-      const state = await autoplayForfeits(a, g.timeout(a.state));
-      const next = await save(a, { state, turnDeadline: new Date(Date.now() + g.turnSeconds * 1000).toISOString() });
+      const state = await autoplayForfeits(a, g.timeout(a.state, Date.now()));
+      const next = await save(a, { state, turnDeadline: deadlineFor(g, state) });
       await settleIfOver(next);
     } catch (e) {
       if (e.status !== 409) console.warn('[arena timeout]', a._id, e.message);

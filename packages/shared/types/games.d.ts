@@ -1,4 +1,4 @@
-export type GameKey = 'chess' | 'checkers' | 'poker' | 'tycoon';
+export type GameKey = 'chess' | 'checkers' | 'poker' | 'tycoon' | 'ludo' | 'dominoes' | 'backgammon' | 'yahtzee' | 'trivia' | 'mahjong' | 'words' | 'pool' | 'tower';
 export type StakeCurrency = 'none' | 'sparks' | 'gems' | 'gold';
 export interface GameInfo { key: GameKey; name: string; emoji: string; min: number; max: number; desc: string; turnSeconds: number }
 export interface ChessMove { from: number; to: number; promo?: 'Q' | 'R' | 'B' | 'N'; castle?: 'K' | 'Q'; enPassant?: boolean; double?: boolean }
@@ -43,3 +43,21 @@ export interface Arena {
     outcome: { winners?: number[]; shares?: number[]; reason?: string } | null; payouts: { userId: string; amount: number }[];
     players: import('./types').UserPublic[]; host: import('./types').UserPublic; createdAt: string;
 }
+export declare const LUDO_START: number[];
+export declare const LUDO_SAFE: Set<number>;
+export declare const LUDO_HOME: number;
+export declare function ludoSquare(seat: number, p: number, n?: number): number;
+export declare function ludoCorner(n: number, seat: number): number;
+export declare function dominoPlays(s: unknown, seat?: number): { tile: number; side: 'left' | 'right' }[];
+export declare function bgMoves(s: unknown, seat?: number): { from: 'bar' | number; die: number; to: number | 'off' }[];
+export declare const YAHTZEE_BOXES: { key: string; label: string }[];
+export declare function yahtzeeScore(box: string, dice: number[]): number;
+export declare function yahtzeeTotal(card: Record<string, number>): number;
+export declare const MAHJONG_SLOTS: { x: number; y: number; z: number }[];
+export declare function mahjongFree(present: boolean[], i: number): boolean;
+export declare function canMake(word: string, tiles: string[]): boolean;
+export declare const POOL: { W: number; H: number; R: number; POCKET: number };
+export declare const POCKETS: [number, number][];
+export declare function simulateShot(balls: { id: number; x: number; y: number; in: boolean }[], angle: number, power: number, opts?: { frames?: boolean }): { balls: { id: number; x: number; y: number; in: boolean }[]; potted: number[]; firstHit: number | null; frames: number[][][] };
+export declare const TOWER: { W: number; BASE: number; FLOORS: number };
+export declare function towerX(width: number, floor: number, ms: number): number;
