@@ -9,8 +9,9 @@ export async function initPurchases(_userId: string) {}
 export async function resetPurchases() {}
 
 export interface PackOffer extends GemPack { priceLabel: string }
+/** Gems aren't sold any more (Premium members earn them as drops), so there are no Gem packs to offer. */
 export async function loadOffers(): Promise<PackOffer[]> {
-  return GEM_PACKS.map((p) => ({ ...p, priceLabel: `$${p.usd.toFixed(2)}` }));
+  return [];
 }
 
 export async function buyPack(packId: string): Promise<'purchased' | 'cancelled'> {

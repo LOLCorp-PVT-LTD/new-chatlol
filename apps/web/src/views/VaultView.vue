@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { EXCHANGE, KING, powerByKey, ticketByKey, type GemPack, type PowerKey, type StoreItem, type StoreItemKind, type TicketKey } from '@chatlol/shared';
+import { EXCHANGE, KING, powerByKey, ticketByKey, type PowerKey, type StoreItem, type StoreItemKind, type TicketKey } from '@chatlol/shared';
 import { confirmDialog, promptDialog } from '../lib/dialog';
 import { api } from '../lib/api';
 import { useSession } from '../stores/session';
@@ -13,17 +13,14 @@ const s = useSession();
 const route = useRoute();
 const router = useRouter();
 const items = ref<StoreItem[]>([]);
-const packs = ref<GemPack[]>([]);
-const cardsEnabled = ref(false);
 const history = ref<{ id: string; product_id: string; gems: number; amount_cents: number | null; currency: string | null; status: string; created_at: string }[]>([]);
-const checkingOut = ref<string | null>(null);
 const odds = ref<Record<string, number>>({});
 type Tab = StoreItemKind | 'all' | 'gems' | 'exchange';
 const tab = ref<Tab>((['gems', 'power', 'ticket', 'king', 'exchange'] as string[]).includes(String(route.query.tab)) ? (route.query.tab as Tab) : 'all');
 const won = ref<StoreItem | null>(null);
 const buying = ref<string | null>(null);
 const chest = ref<{ claimed: boolean; nextAt: string } | null>(null);
-const TABS: [Tab, string][] = [['king', '👑 King'], ['ticket', '🎫 Tickets'], ['power', '⚡ Power-ups'], ['exchange', '🔄 Exchange'], ['gems', '💎 Get Gems'], ['all', '✨ All'], ['frame', '⭕ Frames'], ['flair', '🔥 Flairs'], ['theme', '🎨 Themes'], ['banner', '🏙️ Banners'], ['crate', '🎁 Crates'], ['streak_freeze', '🧊 Boosts']];
+const TABS: [Tab, string][] = [['king', '👑 King'], ['ticket', '🎫 Tickets'], ['power', '⚡ Power-ups'], ['exchange', '🔄 Exchange'], ['gems', '💎 Gems'], ['all', '✨ All'], ['frame', '⭕ Frames'], ['flair', '🔥 Flairs'], ['theme', '🎨 Themes'], ['banner', '🏙️ Banners'], ['crate', '🎁 Crates'], ['streak_freeze', '🧊 Boosts']];
 const rarityStyle: Record<string, string> = { common: 'bg-surface-container text-on-surface-variant', rare: 'bg-sky-100 text-sky-700', epic: 'bg-violet-100 text-violet-700', legendary: 'bg-sunset text-white' };
 const shown = computed(() => items.value.filter((i) => tab.value === 'all' || i.kind === tab.value || (tab.value === 'streak_freeze' && i.kind === 'boost')));
 
@@ -65,9 +62,6 @@ async function useTicket(i: StoreItem) {
   } catch (e) { s.toast({ kind: 'error', title: (e as Error).message }); }
 }
 async function loadGems() {
-  const p = await api.gemPacks();
-  packs.value = p.packs;
-  cardsEnabled.value = p.stripe;
   if (s.user) history.value = (await api.purchaseHistory()).purchases;
 }
 onMounted(async () => {
@@ -87,15 +81,6 @@ onMounted(async () => {
   }
 });
 
-async function checkout(p: GemPack) {
-  if (!s.user) return router.push('/join');
-  if (!s.user.emailVerified) return s.toast({ kind: 'info', title: 'Verify your email first ✉️', body: 'Check your inbox or resend from Settings.' });
-  checkingOut.value = p.id;
-  try {
-    const { url } = await api.stripeCheckout(p.id, `${location.origin}/vault`);
-    location.href = url;
-  } catch (e) { s.toast({ kind: 'error', title: (e as Error).message }); checkingOut.value = null; }
-}
 const money = (cents: number | null, cur: string | null) => (cents == null ? '' : new Intl.NumberFormat(undefined, { style: 'currency', currency: (cur ?? 'usd').toUpperCase() }).format(cents / 100));
 
 async function buy(i: StoreItem, currency: 'sparks' | 'gems' | 'gold' = 'sparks') {
@@ -190,19 +175,12 @@ async function claim() {
       </div>
     </section>
     <template v-if="tab === 'gems'">
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <button v-for="p in packs" :key="p.id" class="card p-5 text-center relative hover:shadow-pop transition active:scale-[.98] disabled:opacity-60"
-          :class="{ 'ring-2 ring-flame': p.best }" :disabled="!!checkingOut || !cardsEnabled" @click="checkout(p)">
-          <span v-if="p.best" class="absolute -top-2 left-1/2 -translate-x-1/2 bg-sunset text-white rounded-full px-3 py-0.5 text-label-sm">BEST VALUE</span>
-          <p class="text-4xl">💎</p>
-          <p class="text-headline-md mt-2">{{ (p.gems + p.bonus).toLocaleString() }}</p>
-          <p v-if="p.bonus" class="text-label-sm text-primary">incl. +{{ p.bonus }} bonus</p>
-          <p class="text-body-sm text-on-surface-variant">{{ p.label }}</p>
-          <span class="btn-primary h-10 mt-3 w-full">{{ checkingOut === p.id ? 'Opening…' : `$${p.usd.toFixed(2)}` }}</span>
-        </button>
-      </div>
-      <p v-if="!cardsEnabled" class="text-body-sm text-on-surface-variant text-center">Card payments aren’t switched on for this server yet. On iPhone and Android, buy Gems in the app.</p>
-      <p class="text-body-sm text-on-surface-variant text-center">Gems buy cosmetics and power-ups. They can’t be used for loot crates or cashed out. Secure checkout by Stripe.</p>
+      <section class="card p-6 text-center space-y-3">
+        <p class="text-5xl">💎</p>
+        <h2 class="text-headline-md">Gems drop, they aren’t sold</h2>
+        <p class="text-body-md text-on-surface-variant max-w-lg mx-auto">👑 Premium members get a 60% chance of bonus Gems every time they earn Sparks — posting, drops, quests, check-ins, wins. Anyone can also swap 10,000 Sparks for 1 Gem in Exchange.</p>
+        <RouterLink to="/premium" class="btn-primary inline-flex">Get Premium</RouterLink>
+      </section>
       <section v-if="history.length" class="card p-5">
         <h3 class="text-headline-sm mb-3">Purchase history</h3>
         <div v-for="h in history" :key="h.id" class="flex items-center justify-between py-2 border-b border-sandstone last:border-0 text-body-md">

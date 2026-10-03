@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
-import { GEM_PACKS, PREMIUM_PLANS, gemPack, premiumPlan } from '@chatlol/shared';
+import { PREMIUM_PLANS, gemPack, premiumPlan } from '@chatlol/shared';
 import { extendPremium } from './profile.js';
 import { db, now } from '../db.js';
 import { requireAuth, uid } from '../lib/auth.js';
@@ -20,7 +20,7 @@ export const paymentsRouter = Router();
 
 paymentsRouter.get('/payments/packs', (_req, res) => {
   res.json({
-    packs: GEM_PACKS,
+    packs: [], // Gems aren't sold any more: Premium is the only paid product
     premiumPlans: PREMIUM_PLANS,
     stripe: !!config.payments.stripeSecretKey,
     iap: !!config.payments.revenueCatWebhookAuth,
@@ -133,6 +133,7 @@ paymentsRouter.post('/payments/stripe/checkout', requireAuth, async (req, res) =
   const pack = gemPack(packId);
   const plan = premiumPlan(packId);
   if (!pack && !plan) throw new HttpError(404, 'Unknown pack');
+  if (pack) throw new HttpError(410, 'Gems aren’t sold any more — Premium members earn them as drops', 'gems_not_sold');
   const usd = pack?.usd ?? plan.usd;
   const name = pack ? `${pack.gems + pack.bonus} Gems — ${pack.label}` : `ChatLOL Premium — ${plan.label} (${plan.days} days)`;
   const u = await db.users.findOne({ _id: me }, { projection: { email: 1, emailVerifiedAt: 1 } });

@@ -333,6 +333,8 @@ export interface RewardEvent {
         to: number;
     } | null;
     questCompleted?: string | null;
+    /** Bonus Gems that dropped (Premium members). */
+    gems?: number;
     /** Doubled by a running Spark Surge / XP Surge. */
     boosted?: boolean;
     /** Set on the daily check-in reward. */

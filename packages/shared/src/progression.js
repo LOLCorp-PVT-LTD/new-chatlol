@@ -134,6 +134,11 @@ export function stripPremiumLayout(layout) {
   return { layout: out, removed: [...removed] };
 }
 
+// ——— Premium Gem drops ———
+/** Gems aren't sold. Premium members get a chance of bonus Gems every time a reward pays them Sparks. */
+export const PREMIUM_GEM_DROP = { chance: 0.6, perSparks: 10 };
+export const gemDropFor = (sparks) => Math.max(1, Math.round(sparks / PREMIUM_GEM_DROP.perSparks));
+
 // ——— Currencies: Sparks (earned) → Gems → Gold ———
 /** One-way exchange rates. Gold is the top currency: tickets and the King's crown cost Gold. */
 export const EXCHANGE = { sparksPerGem: 10_000, gemsPerGold: 1_000 };
