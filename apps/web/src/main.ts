@@ -4,6 +4,7 @@ import App from './App.vue';
 import { router } from './router';
 import 'iconsax-font-icon/dist/icons.css';
 import './assets/main.css';
+import './assets/frames.css';
 import './stores/theme';
 
 createApp(App).use(createPinia()).use(router).mount('#app');

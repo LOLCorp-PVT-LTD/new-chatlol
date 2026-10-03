@@ -56,3 +56,34 @@ export const buttonStyleByKey = (k) => BUTTON_STYLES.find((c) => c.key === k);
 export const shopFontByKey = (k) => SHOP_FONTS.find((c) => c.key === k);
 /** Google Fonts stylesheet URL for one family. */
 export const googleFontUrl = (family) => `https://fonts.googleapis.com/css2?family=${encodeURIComponent(family).replace(/%20/g, '+')}:wght@400;600&display=swap`;
+
+/**
+ * Animated avatar frames (Vault → Frames). `fx` names the CSS animation the apps draw; `css` is a still fallback
+ * (and the shop tile). `orbit` adds little emoji circling the avatar. `gold` = can also be bought with Gold.
+ */
+export const ANIMATED_FRAMES = [
+  { key: 'frame_rainbow', label: 'Rainbow Spin', emoji: '🌈', desc: 'A full-spectrum ring that never stops turning', ...R(800, 'rare'), fx: 'rainbow', css: 'conic-gradient(#ff004c,#ff9900,#ffe600,#33e07a,#00c2ff,#8a5cff,#ff004c)' },
+  { key: 'frame_frost', label: 'Frostbite', emoji: '❄️', desc: 'Ice-blue ring with a frosty shine sweeping round', ...R(700, 'rare'), fx: 'frost', css: 'linear-gradient(120deg,#a5f3fc,#ffffff,#38bdf8)' },
+  { key: 'frame_neon_pulse', label: 'Neon Pulse', emoji: '💡', desc: 'Pink and cyan neon that breathes', ...R(900, 'rare'), fx: 'neon', css: 'linear-gradient(135deg,#ff2bd6,#00e5ff)' },
+  { key: 'frame_heartbeat', label: 'Heartbeat', emoji: '💓', desc: 'A ring that beats like a heart', ...R(650, 'rare'), fx: 'heartbeat', css: 'linear-gradient(135deg,#ff4d8d,#ff1f5a)' },
+  { key: 'frame_inferno', label: 'Inferno', emoji: '🔥', desc: 'Spinning flames with a flickering glow', ...R(1500, 'epic'), fx: 'inferno', css: 'conic-gradient(#ff2a00,#ff9900,#ffd000,#ff4d00,#ff2a00)' },
+  { key: 'frame_galaxy', label: 'Galaxy', emoji: '🌌', desc: 'A slow-turning galaxy of violet and pink', ...R(1800, 'epic'), fx: 'galaxy', css: 'conic-gradient(#1e0b4b,#6d28d9,#ec4899,#1e3a8a,#1e0b4b)' },
+  { key: 'frame_thunder', label: 'Thunderstruck', emoji: '⚡', desc: 'Electric hazard ring with lightning flashes', ...R(1600, 'epic'), fx: 'thunder', css: 'repeating-conic-gradient(#fde047 0 10deg,#1e1b4b 10deg 20deg)' },
+  { key: 'frame_glitch', label: 'Glitch', emoji: '👾', desc: 'RGB-split ring that glitches out', ...R(1500, 'epic'), fx: 'glitch', css: 'linear-gradient(135deg,#00ff9c,#00b3ff,#ff00e6)' },
+  { key: 'frame_sakura', label: 'Sakura Drift', emoji: '🌸', desc: 'Blossom pink ring with petals circling', ...R(1400, 'epic'), fx: 'sakura', orbit: '🌸', css: 'linear-gradient(135deg,#ffc0d9,#ff7eb3)' },
+  { key: 'frame_gilded', label: 'Gilded', emoji: '✨', desc: 'Polished gold with a shine that runs round', ...R(2400, 'legendary', 1), fx: 'gilded', css: 'linear-gradient(110deg,#b8860b,#fcd34d,#fffbe6,#fcd34d,#b8860b)' },
+  { key: 'frame_hologram', label: 'Hologram', emoji: '🪩', desc: 'Iridescent, colour-shifting holo ring', ...R(2800, 'legendary', 2), fx: 'holo', css: 'linear-gradient(135deg,#ff9ad5,#a5b4fc,#67e8f9,#bbf7d0,#fde68a)' },
+  { key: 'frame_orbit', label: 'Star Orbit', emoji: '💫', desc: 'Midnight ring with golden stars in orbit', ...R(3200, 'legendary', 3), fx: 'orbit', orbit: '✦', css: 'conic-gradient(#0f172a,#334155,#fcd34d,#0f172a)' },
+];
+export const animatedFrameByKey = (k) => ANIMATED_FRAMES.find((f) => f.key === k) ?? null;
+
+/** More name flairs (the emoji after your name). */
+export const EXTRA_FLAIRS = [
+  { key: 'flair_rocket', label: 'To The Moon', emoji: '🚀', ...R(250, 'common') },
+  { key: 'flair_ghost', label: 'Ghosted', emoji: '👻', ...R(250, 'common') },
+  { key: 'flair_rainbow', label: 'Good Vibes', emoji: '🌈', ...R(400, 'rare') },
+  { key: 'flair_lightning', label: 'Lightning', emoji: '⚡', ...R(400, 'rare') },
+  { key: 'flair_crown', label: 'Royal', emoji: '👑', ...R(1200, 'epic') },
+  { key: 'flair_unicorn', label: 'Unicorn', emoji: '🦄', ...R(1500, 'epic') },
+  { key: 'flair_dragon', label: 'Dragon', emoji: '🐉', ...R(2500, 'legendary', 1) },
+];

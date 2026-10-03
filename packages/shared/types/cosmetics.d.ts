@@ -7,3 +7,7 @@ export declare const coverByKey: (k: string | null | undefined) => (ShopCosmetic
 export declare const buttonStyleByKey: (k: string | null | undefined) => (ShopCosmetic & { css: Record<string, string> }) | undefined;
 export declare const shopFontByKey: (k: string | null | undefined) => (ShopCosmetic & { family: string; css: string }) | undefined;
 export declare const googleFontUrl: (family: string) => string;
+export interface AnimatedFrame { key: string; label: string; emoji: string; desc: string; price: number; rarity: string; gold: number | null; fx: string; css: string; orbit?: string }
+export declare const ANIMATED_FRAMES: AnimatedFrame[];
+export declare function animatedFrameByKey(k: string | null | undefined): AnimatedFrame | null;
+export declare const EXTRA_FLAIRS: { key: string; label: string; emoji: string; price: number; rarity: string; gold: number | null }[];
