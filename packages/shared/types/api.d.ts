@@ -314,6 +314,7 @@ export declare function createApi(opts: ApiClientOptions): {
     }>;
     shouts: (p?: { before?: string; mood?: string; replyTo?: ID }) => Promise<{ items: Shout[]; nextCursor: string | null; nextShoutAt: string | null }>;
     shout: (b: { body: string; mood?: string | null; replyToId?: ID | null; sticker?: import('./stickers').StickerInput | null }) => Promise<WithReward<{ shout: Shout; nextShoutAt: string }>>;
+    reactTo: (type: 'comment' | 'reply' | 'wall' | 'message', id: ID, kind: ReactionKind | null) => Promise<{ reactions: Partial<Record<ReactionKind, number>>; myReaction: ReactionKind | null }>;
     reactShout: (id: ID, kind: ReactionKind | null) => Promise<{ shout: Shout }>;
     deleteShout: (id: ID) => Promise<{ ok: true }>;
     shoutTrends: () => Promise<{ tags: { tag: string; count: number }[]; top: { rank: number; user: UserPublic; shouts: number; reps: number }[] }>;

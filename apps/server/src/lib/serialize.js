@@ -1,4 +1,5 @@
 import { isKing } from './king.js';
+import { cleanCounts, myReaction } from './reactions.js';
 import { friendshipStatus } from './friends.js';
 import {
   summarizeRatings,
@@ -239,7 +240,7 @@ export const userById = (id) => db.users.findOne({ _id: id });
 /** Per-request cache so a feed page doesn't re-query the same author 20 times. */
 export function authorCache(viewerId) {
   const m = new Map();
-  return (id) => {
+  const get = (id) => {
     let u = m.get(id);
     if (!u) {
       u = userById(id).then((row) => (row ? userPublic(row, viewerId) : ghostUser(id)));
@@ -247,6 +248,8 @@ export function authorCache(viewerId) {
     }
     return u;
   };
+  get.viewerId = viewerId; // lets serializers add the viewer's own reaction
+  return get;
 }
 
 function ghostUser(id) {
@@ -322,7 +325,17 @@ export const serializePosts = (rows, viewerId) => {
 
 export async function serializeComment(c, author = authorCache()) {
   const rating = (await db.ratings.findOne({ postId: c.postId, userId: c.authorId }))?.score ?? null;
-  return { id: c._id, postId: c.postId, author: await author(c.authorId), body: c.body, sticker: c.sticker ?? null, rating, createdAt: c.createdAt };
+  return {
+    id: c._id,
+    postId: c.postId,
+    author: await author(c.authorId),
+    body: c.body,
+    sticker: c.sticker ?? null,
+    rating,
+    reactions: cleanCounts(c.reactions),
+    myReaction: await myReaction('comment', c._id, author.viewerId),
+    createdAt: c.createdAt,
+  };
 }
 
 export async function serializeMessage(m, author = authorCache()) {
@@ -335,7 +348,8 @@ export async function serializeMessage(m, author = authorCache()) {
     kind: m.kind ?? 'text',
     sticker: m.sticker ?? null,
     replyToId: m.replyToId ?? null,
-    reactions: {},
+    reactions: cleanCounts(m.reactions),
+    myReaction: await myReaction('message', m._id, author.viewerId),
     createdAt: m.createdAt,
   };
 }
@@ -383,6 +397,8 @@ export async function serializeReply(r, author = authorCache()) {
     author: await author(r.authorId),
     body: r.body,
     upvotes: r.upvotes,
+    reactions: cleanCounts(r.reactions),
+    myReaction: await myReaction('reply', r._id, author.viewerId),
     createdAt: r.createdAt,
   };
 }

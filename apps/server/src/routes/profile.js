@@ -25,6 +25,8 @@ import { serializeShout } from './shouts.js';
 import { friendsFilter, otherOf } from '../lib/friends.js';
 import { emitWallet, notify } from '../lib/rewards.js';
 import { assertClean, classify } from '../lib/moderation.js';
+import { cleanCounts, myReaction, react } from '../lib/reactions.js';
+import { REACTION_KEYS } from '@chatlol/shared';
 import { assertCanPost } from '../lib/enforcement.js';
 import { screen } from '../lib/aiModeration.js';
 import { assertEmojiOwned, resolveSticker, stickerInput } from '../lib/stickers.js';
@@ -416,6 +418,14 @@ export async function recordProfileView(profileId, viewerId) {
   });
 }
 
+/** Emoji reactions on comments, forum replies, wall notes and chat messages. `kind: null` removes yours. */
+profileRouter.post('/react/:type/:id', requireAuth, async (req, res) => {
+  const me = uid(req);
+  await rateLimit(`react:${me}`, 60);
+  const { kind } = parse(z.object({ kind: z.enum(REACTION_KEYS).nullable() }), req.body);
+  res.json(await react(String(req.params.type), String(req.params.id), me, kind));
+});
+
 // ——— Wall (guest notes) ———
 const serializeNote = async (n, author) => ({
   id: n._id,
@@ -424,6 +434,8 @@ const serializeNote = async (n, author) => ({
   body: n.body,
   sticker: n.sticker ?? null,
   mood: n.mood ?? null,
+  reactions: cleanCounts(n.reactions),
+  myReaction: await myReaction('wall', n._id, author.viewerId),
   createdAt: n.createdAt,
 });
 

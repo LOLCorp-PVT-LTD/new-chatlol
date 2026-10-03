@@ -16,6 +16,7 @@ export const REACTIONS = [
   { key: 'wow', emoji: '🤯' },
   { key: 'hundred', emoji: '💯' },
 ];
+export const REACTION_KEYS = REACTIONS.map((r) => r.key);
 
 export function summarizeRatings(dist) {
   const count = dist.reduce((a, b) => a + b, 0);

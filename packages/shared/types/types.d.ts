@@ -173,6 +173,9 @@ export interface Comment {
     body: string;
     sticker: import('./stickers').Sticker | null;
     rating: VibeScore | null;
+    /** Emoji reaction counts, and the viewer's own reaction. */
+    reactions: Partial<Record<ReactionKind, number>>;
+    myReaction: ReactionKind | null;
     createdAt: ISODate;
 }
 export interface Drop {
@@ -221,6 +224,9 @@ export interface ShoutReply {
     author: UserPublic;
     body: string;
     upvotes: number;
+    /** Emoji reaction counts, and the viewer's own reaction. */
+    reactions: Partial<Record<ReactionKind, number>>;
+    myReaction: ReactionKind | null;
     createdAt: ISODate;
 }
 export interface Lounge {
@@ -243,7 +249,8 @@ export interface ChatMessage {
     kind: 'text' | 'image' | 'gift' | 'system' | 'voice' | 'sticker';
     sticker?: import('./stickers').Sticker | null;
     replyToId: ID | null;
-    reactions: Record<string, number>;
+    reactions: Partial<Record<ReactionKind, number>>;
+    myReaction?: ReactionKind | null;
     createdAt: ISODate;
 }
 export interface Conversation {
@@ -403,6 +410,9 @@ export interface WallNote {
     body: string;
     sticker: import('./stickers').Sticker | null;
     mood: import('./profile').WallMood | null;
+    /** Emoji reaction counts, and the viewer's own reaction. */
+    reactions: Partial<Record<ReactionKind, number>>;
+    myReaction: ReactionKind | null;
     createdAt: ISODate;
 }
 export interface ProfileRatings extends RatingSummary {

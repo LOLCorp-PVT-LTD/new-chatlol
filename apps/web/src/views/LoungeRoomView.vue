@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ReactionBar from '../components/ReactionBar.vue';
 import { emojiOnly } from '../lib/richText';
 import type { StickerInput } from '@chatlol/shared';
 import EmojiButton from '../components/EmojiButton.vue';
@@ -36,6 +37,10 @@ const onKicked = (k: { loungeId: string; by: string; minutes: number }) => {
   s.toast({ kind: 'error', title: `🥾 @${k.by} kicked you out`, body: `You can come back in ${k.minutes} minutes.` }, 6000);
   void router.push('/lounges');
 };
+const onReactions = (p: { id: string; reactions: ChatMessage['reactions'] }) => {
+  const m = messages.value.find((x) => x.id === p.id);
+  if (m) m.reactions = p.reactions;
+};
 /** Kick Ticket: tap someone's name in the room. */
 async function kick(m: ChatMessage) {
   if (!(await confirmDialog({ title: `🥾 Kick @${m.author.handle}?`, body: 'Uses one Kick Ticket: they’re out of this lounge for an hour.', danger: true }))) return;
@@ -56,6 +61,7 @@ onMounted(async () => {
     void scroll();
   });
   sock.on('lounge:kicked', onKicked);
+  sock.on('message:reactions', onReactions);
   sock.on('lounge:message', onMsg);
   sock.on('lounge:presence', onPresence);
 });
@@ -65,6 +71,7 @@ onUnmounted(() => {
   sock.off('lounge:message', onMsg);
   sock.off('lounge:presence', onPresence);
   sock.off('lounge:kicked', onKicked);
+  sock.off('message:reactions', onReactions);
 });
 const box = ref<HTMLInputElement>();
 const addEmoji = (t: string) => (draft.value = insertAtCaret(box.value, draft.value, t));
@@ -94,6 +101,7 @@ function send(text = draft.value, sticker: StickerInput | null = null) {
           <p v-if="m.body && emojiOnly(m.body)" :class="{ 'text-right': m.author.id === s.user?.id }"><RichText :text="m.body" /></p>
           <p v-else-if="m.body" class="px-4 py-2 rounded-[20px] text-body-md break-words"
             :class="m.author.id === s.user?.id ? 'bg-sunset text-white rounded-tr-md' : 'bg-surface-container-low rounded-tl-md'"><RichText :text="m.body" /></p>
+          <ReactionBar type="message" :id="m.id" :reactions="m.reactions ?? {}" :mine="m.myReaction" compact class="mt-1" :class="{ 'justify-end': m.author.id === s.user?.id }" @update="Object.assign(m, $event)" />
         </div>
       </div>
     </div>

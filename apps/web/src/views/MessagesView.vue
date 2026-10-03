@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ReactionBar from '../components/ReactionBar.vue';
 import { emojiOnly } from '../lib/richText';
 import type { StickerInput } from '@chatlol/shared';
 import EmojiButton from '../components/EmojiButton.vue';
@@ -8,7 +9,7 @@ import { insertAtCaret } from '../lib/insertAtCaret';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { ChatMessage, Conversation } from '@chatlol/shared';
-import { timeAgo } from '@chatlol/shared';
+import { timeAgo, DM_SPARK_COST } from '@chatlol/shared';
 import { api, uploadImage } from '../lib/api';
 import { useSession } from '../stores/session';
 import Avatar from '../components/Avatar.vue';
@@ -180,6 +181,7 @@ const seen = computed(() => !!readAt.value || (!!lastMine.value && messages.valu
               <p v-if="m.body && emojiOnly(m.body)" :class="{ 'text-right': m.author.id === s.user?.id }"><RichText :text="m.body" /></p>
               <p v-else-if="m.body" class="px-4 py-2.5 rounded-[22px] text-body-md break-words"
                 :class="m.author.id === s.user?.id ? 'bg-sunset text-white rounded-br-md' : 'bg-surface-container-low rounded-bl-md'"><RichText :text="m.body" /></p>
+              <ReactionBar type="message" :id="m.id" :reactions="m.reactions ?? {}" :mine="m.myReaction" compact class="mt-1" :class="{ 'justify-end': m.author.id === s.user?.id }" @update="Object.assign(m, $event)" />
               <p v-if="m.id === lastMine?.id" class="text-[11px] text-on-surface-variant text-right mt-0.5">{{ seen ? 'Seen' : 'Sent' }}</p>
             </div>
           </div>
@@ -191,7 +193,7 @@ const seen = computed(() => !!readAt.value || (!!lastMine.value && messages.valu
           <button type="button" class="btn-icon bg-sunlit text-flame shrink-0" aria-label="Send photo" @click="fileInput?.click()"><Icon name="image" /></button>
           <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="sendPhoto" />
           <EmojiButton stickers align="left" @insert="addEmoji" @sticker="send" />
-          <input ref="box" v-model="draft" class="input h-11 text-body-md" placeholder="Message…" maxlength="2000" @input="onInput" />
+          <input ref="box" v-model="draft" class="input h-11 text-body-md" :placeholder="other && !other.isAI && !s.user?.premiumUntil ? `Message… (${DM_SPARK_COST} ✦ each · free with Premium)` : 'Message…'" maxlength="2000" @input="onInput" />
           <button class="btn-primary h-11 w-11 px-0 shrink-0" aria-label="Send" :disabled="!draft.trim()"><Icon name="send" /></button>
         </form>
       </template>

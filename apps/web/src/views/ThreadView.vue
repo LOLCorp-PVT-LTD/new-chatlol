@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ReactionBar from '../components/ReactionBar.vue';
 import EmojiButton from '../components/EmojiButton.vue';
 import RichText from '../components/RichText.vue';
 import { insertAtCaret } from '../lib/insertAtCaret';
@@ -49,6 +50,7 @@ async function send() {
       <div class="card px-4 py-3 flex-1 min-w-0 rounded-md">
         <div class="flex items-center gap-2 text-body-sm"><UserName :user="r.author" /><span class="text-on-surface-variant">{{ timeAgo(r.createdAt) }}</span></div>
         <p class="text-body-md mt-0.5 whitespace-pre-line break-words"><RichText :text="r.body" /></p>
+        <ReactionBar type="reply" :id="r.id" :reactions="r.reactions ?? {}" :mine="r.myReaction" compact class="mt-1.5" @update="Object.assign(r, $event)" />
       </div>
     </div>
     <form v-if="s.user" class="sticky bottom-24 lg:bottom-4 flex gap-2 card p-2 shadow-float" @submit.prevent="send">

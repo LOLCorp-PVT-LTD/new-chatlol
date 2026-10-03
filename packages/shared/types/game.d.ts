@@ -110,3 +110,5 @@ export declare function countdown(toIso: string, now?: number): string;
 export declare function gemPriceFor(kind: string, sparksPrice: number): number | null;
 export declare const GEM_PACKS: import('./types').GemPack[];
 export declare const gemPack: (id: string) => import("./types").GemPack | undefined;
+
+export declare const REACTION_KEYS: import('./types').ReactionKind[];

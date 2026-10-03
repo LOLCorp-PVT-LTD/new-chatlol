@@ -50,6 +50,7 @@ export async function ensureIndexes(db) {
     idx('shouts', { hidden: 1, createdAt: -1 }),
     idx('shouts', { authorId: 1, createdAt: -1 }),
     idx('shoutReactions', { shoutId: 1, userId: 1 }, { unique: true }),
+    idx('contentReactions', { type: 1, targetId: 1, userId: 1 }, { unique: true }),
     idx('wallNotes', { profileId: 1, createdAt: -1 }),
     idx('modEvents', { userId: 1, createdAt: -1 }),
     idx('modFlags', { status: 1, priority: 1, createdAt: -1 }),

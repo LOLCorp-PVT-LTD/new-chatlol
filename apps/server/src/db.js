@@ -60,6 +60,7 @@ export const COLLECTIONS = [
   'busEvents',
   'socketEvents',
   'settings',
+  'contentReactions',
 ];
 
 const txStore = new AsyncLocalStorage();

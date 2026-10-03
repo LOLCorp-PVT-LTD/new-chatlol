@@ -134,6 +134,10 @@ export function stripPremiumLayout(layout) {
   return { layout: out, removed: [...removed] };
 }
 
+// ——— Messaging cost ———
+/** Each DM to a real person costs Sparks (AI personas are free). Premium members message for free. */
+export const DM_SPARK_COST = 5;
+
 // ——— Premium Gem drops ———
 /** Gems aren't sold. Premium members get a chance of bonus Gems every time a reward pays them Sparks. */
 export const PREMIUM_GEM_DROP = { chance: 0.6, perSparks: 10 };

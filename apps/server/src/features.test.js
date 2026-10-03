@@ -766,7 +766,11 @@ test('progression: power-ups, level gates, daily check-in streak and the 7-day i
   await c.buy('gate_pass');
   const used = await c.usePower('gate_pass');
   assert.ok(used.powers.gate_pass > new Date().toISOString());
-  await c.openConversation(stranger.id);
+  const { conversation } = await c.openConversation(stranger.id);
+  // DMs to real people cost Sparks.
+  const before = (await db.users.findOne({ _id: u.id })).sparks;
+  await c.sendMessage(conversation.id, { body: 'hey' });
+  assert.equal(before - (await db.users.findOne({ _id: u.id })).sparks, 5);
   await assert.rejects(c.usePower('gate_pass'), (e) => e.code === 'power_missing');
   await assert.rejects(c.usePower('wipe_shield'), (e) => e.code === 'power_auto');
 

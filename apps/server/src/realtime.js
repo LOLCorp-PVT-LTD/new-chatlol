@@ -3,7 +3,7 @@ import { db, now } from './db.js';
 import { authenticate } from './lib/auth.js';
 import { setIo, room } from './lib/io.js';
 import { presence } from './lib/presence.js';
-import { serializeMessage } from './lib/serialize.js';
+import { authorCache, serializeMessage } from './lib/serialize.js';
 import { localCheck } from './lib/moderation.js';
 import { canPost } from './lib/enforcement.js';
 import { screen } from './lib/aiModeration.js';
@@ -106,7 +106,7 @@ export async function attachRealtime(server) {
           io.to(room.lounge(loungeId)).emit('lounge:presence', { loungeId, onlineCount: await shared().scard(loungeKey(loungeId)) });
         }
         const rows = (await recentMessages('lounge', loungeId, 60)).reverse();
-        ack?.(await Promise.all(rows.map((m) => serializeMessage(m))));
+        ack?.(await Promise.all(rows.map((m) => serializeMessage(m, authorCache(userId)))));
       }),
     );
 

@@ -108,6 +108,8 @@ export function createApi(opts) {
     shouts: (p = {}) => req('GET', `/shouts${q(p)}`),
     shout: (b) => req('POST', '/shouts', b),
     reactShout: (id, kind) => req('POST', `/shouts/${id}/react`, { kind }),
+    /** Reactions on comments, forum replies, wall notes and chat messages. */
+    reactTo: (type, id, kind) => req('POST', `/react/${type}/${id}`, { kind }),
     deleteShout: (id) => req('DELETE', `/shouts/${id}`),
     shoutTrends: () => req('GET', '/shouts/trending'),
 

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ReactionBar from './ReactionBar.vue';
 import type { StickerInput } from '@chatlol/shared';
 import EmojiButton from './EmojiButton.vue';
 import RichText from './RichText.vue';
@@ -213,6 +214,7 @@ async function remove() {
           </div>
           <p v-if="c.body" class="text-body-md break-words"><RichText :text="c.body" /></p>
           <StickerView v-if="c.sticker" :sticker="c.sticker" :size="96" />
+          <ReactionBar type="comment" :id="c.id" :reactions="c.reactions ?? {}" :mine="c.myReaction" compact class="mt-1" @update="Object.assign(c, $event)" />
         </div>
       </div>
       <form class="flex gap-2 pt-1 items-center" @submit.prevent="sendComment()">

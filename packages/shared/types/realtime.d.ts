@@ -29,6 +29,7 @@ export interface ServerEvents {
         level: number;
     }) => void;
     'feed:new': (p: Post) => void;
+    'message:reactions': (p: { id: ID; roomId: ID; reactions: Partial<Record<import('./types').ReactionKind, number>> }) => void;
     /** A Kick Ticket removed you from a lounge. */
     'lounge:kicked': (p: { loungeId: ID; by: string; minutes: number }) => void;
     'shout:new': (s: import('./types').Shout) => void;

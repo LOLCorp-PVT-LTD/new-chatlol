@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { REACTIONS, SHOUT_COOLDOWN_SEC, SHOUT_MAX, SHOUT_MOODS } from '@chatlol/shared';
+import { REACTIONS, SHOUT_COOLDOWN_SEC, SHOUT_MAX, SHOUT_MOODS, REACTION_KEYS } from '@chatlol/shared';
 import { db, newId, now } from '../db.js';
 import { assertEmojiOwned, resolveSticker, stickerInput } from '../lib/stickers.js';
 import { optionalAuth, requireAuth, uid } from '../lib/auth.js';
@@ -21,7 +21,6 @@ import { shared } from '../lib/shared.js';
  */
 export const shoutsRouter = Router();
 
-const REACTION_KEYS = REACTIONS.map((r) => r.key);
 const emptyReactions = () => Object.fromEntries(REACTION_KEYS.map((k) => [k, 0]));
 
 export async function serializeShout(s, viewerId, author = authorCache(viewerId)) {

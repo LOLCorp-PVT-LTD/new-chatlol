@@ -44,6 +44,7 @@ export declare const PREMIUM_PROFILE: {
 export declare function stripPremiumLayout<
   L extends { header: string; font: string; width: string; sections: { type: string; style: string }[] },
 >(layout: L): { layout: L; removed: string[] };
+export declare const DM_SPARK_COST: number;
 export declare const PREMIUM_GEM_DROP: { chance: number; perSparks: number };
 export declare const gemDropFor: (sparks: number) => number;
 export declare const EXCHANGE: { sparksPerGem: number; gemsPerGold: number };

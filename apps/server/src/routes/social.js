@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { REWARDS } from '@chatlol/shared';
+import { DM_SPARK_COST, REWARDS } from '@chatlol/shared';
 import { db, newId, now, isDuplicateKey, isObjectIdHex } from '../db.js';
 import { assertEmojiOwned, resolveSticker, stickerInput, stickerPreview } from '../lib/stickers.js';
 import { optionalAuth, requireAuth, uid } from '../lib/auth.js';
@@ -15,7 +15,7 @@ import {
   DEFAULT_SETTINGS,
   isPremium,
 } from '../lib/serialize.js';
-import { grant, notify } from '../lib/rewards.js';
+import { grant, notify, emitWallet } from '../lib/rewards.js';
 import { assertLevel } from '../lib/progression.js';
 import { areFriends } from '../lib/friends.js';
 import { assertClean } from '../lib/moderation.js';
@@ -414,6 +414,17 @@ socialRouter.post('/conversations/:id/messages', requireAuth, async (req, res) =
     }))
   )
     throw new HttpError(403, "You can't message this person");
+  // DMs to real people cost Sparks (Premium members and chats with AI personas are free).
+  const [sender, other] = await Promise.all([
+    db.users.findOne({ _id: me }, { projection: { premium: 1 } }),
+    otherId ? db.users.findOne({ _id: otherId }, { projection: { isAi: 1 } }) : null,
+  ]);
+  if (other && !other.isAi && !isPremium(sender)) {
+    const paid = await db.users.updateOne({ _id: me, sparks: { $gte: DM_SPARK_COST } }, { $inc: { sparks: -DM_SPARK_COST } });
+    if (!paid.modifiedCount)
+      throw new HttpError(402, `Messages cost ${DM_SPARK_COST} Sparks — earn more, or go Premium to message free`, 'insufficient_sparks');
+    void emitWallet(me);
+  }
   const message = await insertDm(convId, me, b.body, b.mediaUrl ? (b.kind === 'text' ? 'image' : b.kind) : 'text', b.mediaUrl ?? null, sticker);
   screen({ userId: me, text: b.body, ref: { type: 'message', id: message.id }, targetId: otherId });
   res.status(201).json({ message });
