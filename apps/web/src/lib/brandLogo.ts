@@ -43,10 +43,18 @@ function recolour(setting: AppThemeSetting | null | undefined) {
   return out;
 }
 
-/** SVG markup for the wordmark or the mascot alone, in the given theme. */
-export function logoSvg(setting: AppThemeSetting | null | undefined, part: 'wordmark' | 'mascot' = 'wordmark') {
+let seq = 0;
+/** A fresh id prefix for each logo on the page. */
+export const logoUid = () => `l${++seq}`;
+
+/**
+ * SVG markup for the wordmark or the mascot alone, in the given theme. `uid` keeps gradient / filter ids unique per
+ * logo: with shared ids, `url(#…)` resolves to the first copy in the page, and if that copy is hidden (the mascot
+ * on desktop, a closed drawer) Chrome paints the letters with nothing, so only the mascot shows.
+ */
+export function logoSvg(setting: AppThemeSetting | null | undefined, part: 'wordmark' | 'mascot' = 'wordmark', uid = '') {
   const box = part === 'mascot' ? `${MASCOT.x} 0 ${MASCOT.w} ${H}` : `0 0 ${W} ${H}`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${box}" preserveAspectRatio="xMidYMid meet" fill="none" role="img" aria-label="ChatLOL" style="display:block;width:100%;height:100%">${recolour(setting)}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${box}" preserveAspectRatio="xMidYMid meet" fill="none" role="img" aria-label="ChatLOL" style="display:block;width:100%;height:100%">${uid ? recolour(setting).replace(/clg-/g, `clg${uid}${part[0]}-`) : recolour(setting)}</svg>`;
 }
 export const LOGO_RATIO = W / H;
 export const MASCOT_RATIO = MASCOT.w / H;
