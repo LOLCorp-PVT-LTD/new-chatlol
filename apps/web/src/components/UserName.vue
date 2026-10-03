@@ -9,8 +9,8 @@ const props = defineProps<{ user: UserPublic; handle?: boolean; link?: boolean }
 const rank = computed(() => statusFor(props.user.level ?? 1));
 </script>
 <template>
-  <component :is="link === false ? 'span' : 'RouterLink'" :to="`/u/${user.handle}`" class="inline-flex items-center gap-1.5 min-w-0 hover:underline decoration-flame/40">
-    <span class="font-bold truncate">{{ user.displayName }}</span>
+  <component :is="link === false ? 'span' : 'RouterLink'" :to="`/u/${user.handle}`" class="group/name inline-flex items-center gap-1.5 min-w-0">
+    <span class="font-bold truncate decoration-flame/40" :class="{ 'group-hover/name:underline': link !== false }">{{ user.displayName }}</span>
     <span v-if="user.clan" class="clan-tag shrink-0" :class="{ 'clan-legend': user.clan.legend }" :style="user.clan.color ? { '--clan': user.clan.color } : undefined" :title="`Clan: ${user.clan.name}`">[{{ user.clan.tag }}]</span>
     <span v-if="user.cosmetics.flair" class="text-[0.9em]">{{ FLAIRS[user.cosmetics.flair] }}</span>
     <span v-if="user.isKing" class="text-[0.9em]" title="King of ChatLOL">👑</span>
